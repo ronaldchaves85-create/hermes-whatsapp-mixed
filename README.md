@@ -233,6 +233,69 @@ Acesse o gerenciador de arquivos visual do Dashboard (`https://hermes.seu-domini
 
 ---
 
+## 🤖 Setup Via Conversa com o Hermes (Universal — Portainer, Easypanel e Hostinger)
+
+> Em vez de rodar o `setup.sh` pelo terminal do painel, você pode pedir diretamente ao Hermes para fazer o setup. Funciona em **qualquer instalação** porque o Hermes descobre os seus próprios caminhos automaticamente.
+
+Envie o prompt abaixo para o Hermes pelo **Dashboard Web**, **Telegram** ou **WhatsApp** (na sua conversa privada de dono):
+
+---
+
+```
+Hermes, preciso que você execute o setup inicial do modo misto.
+Siga os passos abaixo usando suas ferramentas de terminal:
+
+**PASSO 1 — Auto-descoberta de caminhos**
+Execute e me mostre os resultados:
+echo "HOME=$HOME"
+echo "HERMES_HOME=$HERMES_HOME"
+echo "WORKSPACE=$WORKSPACE"
+
+Use os valores descobertos nas etapas seguintes.
+Sempre que eu mencionar $HERMES_HOME, use o valor real encontrado.
+Para $DATA_DIR, use o diretório pai do $WORKSPACE (ex: se WORKSPACE=/opt/data/workspace, então DATA_DIR=/opt/data).
+Se /opt/data existir, use-o como DATA_DIR. Caso contrário, use $HOME.
+
+**PASSO 2 — Criar estrutura de diretórios**
+mkdir -p $HERMES_HOME $DATA_DIR
+
+**PASSO 3 — Baixar SOUL.md (persona)**
+Se o arquivo $DATA_DIR/SOUL.md NÃO existir:
+  curl -sSL https://raw.githubusercontent.com/SEU_USUARIO_GITHUB/hermes-whatsapp-mixed/main/SOUL.md -o $DATA_DIR/SOUL.md
+  cp $DATA_DIR/SOUL.md $HERMES_HOME/SOUL.md
+Se já existir, apenas copie a versão persistente para $HERMES_HOME/SOUL.md
+
+**PASSO 4 — Baixar support_rules.md**
+Se o arquivo $DATA_DIR/support_rules.md NÃO existir:
+  curl -sSL https://raw.githubusercontent.com/SEU_USUARIO_GITHUB/hermes-whatsapp-mixed/main/support_rules.md -o $DATA_DIR/support_rules.md
+
+**PASSO 5 — Baixar config.yaml inicial**
+Se o arquivo $HERMES_HOME/config.yaml NÃO existir:
+  curl -sSL https://raw.githubusercontent.com/SEU_USUARIO_GITHUB/hermes-whatsapp-mixed/main/config.yaml.example -o $HERMES_HOME/config.yaml
+
+**PASSO 6 — Aplicar patch do WhatsApp**
+curl -sSL https://raw.githubusercontent.com/SEU_USUARIO_GITHUB/hermes-whatsapp-mixed/main/patch_whatsapp.py -o /tmp/patch_whatsapp.py && python3 /tmp/patch_whatsapp.py
+
+**PASSO 7 — Confirmar resultado**
+Me mostre a lista de arquivos criados em $HERMES_HOME e em $DATA_DIR.
+
+Execute cada passo em sequência, pare se houver erro e me explique o que aconteceu.
+```
+
+> 💡 **Substitua `SEU_USUARIO_GITHUB`** pelo seu usuário do GitHub (onde está o seu Fork personalizado com suas regras e persona).
+
+### Por que funciona em qualquer ambiente?
+
+O **Passo 1** faz o Hermes ler suas próprias variáveis de ambiente antes de agir. Assim ele descobre os caminhos corretos independente de onde está instalado:
+
+| Variável | Portainer / Easypanel | Hostinger VPS |
+|---|---|---|
+| `$HERMES_HOME` | `/opt/data/.hermes` | descoberto automaticamente |
+| `$DATA_DIR` | `/opt/data` | `/root` ou `/home/hermes` |
+| `$WORKSPACE` | `/opt/data/workspace` | descoberto automaticamente |
+
+---
+
 ## 📧 Como Conectar e Ativar o Suporte via Gmail (OAuth Conversacional)
 
 Em vez de digitar códigos no terminal ou usar senhas manuais, você pode autenticar sua conta de e-mail de suporte conversando com o seu Hermes diretamente pelo **console (chat do terminal) ou pelo Telegram**!
