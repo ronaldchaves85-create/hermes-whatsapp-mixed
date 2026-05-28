@@ -64,32 +64,30 @@ Acesse os arquivos diretamente na pasta de volume persistente do seu servidor (e
 
 ---
 
-## 📧 Como Conectar e Ativar o Suporte via Gmail (OAuth Seguro)
+## 📧 Como Conectar e Ativar o Suporte via Gmail (OAuth Conversacional)
 
-Em vez de usar senhas comuns ou senhas de aplicativo que expiram ou são bloqueadas, nós utilizamos a autenticação oficial por **OAuth 2.0 (Google Web Client)** contida na sua stack do Portainer.
+Em vez de digitar códigos no terminal ou usar senhas manuais, você pode autenticar sua conta de e-mail de suporte conversando com o seu Hermes diretamente pelo **console (chat do terminal) ou pelo Telegram**!
 
 ### 1. Garantir as Credenciais do Google na Stack
-Certifique-se de que as credenciais do seu cliente Google Web estejam definidas nas variáveis de ambiente da sua Stack do Portainer ou no arquivo `/opt/data/.hermes/.env`:
+Certifique-se de que as credenciais do seu cliente Google Web estejam definidas na sua Stack do Portainer ou no arquivo `/opt/data/.hermes/.env`:
 * `GOOGLE_CLIENT_ID`
 * `GOOGLE_CLIENT_SECRET`
-* *Nota: No Google Cloud Console, a URI de redirecionamento autorizada para este cliente deve ser configurada exatamente como: `http://localhost:1`.*
+* *Nota: No Google Cloud Console, a URI de redirecionamento autorizada deve ser configurada como: `http://localhost:1`.*
 
-### 2. Rodar o Fluxo de Consentimento (Login)
-1. No console do container no Portainer, inicie o comando de login do e-mail de suporte rodando o script:
-   ```bash
-   python3 /opt/data/.hermes/scripts/support_agent.py
-   ```
-2. O script detectará a falta do token e imprimirá uma **URL de consentimento da Google** no terminal.
-3. Copie essa URL completa, abra no seu navegador e faça login com a conta de e-mail de suporte da sua empresa.
-4. Clique em **Continuar** e dê as permissões de acesso ao Gmail para o Hermes.
+### 2. Pedir o Link ao Bot (No Console do Hermes ou no Telegram)
+1. Abra o chat com o seu Hermes (digite `hermes` no console do container, ou envie uma mensagem direta no seu Telegram/WhatsApp do bot pareado).
+2. Envie a seguinte instrução para o bot:
+   > *"Hermes, inicie o fluxo de login do Gmail de suporte da minha empresa."*
+3. O robô vai iniciar o processo em segundo plano e responderá diretamente no chat com um **Link de Consentimento da Google**.
+4. Clique no link, faça login com a conta de e-mail de suporte da sua empresa e conceda as permissões de acesso ao Gmail.
 
-### 3. Copiar o Link de Redirecionamento de Volta
-1. Após permitir o acesso, o navegador tentará te redirecionar para uma página em branco que não carrega, cujo endereço na barra de navegação começará com:
+### 3. Entregar o Link de Retorno ao Bot
+1. Após permitir o acesso, o navegador tentará redirecionar para uma página em branco que começará com:
    👉 `http://localhost:1/?code=4/0Ad...`
 2. Copie essa **URL completa diretamente da barra de endereços** do seu navegador.
-3. Volte ao terminal do Portainer, **cole a URL inteira** no console e aperte Enter.
+3. Volte ao seu chat com o Hermes (Console ou Telegram) e apenas envie a URL copiada para ele.
 
-> **Pronto!** O Hermes validará o token de acesso de forma criptografada e salvará a autenticação permanente. Ele agora tem acesso seguro ao seu Gmail para ler e responder dúvidas de suporte automaticamente com base nas suas regras!
+> **Pronto!** O Hermes processará a URL automaticamente, salvará suas credenciais criptografadas e responderá confirmando o sucesso da autenticação. A partir deste momento, ele começará a responder e-mails de suporte de forma 100% autônoma baseando-se nas suas `support_rules.md`!
 
 ---
 
@@ -110,7 +108,7 @@ Como o Hermes Agent roda containerizado, qualquer arquivo criado fora dos caminh
 
 Se você quer acessar o Web Dashboard e o console interativo do Hermes com HTTPS (`https://seu-dominio.com`), nós incluímos o arquivo `Caddyfile.example`.
 
-Basta subir um container do Caddy na mesma rede do seu Hermes Agent e usar a seguinte configuração no seu `Caddyfile`:
+Basta subir un container do Caddy na mesma rede do seu Hermes Agent e usar a seguinte configuração no seu `Caddyfile`:
 
 ```caddy
 hermes.seu-dominio.com {
