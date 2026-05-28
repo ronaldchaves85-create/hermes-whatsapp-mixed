@@ -120,12 +120,16 @@ Depois de parear o seu WhatsApp no Hermes Agent, você pode controlá-lo enviand
 
 ---
 
-### 🔄 Como Forçar o Reinício da Ponte
-Sempre que fizer alterações do robô ou aplicar o patch pela primeira vez, execute o seguinte comando no console para recarregar o robô do WhatsApp:
+## 🔄 Como Reiniciar a Ponte do WhatsApp de Forma Segura
 
-```bash
-docker exec -it hermes-agent pkill -f bridge.js
-```
+Toda vez que você rodar o script de setup para sincronizar novas regras ou atualizar sua persona, a ponte do WhatsApp precisa ser recarregada para carregar as novas instruções de forma limpa.
+
+**A forma mais segura, robusta e recomendada de fazer isso em ambiente Docker/Portainer é:**
+1. Acesse o seu painel do **Portainer**.
+2. Vá em **Stacks** e clique na sua stack `hermes-agent`.
+3. Clique em **Restart** (Reiniciar) ou em **Update the stack** para atualizar o container de forma limpa e segura.
+
+*💡 Dica técnica: Evite usar comandos de kill (como pkill -f bridge.js) diretamente de dentro do console do container. Deixar o Portainer gerenciar o ciclo de vida do container previne o travamento de portas e a criação de processos zumbis de Node.js no seu servidor!*
 
 ---
 *Desenvolvido e disponibilizado pela Comunidade Empreendedor Serial (André Alencar).*

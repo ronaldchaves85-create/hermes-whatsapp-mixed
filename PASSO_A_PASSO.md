@@ -44,7 +44,7 @@ Agora faremos seu servidor puxar as regras que você salvou no seu GitHub no Pas
 1. No painel do Portainer, clique em **Containers** e encontre o container `hermes-agent`.
 2. Clique no ícone de **Console** (`>_`) correspondente a ele.
 3. Clique em **Connect** para abrir o terminal integrado.
-4. **Substitua `SEU_USUARIO_GITHUB` pelo seu usuário real do GitHub** no comando abaixo, cole-o no terminal e aperte **Enter**:
+4. **Substitua `SEU_USUARIO_GITHUB` pelo seu usuário real do GitHub** no comando abaixo, cole-o no terminal e aprete **Enter**:
 
 ```bash
 curl -sSL https://raw.githubusercontent.com/SEU_USUARIO_GITHUB/hermes-whatsapp-mixed/main/setup.sh | bash -s SEU_USUARIO_GITHUB
@@ -66,10 +66,8 @@ curl -sSL https://raw.githubusercontent.com/SEU_USUARIO_GITHUB/hermes-whatsapp-m
 3. Um **QR Code** será exibido na tela do terminal. 
 4. Abra o WhatsApp no seu celular, vá em **Aparelhos conectados** -> **Conectar um aparelho** e escaneie o código da tela.
 5. Assim que a conexão for concluída, você poderá fechar o terminal interativo digitando `/exit`.
-6. Para garantir que as novas regras de limpeza de assinaturas e os comandos estão ativos na ponte, execute este comando de reinício rápido no console:
-   ```bash
-   pkill -f bridge.js
-   ```
+6. Para que as novas diretrizes da persona sincronizadas no Passo 3 entrem em vigor na ponte do WhatsApp de forma 100% limpa e estável:
+   * Vá ao painel do seu **Portainer**, entre na sua Stack do `hermes-agent` e clique em **Restart** (Reiniciar) no container para recarregar o robô de forma limpa e segura!
 
 ---
 
