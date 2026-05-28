@@ -28,6 +28,10 @@ echo "  ✓ Persona SOUL.md sincronizada com seu GitHub"
 curl -sSL "$RAW_URL/SOUL_WHATSAPP.md" -o "/opt/data/SOUL_WHATSAPP.md"
 echo "  ✓ Persona do WhatsApp SOUL_WHATSAPP.md sincronizada"
 
+# Baixa e atualiza o arquivo de persona do suporte de E-mail (SOUL_EMAIL.md) direto do repositório/fork do aluno
+curl -sSL "$RAW_URL/SOUL_EMAIL.md" -o "/opt/data/SOUL_EMAIL.md"
+echo "  ✓ Persona de E-mail SOUL_EMAIL.md sincronizada"
+
 # Baixa e atualiza a base de conhecimento de suporte (support_rules.md) direto do repositório/fork do aluno
 curl -sSL "$RAW_URL/support_rules.md" -o "/opt/data/support_rules.md"
 echo "  ✓ Regras de suporte support_rules.md sincronizadas com seu GitHub"

@@ -107,19 +107,25 @@ Você agora tem superpoderes! Diretamente do seu chat privado, envie os seguinte
 
 ## 👥 PASSO EXTRA: Configurando Múltiplos Perfis Separados (Profiles Nativo) 🚀
 
-Se você deseja ter **agentes totalmente independentes** rodando ao mesmo tempo (um perfil focado apenas em ser seu Assistente Técnico Pessoal e outro focado 100% no Atendimento ao Cliente), você pode usar o sistema de **Perfis (Profiles)** do Hermes:
+Se você deseja ter **agentes totalmente independentes** rodando ao mesmo tempo (um perfil focado em ser seu Assistente Técnico Pessoal, outro focado 100% no Atendimento ao Cliente no WhatsApp, e um terceiro focado em Suporte por E-mail), você pode usar o sistema de **Perfis (Profiles)** do Hermes:
 
 1. Abra o **Console** do seu container `hermes-agent` no Portainer.
-2. Crie um novo perfil chamado `suporte` herdando as suas chaves base de API rodando o comando:
-   ```bash
-   /opt/hermes/.venv/bin/hermes profile create suporte --clone
-   ```
-3. Abra sua Dashboard Web e clique na aba **PROFILES** (`https://hermes.seu-dominio.com/profiles`). Você verá que agora existem dois perfis listados de forma visual!
-4. **Isolamento de Prompts:**
-   * O perfil `default` mantém o `/opt/data/.hermes/SOUL.md` (Admin).
-   * O perfil `suporte` terá seu próprio arquivo exclusivo em `/opt/data/.hermes/profiles/suporte/SOUL.md`. Você pode colar nele apenas o tom e as diretrizes do atendimento de clientes.
-5. **WhatsApp Independente:**
-   Cada perfil possui seu próprio pareamento de WhatsApp independente. Você pode parear um número exclusivo para o suporte dos seus clientes e manter seu assistente no seu número privado!
+2. Crie os novos perfis herdando as suas chaves base de API rodando os comandos:
+   * **Perfil WhatsApp:**
+     ```bash
+     /opt/hermes/.venv/bin/hermes profile create whatsapp --clone
+     ```
+   * **Perfil E-mail:**
+     ```bash
+     /opt/hermes/.venv/bin/hermes profile create email --clone
+     ```
+3. Abra sua Dashboard Web e clique na aba **PROFILES** (`https://hermes.seu-dominio.com/profiles`). Você verá que agora existem os perfis listados de forma visual!
+4. **Isolamento de Prompts (SOULs de cada canal):**
+   * **`default` (Admin):** Mantém o `/opt/data/.hermes/SOUL.md` (regras do dono).
+   * **`whatsapp` (WhatsApp):** Terá seu próprio arquivo em `/opt/data/.hermes/profiles/whatsapp/SOUL.md` (onde você cola o tom de chat do `SOUL_WHATSAPP.md`).
+   * **`email` (E-mail):** Terá seu próprio arquivo em `/opt/data/.hermes/profiles/email/SOUL.md` (onde você cola o tom formal do `SOUL_EMAIL.md`).
+5. **WhatsApp e E-mail Independentes:**
+   Cada perfil possui seu próprio pareamento e chaves de forma independente. Você pode parear um número exclusivo para o suporte do WhatsApp de clientes e manter seu assistente no seu número privado, além de gerenciar a caixa do suporte do Gmail no perfil de e-mail!
 
 ---
 *Bons negócios e automações!*  

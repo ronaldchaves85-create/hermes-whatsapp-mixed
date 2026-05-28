@@ -348,23 +348,29 @@ Depois de parear o seu WhatsApp no Hermes Agent, você pode controlá-lo enviand
 
 ## 👥 Configuração Avançada de Múltiplos Perfis (Profiles Nativo) 🚀
 
-Se você deseja ter **agentes totalmente independentes** rodando ao mesmo tempo (por exemplo: um perfil focado apenas em ser seu Assistente Técnico Pessoal e outro perfil focado 100% no Atendimento de Clientes), você pode usar o sistema nativo de **Perfis (Profiles)** do Hermes!
+Se você deseja ter **agentes totalmente independentes** rodando ao mesmo tempo (por exemplo: um perfil focado em ser seu Assistente Técnico Pessoal, outro focado 100% no Atendimento de Clientes no WhatsApp, e um terceiro focado exclusivamente em Suporte por E-mail), você pode usar o sistema nativo de **Perfis (Profiles)** do Hermes!
 
 Cada perfil ganha seu próprio painel, chaves de API, banco de dados, memórias e arquivos de persona (`SOUL.md`).
 
-### Como criar e configurar um novo perfil:
+### Como criar e configurar seus perfis separados:
 
 1. Acesse o **Console** do container do `hermes-agent` no seu Portainer.
-2. Rode o comando para criar um novo perfil clonando as suas configurações base (vamos chamá-lo de `suporte`):
-   ```bash
-   /opt/hermes/.venv/bin/hermes profile create suporte --clone
-   ```
-3. Acesse a aba **PROFILES** na sua Dashboard Web (`https://hermes.seu-dominio.com/profiles`) e você verá que agora aparecem os dois perfis (`default` e `suporte`).
-4. **Isolando as Personas:**
-   * O perfil `default` continuará usando o `/opt/data/.hermes/SOUL.md` (onde você pode deixar apenas suas regras de Admin).
-   * O perfil `suporte` usará seu próprio arquivo localizado em `/opt/data/.hermes/profiles/suporte/SOUL.md` (onde você pode colar apenas as diretrizes do suporte ao cliente, como o conteúdo do `SOUL_WHATSAPP.md`).
+2. Rode os comandos para criar os perfis clonando as suas configurações base:
+   * **Perfil WhatsApp de Suporte:**
+     ```bash
+     /opt/hermes/.venv/bin/hermes profile create whatsapp --clone
+     ```
+   * **Perfil E-mail de Suporte:**
+     ```bash
+     /opt/hermes/.venv/bin/hermes profile create email --clone
+     ```
+3. Acesse a aba **PROFILES** na sua Dashboard Web (`https://hermes.seu-dominio.com/profiles`) e você verá que agora aparecem os três perfis (`default`, `whatsapp` e `email`).
+4. **Isolando as Personas (Arquivos de SOUL separados):**
+   * **Seu Assistente Admin (`default`):** Continuará usando o `/opt/data/.hermes/SOUL.md` (onde você deixa apenas as regras de Admin e infraestrutura).
+   * **Seu Atendente do WhatsApp (`whatsapp`):** Usará `/opt/data/.hermes/profiles/whatsapp/SOUL.md` (onde você pode colocar as regras de conversa rápida e estilo chat do `SOUL_WHATSAPP.md`).
+   * **Seu Atendente do E-mail (`email`):** Usará `/opt/data/.hermes/profiles/email/SOUL.md` (onde você pode colocar o tom formal de e-mail e assinaturas do `SOUL_EMAIL.md`).
 5. **Pareando de forma independente:**
-   Você pode parear um número de WhatsApp diferente para cada perfil de forma totalmente isolada! Basta acessar o terminal ou o painel web de cada perfil para fazer o escaneamento do QR Code.
+   Você pode parear números de WhatsApp ou contas de e-mail diferentes para cada perfil de forma totalmente isolada! Basta acessar o painel de cada perfil de forma independente.
 
 ---
 
