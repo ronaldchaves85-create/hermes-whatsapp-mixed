@@ -63,6 +63,26 @@ echo "⏳ 2. Baixando e aplicando o Patch do WhatsApp..."
 curl -sSL "$RAW_URL/patch_whatsapp.py" -o "/tmp/patch_whatsapp.py"
 python3 /tmp/patch_whatsapp.py
 
+echo "⏳ 3. Instalando dependências da ponte e de geração de imagem do QR Code..."
+
+# Instala dependências Node.js da ponte do WhatsApp (necessário para iniciar o pareamento)
+if [ -d "/opt/hermes/scripts/whatsapp-bridge" ]; then
+    (cd /opt/hermes/scripts/whatsapp-bridge && npm install --no-fund --no-audit --silent 2>/dev/null) \
+        && echo "  ✓ Dependências Node.js da ponte do WhatsApp instaladas." \
+        || echo "  ⚠️  npm install falhou (pode ser seguro ignorar se já instalado)."
+else
+    echo "  - Pasta whatsapp-bridge não encontrada, pulando npm install."
+fi
+
+# Instala qrcode e pillow no venv do Hermes (necessário para enviar QR Code como imagem PNG)
+if [ -x "/opt/hermes/.venv/bin/python" ]; then
+    uv pip install --python /opt/hermes/.venv/bin/python qrcode pillow --quiet 2>/dev/null \
+        && echo "  ✓ Bibliotecas qrcode e pillow instaladas no ambiente virtual." \
+        || echo "  ⚠️  uv pip install falhou (pode ser seguro ignorar se já instalado)."
+else
+    echo "  - Ambiente virtual do Hermes não encontrado em /opt/hermes/.venv, pulando."
+fi
+
 # Se o profile de WhatsApp do Hermes já existir, sincroniza também o SOUL_WHATSAPP para lá automaticamente
 if [ -d "/opt/data/.hermes/profiles/whatsapp" ]; then
     cp "/opt/data/SOUL_WHATSAPP.md" "/opt/data/.hermes/profiles/whatsapp/SOUL.md"

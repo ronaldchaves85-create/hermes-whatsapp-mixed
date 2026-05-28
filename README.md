@@ -308,6 +308,15 @@ Se o arquivo $HERMES_HOME/config.yaml NÃO existir:
 **PASSO 8 — Aplicar patch do WhatsApp**
 curl -sSL $REPO_BASE/patch_whatsapp.py -o /tmp/patch_whatsapp.py && python3 /tmp/patch_whatsapp.py
 
+**PASSO 8.5 — Instalar dependências de ponte e geração de imagem do QR Code**
+Este passo garante que o pareamento do WhatsApp funcione e que o QR Code possa ser enviado como imagem PNG diretamente pelo Telegram.
+
+1. Instalar dependências Node.js da ponte do WhatsApp:
+   cd /opt/hermes/scripts/whatsapp-bridge && npm install --no-fund --no-audit
+
+2. Instalar dependências Python de renderização de imagem no ambiente virtual do Hermes:
+   uv pip install --python /opt/hermes/.venv/bin/python qrcode pillow
+
 **PASSO 9 — Criar os perfis separados (whatsapp e email)**
 Execute os comandos abaixo para criar os perfis clonando as configurações base:
 /opt/hermes/.venv/bin/hermes profile create whatsapp --clone
