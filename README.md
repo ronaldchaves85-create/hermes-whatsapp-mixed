@@ -17,7 +17,9 @@ Esse modo permite que seu agente desempenhe duas funções ao mesmo tempo:
 * ⚙️ **`config.yaml.example`**: Configuração pré-otimizada para alta performance, ativação de memória persistente e prevenção de spam em grupos de WhatsApp.
 * 🔑 **`.env.example`**: Modelo de exemplo para as variáveis de ambiente necessárias (ignorado por segurança pelo `.gitignore` para evitar vazamentos).
 * 👤 **`SOUL.md`**: Persona pré-configurada para o funcionamento do Modo Duplo (Dono vs Clientes).
-* 📖 **`support_rules.md`**: Modelo estruturado de base de conhecimento separando as diretrizes de e-mail e WhatsApp.
+* 👤 **`SOUL_WHATSAPP.md`**: Persona específica e otimizada para o WhatsApp de Clientes (diálogos amigáveis, saudações curtas, regras de abordagem humana).
+* 👤 **`SOUL_EMAIL.md`**: Persona específica e estruturada para Suporte por E-mail (tom formal, com quebra de parágrafos e assinatura oficial).
+* 📖 **`support_rules.md`**: Modelo estruturado de base de conhecimento com as diretrizes e FAQs do seu negócio.
 
 ---
 
@@ -30,7 +32,8 @@ Em vez de editar arquivos complexos no terminal do seu servidor, você vai usar 
 1. Na parte superior desta página, clique no botão **Fork** para criar uma cópia deste repositório na sua própria conta do GitHub (ex: `github.com/SEU_USUARIO_GITHUB/hermes-whatsapp-mixed`).
 2. Dentro do seu repositório pessoal recém-criado, edite os arquivos diretamente pelo seu navegador:
    * **`support_rules.md`**: Preencha o documento com as informações do seu negócio, preços, links de checkout (Kiwify, Hotmart, etc.) e formas de suporte. Clique em **Commit changes** para salvar.
-   * **`SOUL.md`**: Se quiser, mude o tom do robô ou adicione instruções personalizadas de persona. Salve.
+   * **`SOUL_WHATSAPP.md`**: Ajuste os exemplos práticos de saudação ou personalize a abordagem humana do suporte de WhatsApp. Salve.
+   * **`SOUL_EMAIL.md`**: Mude a assinatura padrão de e-mail ou ajuste as regrinhas formais de atendimento. Salve.
 3. Pronto! Seus arquivos de persona e regras de negócio agora estão guardados com segurança e com histórico no seu próprio GitHub.
 
 ---
@@ -47,6 +50,7 @@ Toda a infraestrutura de rede, domínios SSL e chaves de API é gerenciada de fo
    * **`HERMES_API_HOST`**: O subdomínio para a API (ex: `hermes-api.seu-dominio.com`).
    * **`GOOGLE_API_KEY`**: Sua chave da API do Gemini (usada para pensar).
    * **`API_SERVER_KEY`**: Uma senha secreta para proteger a API do seu robô.
+   * **`WHATSAPP_FIRST_RESPONSE_DELAY_S`**: (Opcional) Tempo de delay humano em segundos para a primeiríssima resposta do bot ao cliente. Padrão: `30` (30 segundos). Defina como `0` para desativar.
 5. Clique em **Deploy the stack** para criar seu container.
 
 > 🔒 **Traefik Integrado:** O arquivo `docker-compose.yml` já possui todas as `labels` de produção do Traefik mapeadas. Ele cuida da geração e renovação de certificados SSL da Let's Encrypt de forma 100% nativa e automática!
@@ -59,13 +63,13 @@ Agora, vamos fazer com que o seu servidor baixe automaticamente os arquivos que 
 
 1. No Portainer, clique em **Containers** e clique no ícone de **Console** (`>_`) do container `hermes-agent`.
 2. Clique em **Connect** para abrir o terminal integrado.
-3. Substitua `SEU_USUARIO_GITHUB` pelo seu usuário real do GitHub no comando abaixo, cole-o no console e aprete Enter:
+3. Substitua `SEU_USUARIO_GITHUB` pelo seu usuário real do GitHub no comando abaixo, cole-o no console e aperte Enter:
 
 ```bash
 curl -sSL https://raw.githubusercontent.com/SEU_USUARIO_GITHUB/hermes-whatsapp-mixed/main/setup.sh | bash -s SEU_USUARIO_GITHUB
 ```
 
-> **O que o script fez por você?** Ele baixou a persona (`SOUL.md`) e as regras de negócio (`support_rules.md`) diretamente do seu GitHub Fork pessoal, configurou as otimizações no `config.yaml` e corrigiu a ponte do WhatsApp!
+> **O que o script fez por você?** Ele baixou a persona global (`SOUL.md`), as personas isoladas (`SOUL_WHATSAPP.md` e `SOUL_EMAIL.md`), a base de conhecimento (`support_rules.md`) diretamente do seu GitHub Fork pessoal, configurou as otimizações no `config.yaml` e aplicou a inteligência do plugin do WhatsApp!
 
 💡 **Dica de Sincronização:** Toda vez que você quiser alterar as regras do seu negócio ou atualizar sua persona, basta editá-las no seu GitHub e rodar este mesmo comando de novo. Seu servidor atualizará tudo em segundos!
 
@@ -80,7 +84,8 @@ Se você precisar fazer um ajuste rápido de última hora (mudar um preço, corr
 2. No menu lateral, acesse o **gerenciador de arquivos visual** integrado.
 3. Você pode clicar para abrir e **editar diretamente pela interface Web** os arquivos:
    * 📄 **`support_rules.md`** (Regras de Suporte e FAQ).
-   * 📄 **`SOUL.md`** (Arquivo de Persona e Personalidade).
+   * 📄 **`SOUL_WHATSAPP.md`** (Persona específica do WhatsApp).
+   * 📄 **`SOUL_EMAIL.md`** (Persona específica do E-mail).
 4. Basta clicar em **Salvar** e o Hermes assumirá as alterações no mesmo instante!
 
 *⚠️ Nota: Lembre-se de que se você rodar o setup.sh novamente com o parâmetro do seu GitHub, ele baixará as versões do seu repositório. Por isso, para alterações definitivas, o recomendado é atualizar sempre o seu GitHub Fork!*
@@ -119,7 +124,7 @@ Se você precisar fazer um ajuste rápido de última hora (mudar um preço, corr
 # OBRIGATÓRIA
 API_SERVER_KEY=sua_chave_secreta_aqui
 
-# Provedores de IA (pelo menos uma)
+# Provedores de IA (pelo menos uma com sua chave)
 OPENAI_API_KEY=
 ANTHROPIC_API_KEY=
 GOOGLE_API_KEY=
@@ -130,13 +135,15 @@ TELEGRAM_BOT_TOKEN=
 TELEGRAM_ALLOWED_USERS=
 GATEWAY_ALLOW_ALL_USERS=false
 
-# WhatsApp (deixe false até parear)
+# WhatsApp
 WHATSAPP_ENABLED=false
 WHATSAPP_OWNER_NUMBER=
 WHATSAPP_MODE=bot
 WHATSAPP_ALLOWED_USERS=*
+# Delay em segundos para a primeira resposta do bot ao cliente
+WHATSAPP_FIRST_RESPONSE_DELAY_S=30
 
-# Google OAuth (opcional)
+# Google OAuth (opcional para Gmail)
 GOOGLE_CLIENT_ID=
 GOOGLE_CLIENT_SECRET=
 
@@ -173,7 +180,7 @@ O Hermes expõe **duas portas** que precisam de subdomínios separados:
 
 **Para configurar o domínio da API:**
 
-1. Clique em **+ Add Domain** novamente:
+1. Clique em **+ Add Domain novamente**:
    - **Domain:** `hermes-api.seu-dominio.com`
    - **Port:** `8642`
 2. Clique em **Save**.
@@ -202,10 +209,12 @@ curl -sSL https://raw.githubusercontent.com/SEU_USUARIO_GITHUB/hermes-whatsapp-m
 
 **O setup irá:**
 * Configurar a persona (`SOUL.md`) em `/opt/data/SOUL.md`
+* Configurar as personas isoladas (`SOUL_WHATSAPP.md` e `SOUL_EMAIL.md`) em `/opt/data/`
 * Criar as regras de suporte (`support_rules.md`) em `/opt/data/support_rules.md`
 * Criar o `config.yaml` em `/root/.hermes/config.yaml`
 * Criar o `.env` em `/root/.hermes/.env`
-* Aplicar o patch do WhatsApp automaticamente
+* Configurar o plugin `whatsapp-manager` automaticamente
+* Aplicar o patch do WhatsApp
 
 > Todos os arquivos são salvos em volumes persistentes — sobrevivem a restarts e atualizações de imagem.
 
@@ -218,7 +227,8 @@ curl -sSL https://raw.githubusercontent.com/SEU_USUARIO_GITHUB/hermes-whatsapp-m
 Acesse o gerenciador de arquivos visual do Dashboard (`https://hermes.seu-dominio.com`) ou o Console do Easypanel e edite:
 
 * 📄 **`/opt/data/support_rules.md`** — regras do negócio, preços, links de checkout, instruções de suporte.
-* 📄 **`/opt/data/SOUL.md`** — persona e tom do assistente (só se quiser personalizar).
+* 📄 **`/opt/data/SOUL_WHATSAPP.md`** — persona e exemplos práticos rápidos de chat do WhatsApp.
+* 📄 **`/opt/data/SOUL_EMAIL.md`** — persona e regras formais do e-mail.
 
 ---
 
@@ -226,7 +236,7 @@ Acesse o gerenciador de arquivos visual do Dashboard (`https://hermes.seu-domini
 
 | Volume | Caminho no container | O que persiste |
 |---|---|---|
-| `hermes_data` | `/opt/data` | SOUL.md, support_rules.md, workspace, HERMES_HOME |
+| `hermes_data` | `/opt/data` | SOUL.md, support_rules.md, workspace, HERMES_HOME, chaves de pareamento |
 | `hermes_root` | `/root/.hermes` | config.yaml (criado pelo setup.sh) |
 
 > Os volumes ficam em `/etc/easypanel/projects/<projeto>/hermes/volumes/` no servidor.
@@ -235,7 +245,7 @@ Acesse o gerenciador de arquivos visual do Dashboard (`https://hermes.seu-domini
 
 ## 🤖 Setup Via Conversa com o Hermes (Universal — Portainer, Easypanel e Hostinger)
 
-> Em vez de rodar o `setup.sh` pelo terminal do painel, você pode pedir diretamente ao Hermes para fazer o setup. Funciona em **qualquer instalação** porque o Hermes descobre os seus próprios caminhos automaticamente.
+> Em vez de rodar o `setup.sh` pelo terminal do painel, você pode pedir diretamente ao Hermes para fazer o setup do sistema. Funciona em **qualquer instalação** porque o Hermes descobre os seus próprios caminhos automaticamente.
 
 Envie o prompt abaixo para o Hermes pelo **Dashboard Web**, **Telegram** ou **WhatsApp** (na sua conversa privada de dono):
 
@@ -260,7 +270,7 @@ Se /opt/data existir, use-o como DATA_DIR. Caso contrário, use $HOME.
 mkdir -p $HERMES_HOME $DATA_DIR
 mkdir -p $HERMES_HOME/plugins/whatsapp-manager
 
-**PASSO 3 — Baixar SOUL.md (persona)**
+**PASSO 3 — Baixar SOUL.md (persona principal)**
 Se o arquivo $DATA_DIR/SOUL.md NÃO existir:
   curl -sSL https://raw.githubusercontent.com/SEU_USUARIO_GITHUB/hermes-whatsapp-mixed/main/SOUL.md -o $DATA_DIR/SOUL.md
   cp $DATA_DIR/SOUL.md $HERMES_HOME/SOUL.md
@@ -293,7 +303,7 @@ Me mostre a lista de arquivos criados em $HERMES_HOME, em $HERMES_HOME/plugins/w
 Execute cada passo em sequência, pare se houver erro e me explique o que aconteceu.
 ```
 
-> 💡 **Substitua `SEU_USUARIO_GITHUB`** pelo seu usuário do GitHub (onde está o seu Fork personalizado com suas regras e persona).
+> 💡 **Substitua `SEU_USUARIO_GITHUB`** pelo seu usuário do GitHub (onde está o seu Fork pessoal).
 
 ### Por que funciona em qualquer ambiente?
 
@@ -304,6 +314,18 @@ O **Passo 1** faz o Hermes ler suas próprias variáveis de ambiente antes de ag
 | `$HERMES_HOME` | `/opt/data/.hermes` | descoberto automaticamente |
 | `$DATA_DIR` | `/opt/data` | `/root` ou `/home/hermes` |
 | `$WORKSPACE` | `/opt/data/workspace` | descoberto automaticamente |
+
+---
+
+## 🎙️ Como Enviar e Receber Áudio e Imagem com Visão do Bot
+O Hermes Agent já vem pré-configurado de fábrica para suportar fluxos ricos de multimídia:
+
+### 📸 Recebimento de Imagens (Visão Ativa):
+* Quando um cliente envia um print de tela com erro ou comprovante de pagamento, o Gemini 3.5 Flash utiliza sua **visão computacional nativa** para ler a imagem e interpretá-la na hora! Não é preciso nenhuma configuração adicional.
+
+### 🎙️ Recebimento de Áudios (Transcrição Inteligente):
+* Para que seu robô ouça mensagens de voz e responda de forma inteligente, o Hermes utiliza o **OpenAI Whisper** de forma nativa. 
+* Certifique-se de que a variável de ambiente `OPENAI_API_KEY` esteja devidamente preenchida na sua Stack do Portainer ou no arquivo `.env`. O bot transcreverá a voz em milissegundos e responderá em texto!
 
 ---
 
@@ -326,7 +348,7 @@ Certifique-se de que as credenciais do seu cliente Google Web estejam definidas 
 
 ### 3. Entregar o Link de Retorno ao Bot
 1. Após permitir o acesso, o navegador tentará redirecionar para uma página em branco que começará com:
-   👉 `http://localhost:1/?code=4/0Ad...`
+   👉 `http://localhost:1/?code=***`
 2. Copie essa **URL completa diretamente da barra de endereços** do seu navegador.
 3. Volte ao seu chat com o Hermes (Console ou Telegram) e apenas envie a URL copiada para ele.
 

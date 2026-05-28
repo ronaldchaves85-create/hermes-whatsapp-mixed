@@ -63,6 +63,18 @@ echo "⏳ 2. Baixando e aplicando o Patch do WhatsApp..."
 curl -sSL "$RAW_URL/patch_whatsapp.py" -o "/tmp/patch_whatsapp.py"
 python3 /tmp/patch_whatsapp.py
 
+# Se o profile de WhatsApp do Hermes já existir, sincroniza também o SOUL_WHATSAPP para lá automaticamente
+if [ -d "/opt/data/.hermes/profiles/whatsapp" ]; then
+    cp "/opt/data/SOUL_WHATSAPP.md" "/opt/data/.hermes/profiles/whatsapp/SOUL.md"
+    echo "  ✓ Profile de WhatsApp atualizado com a persona SOUL_WHATSAPP.md"
+fi
+
+# Se o profile de E-mail do Hermes já existir, sincroniza também o SOUL_EMAIL para lá automaticamente
+if [ -d "/opt/data/.hermes/profiles/email" ]; then
+    cp "/opt/data/SOUL_EMAIL.md" "/opt/data/.hermes/profiles/email/SOUL.md"
+    echo "  ✓ Profile de E-mail atualizado com a persona SOUL_EMAIL.md"
+fi
+
 echo "=========================================================="
 echo "🎉 SINCRONIZAÇÃO E CONFIGURAÇÃO CONCLUÍDAS COM SUCESSO!"
 echo "=========================================================="
