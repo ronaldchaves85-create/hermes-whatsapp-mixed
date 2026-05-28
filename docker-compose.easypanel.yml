@@ -1,0 +1,136 @@
+# ==============================================================================
+# 📋 STACK: HERMES AGENT — EASYPANEL
+# ==============================================================================
+# Importe este arquivo no Easypanel via:
+#   Projeto > New Service > Compose (ou cole o conteúdo deste arquivo)
+#
+# ⚠️  VARIÁVEIS OBRIGATÓRIAS — configure em Environment Variables do serviço:
+#   API_SERVER_KEY        : Chave secreta de autenticação para a API do Hermes
+#
+# 🤖 PROVEDORES DE IA (pelo menos uma é recomendada):
+#   OPENAI_API_KEY        : Chave de API da OpenAI
+#   ANTHROPIC_API_KEY     : Chave de API da Anthropic (Claude)
+#   GOOGLE_API_KEY        : Chave de API do Google Gemini
+#   OPENROUTER_API_KEY    : Chave de API da OpenRouter
+#
+# 💬 TELEGRAM (Opcional):
+#   TELEGRAM_BOT_TOKEN    : Token do BotFather
+#   TELEGRAM_ALLOWED_USERS: IDs autorizados (ex: "12345678,98765432")
+#   GATEWAY_ALLOW_ALL_USERS: Permitir qualquer usuário (padrão: false)
+#
+# 🟢 WHATSAPP (Opcional — deixe false até parear):
+#   WHATSAPP_ENABLED      : Habilitar integração (padrão: false)
+#   WHATSAPP_OWNER_NUMBER : Número do proprietário (ex: "5511999999999")
+#   WHATSAPP_MODE         : Modo de funcionamento (padrão: bot)
+#   WHATSAPP_ALLOWED_USERS: Números autorizados (padrão: *)
+#
+# 🔑 GOOGLE CLOUD / OAUTH (Opcional):
+#   GOOGLE_CLIENT_ID      : Client ID do Google Cloud
+#   GOOGLE_CLIENT_SECRET  : Client Secret correspondente
+#
+# ⏱️  OUTRAS CONFIGURAÇÕES (Opcionais, com valores padrão):
+#   TZ                    : Fuso horário (padrão: America/Sao_Paulo)
+#   HERMES_API_TIMEOUT    : Timeout para chamadas da API (padrão: 1800)
+#   HERMES_API_CALL_STALE_TIMEOUT: Timeout de expiração (padrão: 300)
+#   API_SERVER_CORS_ORIGINS: Origens CORS permitidas (padrão: *)
+#
+# 🌐 DOMÍNIOS — configure na aba Domains & Proxy do Easypanel:
+#   Porta 8642 → domínio da API  (ex: hermes-api.seu-dominio.com)
+#   Porta 9119 → domínio do Dashboard (ex: hermes.seu-dominio.com)
+#
+# 🛠️  SETUP INICIAL (após o primeiro deploy):
+#   1. Acesse o Console do serviço no Easypanel
+#   2. Execute: curl -sSL https://raw.githubusercontent.com/empreendedorserial/hermes-whatsapp-mixed/main/setup.sh | bash
+#   3. O setup.sh gravará em /opt/data (persistido) e /root/.hermes (também persistido via volume abaixo)
+# ==============================================================================
+#
+# 📂 MAPA DE PERSISTÊNCIA (compatibilidade com setup.sh):
+#   /opt/data            → volume hermes_data  (SOUL.md, support_rules.md, workspace)
+#   /opt/data/.hermes    → subdiretório dentro de hermes_data (HERMES_HOME)
+#   /root/.hermes        → volume hermes_root  (config.yaml, .env — usados pelo setup.sh)
+# ==============================================================================
+
+services:
+  hermes:
+    image: nousresearch/hermes-agent:v2026.5.16
+    command: gateway run
+
+    volumes:
+      # Volume principal: persiste /opt/data (SOUL.md, support_rules.md, workspace, .hermes/)
+      # Opção A (padrão — volume gerenciado pelo Easypanel):
+      - hermes_data:/opt/data
+      # Opção B (bind mount — dados independentes do serviço, recomendado para produção):
+      # - /srv/hermes/data:/opt/data
+
+      # Volume secundário: persiste /root/.hermes (config.yaml e .env usados pelo setup.sh)
+      # ⚠️  Necessário para compatibilidade com o setup.sh — NÃO remova!
+      - hermes_root:/root/.hermes
+      # Opção B (bind mount):
+      # - /srv/hermes/root-hermes:/root/.hermes
+
+    environment:
+      # Persistência
+      - HOME=/opt/data
+      - HERMES_HOME=/opt/data/.hermes
+      - PATH=/opt/hermes/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+      - TZ=${TZ:-America/Sao_Paulo}
+      - WORKSPACE=/opt/data/workspace
+      - HERMES_WORKSPACE=/opt/data/workspace
+
+      # Providers de IA
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+
+      # Google/OAuth
+      - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
+      - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}
+
+      # Telegram
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN:-}
+      - TELEGRAM_ALLOWED_USERS=${TELEGRAM_ALLOWED_USERS:-}
+
+      # WhatsApp (deixe false até parear)
+      - WHATSAPP_ENABLED=${WHATSAPP_ENABLED:-false}
+      - WHATSAPP_OWNER_NUMBER=${WHATSAPP_OWNER_NUMBER:-}
+      - WHATSAPP_MODE=${WHATSAPP_MODE:-bot}
+      - WHATSAPP_ALLOWED_USERS=${WHATSAPP_ALLOWED_USERS:-*}
+
+      # Gateway
+      - GATEWAY_ALLOW_ALL_USERS=${GATEWAY_ALLOW_ALL_USERS:-false}
+
+      # API Server
+      - API_SERVER_ENABLED=true
+      - API_SERVER_HOST=0.0.0.0
+      - API_SERVER_KEY=${API_SERVER_KEY}
+      - API_SERVER_CORS_ORIGINS=${API_SERVER_CORS_ORIGINS:-*}
+
+      # Dashboard
+      - HERMES_DASHBOARD=1
+      - HERMES_DASHBOARD_HOST=0.0.0.0
+      - HERMES_DASHBOARD_PORT=9119
+      - HERMES_DASHBOARD_TUI=1
+
+      # Timeouts
+      - HERMES_API_TIMEOUT=${HERMES_API_TIMEOUT:-1800}
+      - HERMES_API_CALL_STALE_TIMEOUT=${HERMES_API_CALL_STALE_TIMEOUT:-300}
+
+    # Portas expostas — o Easypanel vai rotear via proxy reverso interno
+    # Adicione os domínios na aba "Domains & Proxy" apontando para estas portas
+    ports:
+      - "8642"   # API REST
+      - "9119"   # Dashboard + WebSocket (/api/ws, /api/events, /api/pty)
+
+    restart: unless-stopped
+
+volumes:
+  hermes_data:
+    # Persiste: /opt/data (SOUL.md, support_rules.md, workspace, HERMES_HOME)
+    # Easypanel armazena em: /etc/easypanel/projects/<projeto>/hermes/volumes/hermes_data
+    # Bind mount alternativo: mkdir -p /srv/hermes/data
+
+  hermes_root:
+    # Persiste: /root/.hermes (config.yaml e .env criados pelo setup.sh)
+    # Easypanel armazena em: /etc/easypanel/projects/<projeto>/hermes/volumes/hermes_root
+    # Bind mount alternativo: mkdir -p /srv/hermes/root-hermes

@@ -1,6 +1,6 @@
 # 🤖 Hermes Agent - Modo Misto Híbrido (WhatsApp + Gmail)
 
-Este repositório contém os arquivos de configuração, templates e scripts necessários para implantar o **Hermes Agent** em modo híbrido (Dual-Mode) via **Portainer**. 
+Este repositório contém os arquivos de configuração, templates e scripts necessários para implantar o **Hermes Agent** em modo híbrido (Dual-Mode) via **Portainer** ou **Easypanel**. 
 
 Esse modo permite que seu agente desempenhe duas funções ao mesmo tempo:
 1. **Assistente Pessoal do Dono:** Quando você fala com o robô no chat privado (ou envia mensagens para si mesmo no WhatsApp/Telegram), ele age como seu assistente técnico e de infraestrutura com permissões para rodar comandos do terminal.
@@ -11,6 +11,7 @@ Esse modo permite que seu agente desempenhe duas funções ao mesmo tempo:
 
 ## 📂 O que está incluído neste repositório:
 * 🐋 **`docker-compose.yml`**: Arquivo de produção otimizado para Portainer Stack, pré-configurado com suporte completo ao **Traefik** e rotas WebSockets seguras.
+* 🟣 **`docker-compose.easypanel.yml`**: Arquivo adaptado para implantação no Easypanel (sem Swarm, sem Traefik externo — SSL e proxy gerenciados automaticamente).
 * ⚡ **`setup.sh`**: Script de configuração e sincronização de 1 clique que vincula seu servidor ao seu repositório pessoal no GitHub.
 * 🐍 **`patch_whatsapp.py`**: Script de automação universal que reconfigura a ponte do WhatsApp (filtro de assinaturas inteligente e novos comandos).
 * ⚙️ **`config.yaml.example`**: Configuração pré-otimizada para alta performance, ativação de memória persistente e prevenção de spam em grupos de WhatsApp.
@@ -86,6 +87,150 @@ Se você precisar fazer um ajuste rápido de última hora (mudar um preço, corr
 
 ---
 
+## 🟣 Como Implantar pelo Easypanel (Passo a Passo)
+
+> O Easypanel gerencia automaticamente o proxy reverso (Traefik), SSL via Let's Encrypt e os volumes — sem configurações manuais de rede.
+
+### Passo 1: Criar o Projeto no Easypanel
+
+1. Acesse o painel do seu **Easypanel**.
+2. Clique em **+ Create Project**.
+3. Dê um nome ao projeto (ex: `hermes`).
+4. Clique em **Create**.
+
+---
+
+### Passo 2: Criar o Serviço Compose
+
+1. Dentro do projeto, clique em **+ Create Service**.
+2. Selecione o tipo **Compose**.
+3. Dê o nome `hermes` ao serviço.
+4. No campo de conteúdo, cole o conteúdo do arquivo **`docker-compose.easypanel.yml`** deste repositório.
+5. Clique em **Save** para salvar a configuração.
+
+---
+
+### Passo 3: Configurar as Variáveis de Ambiente
+
+1. Na tela do serviço, clique na aba **Environment**.
+2. Cole o conteúdo abaixo e preencha os valores:
+
+```env
+# OBRIGATÓRIA
+API_SERVER_KEY=sua_chave_secreta_aqui
+
+# Provedores de IA (pelo menos uma)
+OPENAI_API_KEY=
+ANTHROPIC_API_KEY=
+GOOGLE_API_KEY=
+OPENROUTER_API_KEY=
+
+# Telegram (opcional)
+TELEGRAM_BOT_TOKEN=
+TELEGRAM_ALLOWED_USERS=
+GATEWAY_ALLOW_ALL_USERS=false
+
+# WhatsApp (deixe false até parear)
+WHATSAPP_ENABLED=false
+WHATSAPP_OWNER_NUMBER=
+WHATSAPP_MODE=bot
+WHATSAPP_ALLOWED_USERS=*
+
+# Google OAuth (opcional)
+GOOGLE_CLIENT_ID=
+GOOGLE_CLIENT_SECRET=
+
+# Configurações gerais
+TZ=America/Sao_Paulo
+HERMES_API_TIMEOUT=1800
+HERMES_API_CALL_STALE_TIMEOUT=300
+API_SERVER_CORS_ORIGINS=*
+```
+
+3. Clique em **Save**.
+
+---
+
+### Passo 4: Configurar os Subdomínios (Domains & Proxy)
+
+O Hermes expõe **duas portas** que precisam de subdomínios separados:
+
+| Porta | Finalidade | Subdomínio sugerido |
+|---|---|---|
+| `9119` | Dashboard Web + WebSocket (PTY, eventos) | `hermes.seu-dominio.com` |
+| `8642` | API REST (integrações externas) | `hermes-api.seu-dominio.com` |
+
+> ⚠️ **Antes de adicionar os domínios**, certifique-se de que o DNS de ambos os subdomínios já aponta para o IP do seu servidor. O Easypanel gera o SSL automaticamente via Let's Encrypt assim que o domínio resolver corretamente.
+
+**Para configurar o domínio do Dashboard (principal):**
+
+1. Na tela do serviço, clique na aba **Domains**.
+2. Clique em **+ Add Domain**:
+   - **Domain:** `hermes.seu-dominio.com`
+   - **Port:** `9119`
+   - Marque como **Primary Domain** (clique na estrela ⭐)
+3. Clique em **Save**.
+
+**Para configurar o domínio da API:**
+
+1. Clique em **+ Add Domain** novamente:
+   - **Domain:** `hermes-api.seu-dominio.com`
+   - **Port:** `8642`
+2. Clique em **Save**.
+
+> 💡 O Easypanel suporta WebSocket nativamente — os caminhos `/api/ws`, `/api/events` e `/api/pty` funcionarão automaticamente no domínio do Dashboard sem configuração adicional.
+
+---
+
+### Passo 5: Fazer o Deploy
+
+1. Clique em **Deploy** para iniciar o container.
+2. Aguarde o status ficar verde (**Running**).
+3. Acesse `https://hermes.seu-dominio.com` para verificar o Dashboard.
+
+---
+
+### Passo 6: Setup Inicial de 1 Clique ⚡
+
+1. Na tela do serviço, clique na aba **Console**.
+2. Clique em **Connect** para abrir o terminal integrado.
+3. Cole o comando abaixo e pressione Enter (substitua `SEU_USUARIO_GITHUB` pelo seu usuário):
+
+```bash
+curl -sSL https://raw.githubusercontent.com/SEU_USUARIO_GITHUB/hermes-whatsapp-mixed/main/setup.sh | bash -s SEU_USUARIO_GITHUB
+```
+
+**O setup irá:**
+* Configurar a persona (`SOUL.md`) em `/opt/data/SOUL.md`
+* Criar as regras de suporte (`support_rules.md`) em `/opt/data/support_rules.md`
+* Criar o `config.yaml` em `/root/.hermes/config.yaml`
+* Criar o `.env` em `/root/.hermes/.env`
+* Aplicar o patch do WhatsApp automaticamente
+
+> Todos os arquivos são salvos em volumes persistentes — sobrevivem a restarts e atualizações de imagem.
+
+---
+
+### Passo 7: Inserir Chaves de API e Regras de Negócio
+
+Acesse os arquivos pelo Console do Easypanel ou pelo gerenciador de arquivos do Dashboard:
+
+1. **Chaves de API:** Edite `/root/.hermes/.env` com suas chaves (ex: `OPENROUTER_API_KEY`).
+2. **Regras do Negócio:** Edite `/opt/data/support_rules.md` com os dados do seu produto.
+
+---
+
+### 💾 Mapa de Persistência no Easypanel
+
+| Volume | Caminho no container | O que persiste |
+|---|---|---|
+| `hermes_data` | `/opt/data` | SOUL.md, support_rules.md, workspace, HERMES_HOME |
+| `hermes_root` | `/root/.hermes` | config.yaml, .env (criados pelo setup.sh) |
+
+> Os volumes ficam em `/etc/easypanel/projects/<projeto>/hermes/volumes/` no servidor.
+
+---
+
 ## 📧 Como Conectar e Ativar o Suporte via Gmail (OAuth Conversacional)
 
 Em vez de digitar códigos no terminal ou usar senhas manuais, você pode autenticar sua conta de e-mail de suporte conversando com o seu Hermes diretamente pelo **console (chat do terminal) ou pelo Telegram**!
@@ -113,7 +258,7 @@ Certifique-se de que as credenciais do seu cliente Google Web estejam definidas 
 
 ---
 
-## 💾 Persistência de Dados e Caminhos no Portainer
+## 💾 Persistência de Dados e Caminhos
 
 Como o Hermes Agent roda containerizado, qualquer arquivo criado fora dos caminhos mapeados no seu volume persistente (`/opt/data`) **será perdido permanentemente** toda vez que o container for atualizado, reiniciado ou recriado.
 
