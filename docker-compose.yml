@@ -1,0 +1,15 @@
+version: "3.8"
+
+services:
+  hermes-agent:
+    image: nousresearch/hermes-agent:latest
+    container_name: hermes-agent
+    restart: unless-stopped
+    tty: true
+    stdin_open: true
+    environment:
+      - TZ=America/Sao_Paulo
+    volumes:
+      - /opt/data:/root/.hermes
+    ports:
+      - "9119:9119"
