@@ -97,7 +97,7 @@ def register(ctx):
         try:
             session_key = gateway._session_key_for_source(event.source)
             if session_key:
-                owner_model = os.getenv("WHATSAPP_OWNER_MODEL", "gemini-1.5-pro").strip()
+                owner_model = os.getenv("WHATSAPP_OWNER_MODEL", "gemini-3.5-flash").strip()
                 client_model = os.getenv("WHATSAPP_CLIENT_MODEL", "gemini-3.5-flash").strip()
                 
                 if is_owner:
