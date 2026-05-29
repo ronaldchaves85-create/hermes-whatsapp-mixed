@@ -57,7 +57,7 @@ display:
   # Desativa os avisos automáticos de estado ocupado (ex: "⚡ Interrupting... I'll respond shortly") no chat
   busy_ack_enabled: false
   # Define o comportamento ao receber novas mensagens enquanto trabalha (interrupt | queue | steer)
-  busy_input_mode: interrupt
+  busy_input_mode: queue
 
 auxiliary:
   # IA auxiliar de baixo custo para tarefas de compressão de contexto e buscas
