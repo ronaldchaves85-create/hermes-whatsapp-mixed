@@ -15,51 +15,53 @@ mkdir -p "$BASE_DIR"
 mkdir -p "/opt/data"
 
 # URL Base para os arquivos do GitHub
-RAW_URL="https://raw.githubusercontent.com/$GITHUB_USER/hermes-whatsapp-mixed/main"
+RAW_ROOT="https://raw.githubusercontent.com/$GITHUB_USER/hermes-whatsapp-mixed/main"
+RAW_URL="$RAW_ROOT/deploy"
 
 echo "⏳ 1. Baixando arquivos de configuração e personas de $RAW_URL..."
 
 # Baixa e atualiza o arquivo de persona (SOUL.md) direto do repositório/fork do aluno
-curl -sSL "$RAW_URL/deploy/SOUL.md" -o "/opt/data/SOUL.md"
+curl -sSL "$RAW_URL/SOUL.md" -o "/opt/data/SOUL.md"
 cp "/opt/data/SOUL.md" "$BASE_DIR/SOUL.md"
 echo "  ✓ Persona SOUL.md sincronizada com seu GitHub"
 
-# Baixa e atualiza o arquivo de persona do suporte do WhatsApp (SOUL_WHATSAPP.md) direto do repositório/fork do aluno
-curl -sSL "$RAW_URL/deploy/SOUL_WHATSAPP.md" -o "/opt/data/SOUL_WHATSAPP.md"
+# Baixa e atualiza o arquivo de persona do suporte do WhatsApp
+curl -sSL "$RAW_URL/SOUL_WHATSAPP.md" -o "/opt/data/SOUL_WHATSAPP.md"
 echo "  ✓ Persona do WhatsApp SOUL_WHATSAPP.md sincronizada"
 
-# Baixa e atualiza o arquivo de persona do suporte de E-mail (SOUL_EMAIL.md) direto do repositório/fork do aluno
-curl -sSL "$RAW_URL/deploy/SOUL_EMAIL.md" -o "/opt/data/SOUL_EMAIL.md"
+# Baixa e atualiza o arquivo de persona do suporte de E-mail
+curl -sSL "$RAW_URL/SOUL_EMAIL.md" -o "/opt/data/SOUL_EMAIL.md"
 echo "  ✓ Persona de E-mail SOUL_EMAIL.md sincronizada"
 
-# Baixa e atualiza a base de conhecimento de suporte (support_rules.md) direto do repositório/fork do aluno
-curl -sSL "$RAW_URL/deploy/support_rules.md" -o "/opt/data/support_rules.md"
+# Baixa e atualiza a base de conhecimento de suporte (support_rules.md)
+curl -sSL "$RAW_URL/support_rules.md" -o "/opt/data/support_rules.md"
 echo "  ✓ Regras de suporte support_rules.md sincronizadas com seu GitHub"
 
 # Instala o plugin whatsapp-manager automaticamente caso não esteja presente no volume
 if [ ! -d "/opt/data/.hermes/plugins/whatsapp-manager" ]; then
     echo "⏳ Instalando o plugin whatsapp-manager..."
     mkdir -p "/opt/data/.hermes/plugins/whatsapp-manager"
-    curl -sSL "$RAW_URL/plugin.yaml" -o "/opt/data/.hermes/plugins/whatsapp-manager/plugin.yaml"
-    curl -sSL "$RAW_URL/__init__.py" -o "/opt/data/.hermes/plugins/whatsapp-manager/__init__.py"
-    curl -sSL "$RAW_URL/bridge.js" -o "/opt/data/.hermes/plugins/whatsapp-manager/bridge.js"
-    curl -sSL "$RAW_URL/package.json" -o "/opt/data/.hermes/plugins/whatsapp-manager/package.json"
+    curl -sSL "$RAW_ROOT/plugin.yaml"     -o "/opt/data/.hermes/plugins/whatsapp-manager/plugin.yaml"
+    curl -sSL "$RAW_ROOT/__init__.py"     -o "/opt/data/.hermes/plugins/whatsapp-manager/__init__.py"
+    curl -sSL "$RAW_ROOT/bridge.js"       -o "/opt/data/.hermes/plugins/whatsapp-manager/bridge.js"
+    curl -sSL "$RAW_ROOT/package.json"    -o "/opt/data/.hermes/plugins/whatsapp-manager/package.json"
+    curl -sSL "$RAW_ROOT/google_api.py"   -o "/opt/data/.hermes/plugins/whatsapp-manager/google_api.py"
     # Instalar skills bundled do plugin
     mkdir -p "/opt/data/.hermes/plugins/whatsapp-manager/skills/google-oauth"
-    curl -sSL "$RAW_URL/skills/google-oauth/SKILL.md" -o "/opt/data/.hermes/plugins/whatsapp-manager/skills/google-oauth/SKILL.md"
-    echo "  ✓ Plugin whatsapp-manager instalado com sucesso (incluindo skills)."
+    curl -sSL "$RAW_ROOT/skills/google-oauth/SKILL.md" -o "/opt/data/.hermes/plugins/whatsapp-manager/skills/google-oauth/SKILL.md"
+    echo "  ✓ Plugin whatsapp-manager instalado com sucesso (incluindo skills e google_api)."
 else
-    echo "  - Plugin whatsapp-manager já instalado. Atualizando apenas skills e __init__.py..."
-    # Sempre atualiza o __init__.py e as skills (não sobrescreve configurações visuais)
-    curl -sSL "$RAW_URL/__init__.py" -o "/opt/data/.hermes/plugins/whatsapp-manager/__init__.py"
+    echo "  - Plugin whatsapp-manager já instalado. Atualizando __init__.py, skills e módulos..."
+    curl -sSL "$RAW_ROOT/__init__.py"   -o "/opt/data/.hermes/plugins/whatsapp-manager/__init__.py"
+    curl -sSL "$RAW_ROOT/google_api.py" -o "/opt/data/.hermes/plugins/whatsapp-manager/google_api.py"
     mkdir -p "/opt/data/.hermes/plugins/whatsapp-manager/skills/google-oauth"
-    curl -sSL "$RAW_URL/skills/google-oauth/SKILL.md" -o "/opt/data/.hermes/plugins/whatsapp-manager/skills/google-oauth/SKILL.md"
-    echo "  ✓ __init__.py e skills atualizados."
+    curl -sSL "$RAW_ROOT/skills/google-oauth/SKILL.md" -o "/opt/data/.hermes/plugins/whatsapp-manager/skills/google-oauth/SKILL.md"
+    echo "  ✓ __init__.py, google_api.py e skills atualizados."
 fi
 
 # Baixa o modelo de config.yaml se ele não existir localmente
 if [ ! -f "$BASE_DIR/config.yaml" ]; then
-    curl -sSL "$RAW_URL/deploy/config.yaml.example" -o "$BASE_DIR/config.yaml"
+    curl -sSL "$RAW_URL/config.yaml.example" -o "$BASE_DIR/config.yaml"
     echo "  ✓ config.yaml inicial configurado."
 else
     echo "  - config.yaml já existe localmente, pulando."
@@ -67,7 +69,7 @@ fi
 
 # Baixa o modelo de chaves de API (.env) se ele não existir localmente
 if [ ! -f "$BASE_DIR/.env" ]; then
-    curl -sSL "$RAW_URL/deploy/env.example" -o "$BASE_DIR/.env" || curl -sSL "$RAW_URL/deploy/.env.example" -o "$BASE_DIR/.env"
+    curl -sSL "$RAW_URL/env.example" -o "$BASE_DIR/.env" || curl -sSL "$RAW_URL/.env.example" -o "$BASE_DIR/.env"
     echo "  ✓ Arquivo de chaves .env inicial criado."
 else
     echo "  - Arquivo .env já existe localmente, pulando."
@@ -76,28 +78,28 @@ fi
 echo "⏳ 2. Baixando e aplicando o Patch do WhatsApp..."
 # Sincroniza o arquivo bridge.js modificado diretamente do repositório
 mkdir -p "/opt/data/.hermes/platforms/whatsapp/bridge"
-curl -sSL "$RAW_URL/docs/bridge-artifacts/bridge.js" -o "/opt/data/.hermes/platforms/whatsapp/bridge/bridge.js"
-curl -sSL "$RAW_URL/docs/bridge-artifacts/package.json" -o "/opt/data/.hermes/platforms/whatsapp/bridge/package.json"
+curl -sSL "$RAW_ROOT/docs/bridge-artifacts/bridge.js" -o "/opt/data/.hermes/platforms/whatsapp/bridge/bridge.js"
+curl -sSL "$RAW_ROOT/docs/bridge-artifacts/package.json" -o "/opt/data/.hermes/platforms/whatsapp/bridge/package.json"
 echo "  ✓ Arquivos bridge.js e package.json sincronizados."
 
 # Baixa os scripts do agente de suporte de e-mail direto do repositório
 mkdir -p "/opt/data/.hermes/scripts"
-curl -sSL "$RAW_URL/deploy/scripts/support_agent.py" -o "/opt/data/.hermes/scripts/support_agent.py"
+curl -sSL "$RAW_URL/scripts/support_agent.py" -o "/opt/data/.hermes/scripts/support_agent.py"
 chmod +x "/opt/data/.hermes/scripts/support_agent.py"
 echo "  ✓ support_agent.py sincronizado."
 
 # Baixa o módulo google_api.py (autenticação OAuth2 Gmail)
 mkdir -p "/opt/data/.hermes/skills/productivity/google-workspace/scripts"
-curl -sSL "$RAW_URL/deploy/scripts/google_api.py" -o "/opt/data/.hermes/skills/productivity/google-workspace/scripts/google_api.py"
+curl -sSL "$RAW_URL/scripts/google_api.py" -o "/opt/data/.hermes/skills/productivity/google-workspace/scripts/google_api.py"
 echo "  ✓ google_api.py sincronizado."
 
 # Baixa o script de autorização OAuth2 (necessário na primeira vez)
-curl -sSL "$RAW_URL/deploy/scripts/authorize_google.py" -o "/opt/data/.hermes/scripts/authorize_google.py"
+curl -sSL "$RAW_URL/scripts/authorize_google.py" -o "/opt/data/.hermes/scripts/authorize_google.py"
 chmod +x "/opt/data/.hermes/scripts/authorize_google.py"
 echo "  ✓ authorize_google.py sincronizado."
 
 # Baixa e executa o patch_whatsapp.py para verificar a integridade
-curl -sSL "$RAW_URL/deploy/patch_whatsapp.py" -o "/tmp/patch_whatsapp.py"
+curl -sSL "$RAW_URL/patch_whatsapp.py" -o "/tmp/patch_whatsapp.py"
 python3 /tmp/patch_whatsapp.py
 
 echo "⏳ 3. Instalando dependências da ponte e de geração de imagem do QR Code..."

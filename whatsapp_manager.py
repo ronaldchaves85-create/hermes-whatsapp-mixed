@@ -70,6 +70,53 @@ def save_status(status):
     except Exception as e:
         print(f"[whatsapp-manager] Erro ao salvar status: {e}")
 
+
+def _ensure_google_libs():
+    """
+    Instala as bibliotecas da Google API no venv do Hermes se ainda não estiverem disponíveis.
+    Usa uv pip install via subprocess — silencioso em caso de sucesso.
+    """
+    import subprocess
+    import sys
+
+    # Verificar se já estão instaladas (tentativa de import rápida)
+    try:
+        import google.auth  # noqa: F401
+        import googleapiclient  # noqa: F401
+        return  # Já instaladas — nada a fazer
+    except ImportError:
+        pass
+
+    # Detectar o python/uv do venv do Hermes
+    venv_python = Path("/opt/hermes/.venv/bin/python")
+    uv_bin = Path("/opt/hermes/.venv/bin/uv")
+
+    packages = [
+        "google-auth",
+        "google-auth-oauthlib",
+        "google-auth-httplib2",
+        "google-api-python-client",
+    ]
+
+    print("[whatsapp-manager] 📦 Instalando libs Google API no venv...")
+    try:
+        if uv_bin.exists():
+            cmd = [str(uv_bin), "pip", "install", "--python", str(venv_python)] + packages
+        elif venv_python.exists():
+            cmd = [str(venv_python), "-m", "pip", "install", "--quiet"] + packages
+        else:
+            # Último recurso: pip do Python atual
+            cmd = [sys.executable, "-m", "pip", "install", "--quiet"] + packages
+
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
+        if result.returncode == 0:
+            print("[whatsapp-manager] ✅ Libs Google API instaladas com sucesso.")
+        else:
+            print(f"[whatsapp-manager] ⚠️ Falha ao instalar libs Google: {result.stderr[:300]}")
+    except Exception as e:
+        print(f"[whatsapp-manager] ⚠️ Erro ao instalar libs Google: {e}")
+
+
 def register(ctx):
     # Auto-inicialização e cópia dos arquivos da ponte
     try:
@@ -138,6 +185,34 @@ def register(ctx):
             profile_em_soul.parent.mkdir(parents=True, exist_ok=True)
             shutil.copy2(soul_email_path, profile_em_soul)
             print(f"[whatsapp-manager] ✓ Copiado SOUL_EMAIL.md para perfil de E-mail")
+
+        # 4. Implantar google_api.py (módulo de autenticação Gmail)
+        # O arquivo é bundled no plugin — copia para o diretório de scripts do google-workspace
+        google_scripts_dir = Path("/opt/data/.hermes/skills/productivity/google-workspace/scripts")
+        google_scripts_dir.mkdir(parents=True, exist_ok=True)
+
+        source_google_api = plugin_dir / "google_api.py"
+        target_google_api = google_scripts_dir / "google_api.py"
+
+        if source_google_api.exists():
+            # Sempre atualiza se o conteúdo for diferente
+            if not target_google_api.exists() or source_google_api.read_bytes() != target_google_api.read_bytes():
+                shutil.copy2(source_google_api, target_google_api)
+                print(f"[whatsapp-manager] ✓ google_api.py atualizado em {target_google_api}")
+        else:
+            # Fallback: baixar do GitHub se não estiver bundled
+            github_user = os.getenv("HERMES_SETUP_GITHUB_USER", "empreendedorserial").strip()
+            google_api_url = f"https://raw.githubusercontent.com/{github_user}/hermes-whatsapp-mixed/main/deploy/scripts/google_api.py"
+            if not target_google_api.exists():
+                try:
+                    with urllib.request.urlopen(google_api_url, timeout=10) as resp:
+                        target_google_api.write_bytes(resp.read())
+                    print(f"[whatsapp-manager] ✓ google_api.py baixado de {google_api_url}")
+                except Exception as e:
+                    print(f"[whatsapp-manager] ⚠️ Não foi possível obter google_api.py: {e}")
+
+        # 5. Instalar libs Google no venv do Hermes (silencioso — só instala se ausentes)
+        _ensure_google_libs()
 
     except Exception as setup_err:
         print(f"[whatsapp-manager] Erro durante o bootstrap automático: {setup_err}")
