@@ -6,8 +6,6 @@ import urllib.request
 import urllib.error
 from pathlib import Path
 
-# Arquivo para persistir o status do atendimento de suporte
-STATUS_FILE = Path("/opt/data/.hermes/whatsapp_manager_status.json")
 
 # Mapeamento temporário sender_id -> chat_id (usado entre pre_gateway_dispatch e pre_llm_call)
 _sender_to_chat: dict[str, str] = {}
@@ -56,19 +54,6 @@ def _fetch_chat_history(chat_id: str, limit: int = 50) -> str:
     except Exception:
         return ""
 
-def load_status():
-    if STATUS_FILE.exists():
-        try:
-            return json.loads(STATUS_FILE.read_text(encoding="utf-8"))
-        except Exception:
-            pass
-    return {"support_active": True}
-
-def save_status(status):
-    try:
-        STATUS_FILE.write_text(json.dumps(status), encoding="utf-8")
-    except Exception as e:
-        print(f"[whatsapp-manager] Erro ao salvar status: {e}")
 
 
 def _ensure_google_libs():
@@ -272,51 +257,8 @@ def register(ctx):
         clean_chat = chat_id.split("@")[0]
         is_personal_chat = (clean_chat == clean_owner)
 
-        # Se for mensagem do Dono (André) no chat pessoal e começar com !suporte
-        if is_owner and is_personal_chat and msg_text.startswith("!suporte"):
-            parts = msg_text.split()
-            cmd = parts[1].lower() if len(parts) > 1 else ""
-
-            status = load_status()
-            adapter = gateway.adapters.get(event.source.platform)
-
-            if cmd == "off":
-                status["support_active"] = False
-                save_status(status)
-                if adapter:
-                    await adapter.send(
-                        event.source.chat_id,
-                        "⏸️ *Atendimento do WhatsApp pausado.* Os clientes não receberão respostas da IA a partir de agora."
-                    )
-                return {"action": "skip", "reason": "suporte-pausado-pelo-dono"}
-
-            elif cmd == "on":
-                status["support_active"] = True
-                save_status(status)
-                if adapter:
-                    await adapter.send(
-                        event.source.chat_id,
-                        "▶️ *Atendimento do WhatsApp ativo.* A IA voltará a responder os clientes automaticamente."
-                    )
-                return {"action": "skip", "reason": "suporte-ativado-pelo-dono"}
-
-            elif cmd == "status" or cmd == "":
-                active = status.get("support_active", True)
-                status_str = "ATIVO ▶️" if active else "PAUSADO ⏸️"
-                if adapter:
-                    await adapter.send(
-                        event.source.chat_id,
-                        f"ℹ️ *Status do Atendimento:* {status_str}"
-                    )
-                return {"action": "skip", "reason": "status-solicitado"}
-
-        # Se não for o dono, verificar status de suporte/pausa e injetar histórico da conversa
+        # Se não for o dono, verificar status de pausa e injetar histórico da conversa
         if not is_owner:
-            # Verificar se o suporte está ativo
-            status = load_status()
-            if not status.get("support_active", True):
-                return {"action": "skip", "reason": "atendimento-pausado"}
-
             # Verificar se o bot está pausado via stop_bot
             if _check_bot_paused():
                 return {"action": "skip", "reason": "bot-pausado"}

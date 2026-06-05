@@ -4,21 +4,14 @@ Este documento descreve as diretrizes arquiteturais, o funcionamento dos comando
 
 ---
 
-## 1. 🎛️ Modos de Pausa Global (Totalmente Isolados)
+## 1. 🎛️ Pausa Global (Controlada na Ponte)
 
-O chatbot possui dois mecanismos de pausa global que suspendem o atendimento automático para **todos os clientes**. Ambos os mecanismos **não afetam** as mensagens enviadas pelo dono na sua conversa pessoal com o bot (o assistente pessoal continua respondendo o dono).
+O chatbot possui um mecanismo de pausa global que suspende o atendimento automático para **todos os clientes**. Ele **não afeta** as mensagens enviadas pelo dono na sua conversa pessoal com o bot (o assistente pessoal continua respondendo o dono normalmente).
 
-### A. Pausa na Ponte (Bridge Level)
 * **Comandos:** `stop_bot` / `start_bot` (e seus sinônimos como `!pausar`, `!retomar`, `!parar`, `!iniciar`).
-* **Escopo:** Nível Node.js (`bridge.js`).
+* **Escopo:** Nível Node.js (`bridge.js`). O status é persistido no arquivo `bot_state.json`.
 * **Restrição de Execução:** Estes comandos **só funcionam se forem enviados pelo dono dentro da sua própria conversa pessoal/self-chat** com o bot. Digitar `start_bot` ou `stop_bot` na conversa de um cliente não fará nada.
-* **Comportamento:** Ao pausar, a ponte descarta na origem as mensagens recebidas de qualquer pessoa que não seja o dono.
-
-### B. Pausa no Plugin (Python Level)
-* **Comandos:** `!suporte off` / `!suporte on` / `!suporte status`.
-* **Escopo:** Nível Python (`__init__.py`).
-* **Restrição de Execução:** Estes comandos **só funcionam se forem enviados pelo dono dentro da sua própria conversa pessoal/self-chat** com o bot.
-* **Comportamento:** Ao pausar, o plugin intercepta as mensagens de clientes e impede o envio para a IA (retornando `skip` no gateway).
+* **Comportamento:** Ao pausar, a ponte descarta na origem as mensagens recebidas de qualquer pessoa que não seja o dono. O plugin Python também verifica esse estado no boot e desvia o fluxo se o bot estiver pausado.
 
 ---
 
