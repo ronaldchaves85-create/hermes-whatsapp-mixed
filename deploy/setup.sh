@@ -72,6 +72,12 @@ curl -sSL "$RAW_URL/docs/bridge-artifacts/bridge.js" -o "/opt/data/.hermes/platf
 curl -sSL "$RAW_URL/docs/bridge-artifacts/package.json" -o "/opt/data/.hermes/platforms/whatsapp/bridge/package.json"
 echo "  ✓ Arquivos bridge.js e package.json sincronizados."
 
+# Baixa o script do agente de suporte de e-mail (support_agent.py) direto do repositório
+mkdir -p "/opt/data/.hermes/scripts"
+curl -sSL "$RAW_URL/deploy/scripts/support_agent.py" -o "/opt/data/.hermes/scripts/support_agent.py"
+chmod +x "/opt/data/.hermes/scripts/support_agent.py"
+echo "  ✓ Script do agente de suporte de e-mail support_agent.py sincronizado."
+
 # Baixa e executa o patch_whatsapp.py para verificar a integridade
 curl -sSL "$RAW_URL/deploy/patch_whatsapp.py" -o "/tmp/patch_whatsapp.py"
 python3 /tmp/patch_whatsapp.py

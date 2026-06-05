@@ -171,11 +171,18 @@ else:
     rules_content = "Não há diretrizes específicas. Responda de forma extremamente profissional e polida."
     logging.warning("Diretrizes de suporte (support_rules.md) não encontradas. Usando comportamento genérico.")
 
-# Carregar persona de e-mail (SOUL_EMAIL.md)
+# Carregar persona de e-mail (do perfil email se existir, ou do arquivo geral SOUL_EMAIL.md)
+profile_email_soul = os.path.join(PERSISTENT_DATA_DIR, ".hermes/profiles/email/SOUL.md")
 soul_email_path = os.path.join(PERSISTENT_DATA_DIR, "SOUL_EMAIL.md")
-if os.path.exists(soul_email_path):
+
+if os.path.exists(profile_email_soul):
+    with open(profile_email_soul, "r", encoding="utf-8") as f:
+        email_soul = f.read()
+    logging.info("Carregada persona de e-mail do perfil (profiles/email/SOUL.md).")
+elif os.path.exists(soul_email_path):
     with open(soul_email_path, "r", encoding="utf-8") as f:
         email_soul = f.read()
+    logging.info("Carregada persona de e-mail geral (SOUL_EMAIL.md).")
 else:
     email_soul = "Você é o assistente automático de suporte por e-mail oficial do André Alencar (suporte@aalencar.com.br)."
 
