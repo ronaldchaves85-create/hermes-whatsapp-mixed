@@ -6,13 +6,11 @@ category: devops
 
 # Arquitetura do Hermes Agent
 
-**📌 Fonte de verdade** — Este é o documento completo de referência. Outras skills resumem seções daqui.
+**📌 Fonte de verdade** — Este é o documento completo de referência. Contém tudo: arquitetura, credenciais, fluxos, troubleshooting, patches e STT.
 
 **Skills relacionadas:**
-- `hermes-env-vars` — resumo rápido de variáveis por plataforma
-- `whatsapp-bot-env-vars` — operação WhatsApp (dual-mode, startup, DB)
+- `whatsapp-bot-env-vars` — operação WhatsApp (dual-mode, startup, DB, SQLite)
 - `messaging-gateway-customization` — customização avançada (plugins, patching, pitfalls)
-- `himalaya` — CLI IMAP/SMTP (⚠️ NÃO é o sistema ativo de email — ver nota no topo)
 
 Guia completo de referência sobre como o sistema funciona: onde estão as credenciais, como cada plataforma se conecta, e como a informação flui entre os componentes.
 
@@ -50,8 +48,11 @@ WHATSAPP_BRIDGE_PORT=18732
 
 **Onde são usadas:**
 - Bridge Node.js: `/opt/data/.hermes/platforms/whatsapp/bridge/bridge.js`
+- Plugin: `/opt/data/.hermes/plugins/whatsapp-manager/__init__.py` (instalado/atualizado pelo Dashboard do Hermes)
 - Autenticação: QR Code via Baileys (sessão armazenada em `/opt/data/.hermes/platforms/whatsapp/session/`)
 - Arquivo de log: `/opt/data/.hermes/platforms/whatsapp/bridge.log`
+
+**Importante:** O `bridge.js` está em `/opt/data/.hermes/` (persistente), NÃO em `/opt/hermes/scripts/` (efêmero). O bridge sobrevive a rebuilds do container porque foi instalado/copiado para o volume persistente.
 
 **Verificação:**
 ```bash
@@ -239,6 +240,62 @@ cat /opt/data/.hermes/auth.json | python3 -c "import json,sys; d=json.load(sys.s
 
 ---
 
+## ⚠️ Patches de Visão (MiniMax) — Efêmeros
+
+O arquivo `/opt/hermes/agent/auxiliary_client.py` é **efêmero** — todo rebuild do container o sobrescreve. Os patches abaixo precisam ser re-aplicados após cada rebuild manual via Portainer.
+
+### Patch 1 — Adicionar `minimax` a `_PROVIDERS_WITHOUT_VISION`
+
+```python
+# Linha ~303 de /opt/hermes/agent/auxiliary_client.py
+_PROVIDERS_WITHOUT_VISION: frozenset = frozenset({
+    "kimi-coding",
+    "kimi-coding-cn",
+    "minimax",  # ← ADICIONAR
+})
+```
+
+### Patch 2 — Adicionar `gemini` como fallback de visão
+
+```python
+# _VISION_AUTO_PROVIDER_ORDER (linha ~3389):
+_VISION_AUTO_PROVIDER_ORDER = (
+    "openrouter",
+    "gemini",  # ← ADICIONAR
+    "nous",
+)
+
+# _resolve_strict_vision_backend (linha ~3420, antes do return None):
+if provider == "gemini":
+    return resolve_provider_client("gemini", model, is_vision=True)
+```
+
+Após os patches, o fallback de visão fica: **minimax → openrouter → gemini** (via `google/gemini-3-flash-preview`).
+
+**Verificação pós-rebuild:**
+```bash
+grep '"minimax"' /opt/hermes/agent/auxiliary_client.py | grep "_PROVIDERS_WITHOUT_VISION" || echo "PATCH MISSING"
+grep '"gemini"' /opt/hermes/agent/auxiliary_client.py | grep "_VISION_AUTO_PROVIDER_ORDER" || echo "PATCH MISSING"
+```
+
+---
+
+## ⚠️ STT (Transcrição de Áudio)
+
+O bot detecta mensagens de voz (ptt/audio) e tenta transcrever via `_enrich_message_with_transcription` em `run.py`.
+
+**Providers disponíveis:** `groq` (grátis), `openai` (pago), `local`, `mistral`, `xai`. **Gemini NÃO é provider de STT.**
+
+**Recomendado: Groq** — criar key em https://console.groq.com/keys, adicionar `GROQ_API_KEY` ao `credential_pool` em `auth.json`, e mudar `stt.provider: groq` em `config.yaml`.
+
+**Verificação:**
+```bash
+grep "STT provider" /opt/data/.hermes/logs/agent.log | tail -3
+grep "Transcribed.*via" /opt/data/.hermes/logs/agent.log | tail -3
+```
+
+---
+
 ## Variáveis de Ambiente (Resumo)
 
 | Variável | Plataforma | Onde usar | Formato |
@@ -275,17 +332,24 @@ cat /opt/data/.hermes/auth.json | python3 -c "import json,sys; d=json.load(sys.s
 | Tipo | Localização |
 |------|-------------|
 | Sessão WhatsApp | `/opt/data/.hermes/platforms/whatsapp/session/` |
-| Bridge WhatsApp | `/opt/data/.hermes/platforms/whatsapp/bridge/` |
+| Bridge WhatsApp | `/opt/data/.hermes/platforms/whatsapp/bridge/bridge.js` |
 | Logs WhatsApp | `/opt/data/.hermes/platforms/whatsapp/bridge.log` |
+| Plugin WhatsApp Manager | `/opt/data/.hermes/plugins/whatsapp-manager/__init__.py` |
+| SQLite histórico | `/opt/data/.hermes/whatsapp_messages.db` |
 | Auth do Gateway | `/opt/data/.hermes/auth.json` |
 | Config do Gateway | `/opt/data/.hermes/config.yaml` |
 | Regras de Suporte | `/opt/data/support_rules.md` |
 | Persona Email | `/opt/data/.hermes/profiles/email/SOUL.md` |
 | Persona WhatsApp | `/opt/data/.hermes/profiles/whatsapp/SOUL.md` |
-| Scripts | `/opt/data/.hermes/scripts/support_agent.py` |
+| Script email | `/opt/data/.hermes/scripts/support_agent.py` |
 | Google API | `/opt/data/.hermes/skills/productivity/google-workspace/scripts/google_api.py` |
 | Logs Email | `/opt/data/support_agent.log` |
 | Memória persistente | `/opt/data/.hermes/memory/MEMORY.md` |
+
+**Caminhos Efêmeros (wipados em rebuild):**
+- `/opt/hermes/` — código fonte do Hermes (sobrescrito em rebuild)
+- `/opt/hermes/agent/auxiliary_client.py` — patches de visão precisam ser re-aplicados
+- `/tmp`, `/root`, `/home/hermes`
 
 ---
 

@@ -72,11 +72,21 @@ curl -sSL "$RAW_URL/docs/bridge-artifacts/bridge.js" -o "/opt/data/.hermes/platf
 curl -sSL "$RAW_URL/docs/bridge-artifacts/package.json" -o "/opt/data/.hermes/platforms/whatsapp/bridge/package.json"
 echo "  ✓ Arquivos bridge.js e package.json sincronizados."
 
-# Baixa o script do agente de suporte de e-mail (support_agent.py) direto do repositório
+# Baixa os scripts do agente de suporte de e-mail direto do repositório
 mkdir -p "/opt/data/.hermes/scripts"
 curl -sSL "$RAW_URL/deploy/scripts/support_agent.py" -o "/opt/data/.hermes/scripts/support_agent.py"
 chmod +x "/opt/data/.hermes/scripts/support_agent.py"
-echo "  ✓ Script do agente de suporte de e-mail support_agent.py sincronizado."
+echo "  ✓ support_agent.py sincronizado."
+
+# Baixa o módulo google_api.py (autenticação OAuth2 Gmail)
+mkdir -p "/opt/data/.hermes/skills/productivity/google-workspace/scripts"
+curl -sSL "$RAW_URL/deploy/scripts/google_api.py" -o "/opt/data/.hermes/skills/productivity/google-workspace/scripts/google_api.py"
+echo "  ✓ google_api.py sincronizado."
+
+# Baixa o script de autorização OAuth2 (necessário na primeira vez)
+curl -sSL "$RAW_URL/deploy/scripts/authorize_google.py" -o "/opt/data/.hermes/scripts/authorize_google.py"
+chmod +x "/opt/data/.hermes/scripts/authorize_google.py"
+echo "  ✓ authorize_google.py sincronizado."
 
 # Baixa e executa o patch_whatsapp.py para verificar a integridade
 curl -sSL "$RAW_URL/deploy/patch_whatsapp.py" -o "/tmp/patch_whatsapp.py"
@@ -98,6 +108,13 @@ if [ -x "/opt/hermes/.venv/bin/python" ]; then
     uv pip install --python /opt/hermes/.venv/bin/python qrcode pillow --quiet 2>/dev/null \
         && echo "  ✓ Bibliotecas qrcode e pillow instaladas no ambiente virtual." \
         || echo "  ⚠️  uv pip install falhou (pode ser seguro ignorar se já instalado)."
+
+    # Instala dependências do Gmail API (necessárias para support_agent.py)
+    uv pip install --python /opt/hermes/.venv/bin/python \
+        google-auth google-auth-oauthlib google-auth-httplib2 google-api-python-client \
+        --quiet 2>/dev/null \
+        && echo "  ✓ Bibliotecas Google API instaladas no ambiente virtual." \
+        || echo "  ⚠️  Instalação das libs Google falhou (verificar conectividade)."
 else
     echo "  - Ambiente virtual do Hermes não encontrado em /opt/hermes/.venv, pulando."
 fi
@@ -118,9 +135,18 @@ echo "=========================================================="
 echo "🎉 SINCRONIZAÇÃO E CONFIGURAÇÃO CONCLUÍDAS COM SUCESSO!"
 echo "=========================================================="
 echo "Seu Hermes foi sincronizado com o seu GitHub Fork ($GITHUB_USER)!"
+echo ""
 echo "Para deixar seu Hermes 100% operacional:"
-echo "1. Preencha suas chaves no Portainer Stack Env ou em: /opt/data/.hermes/.env"
-echo "2. Para atualizar suas regras de negócio ou sua persona no futuro:"
-echo "   Edite-as diretamente no seu GitHub e execute este setup novamente!"
-echo "3. Abra o console do Portainer e digite 'hermes' para iniciar!"
+echo "1. Configure GOOGLE_CLIENT_ID e GOOGLE_CLIENT_SECRET no Portainer Stack Env"
+echo "   (ou em /opt/data/.env)"
+echo ""
+echo "2. ⚠️  PRIMEIRA VEZ com o Gmail? Autorize o acesso OAuth2:"
+echo "   PYTHONPATH=/opt/hermes/.venv/lib/python3.13/site-packages \\"
+echo "   python3 /opt/data/.hermes/scripts/authorize_google.py"
+echo "   (Gera o token em /opt/data/.hermes/google_token.json — só precisa fazer UMA VEZ)"
+echo ""
+echo "3. Para atualizar regras de negócio ou persona:"
+echo "   Edite no GitHub e execute este setup novamente!"
+echo ""
+echo "4. Abra o console do Portainer e digite 'hermes' para iniciar!"
 echo "=========================================================="
