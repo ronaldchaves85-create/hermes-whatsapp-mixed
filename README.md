@@ -61,7 +61,7 @@ Toda a infraestrutura de rede, domínios SSL e chaves de API é gerenciada de fo
 
 Agora, vamos fazer com que o seu servidor baixe automaticamente os arquivos que você personalizou no seu repositório pessoal do GitHub:
 
-> **QR do WhatsApp sem Telegram:** o bridge fica no próprio domínio do dashboard, em `https://SEU-DOMINIO/whatsapp/qr` e `https://SEU-DOMINIO/whatsapp/status`.
+> **QR do WhatsApp sem Telegram:** a stack sobe um serviço separado `whatsapp-bridge` e o QR fica no próprio domínio do dashboard, em `https://SEU-DOMINIO/whatsapp/qr` e `https://SEU-DOMINIO/whatsapp/status`.
 > O QR também pode ser retornado como `?format=png` ou `?format=svg`.
 
 1. No Portainer, clique em **Containers** e clique no ícone de **Console** (`>_`) do container `hermes-agent`.
