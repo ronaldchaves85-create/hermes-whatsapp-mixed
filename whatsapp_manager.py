@@ -142,6 +142,24 @@ def register(ctx):
     except Exception as setup_err:
         print(f"[whatsapp-manager] Erro durante o bootstrap automático: {setup_err}")
 
+    # Registrar skills bundled no plugin (pasta skills/ ao lado do __init__.py)
+    try:
+        skills_dir = Path(__file__).parent / "skills"
+        if skills_dir.is_dir():
+            registered = []
+            for skill_folder in skills_dir.iterdir():
+                skill_md = skill_folder / "SKILL.md"
+                if skill_folder.is_dir() and skill_md.exists():
+                    try:
+                        ctx.register_skill(skill_folder.name, skill_md)
+                        registered.append(skill_folder.name)
+                    except Exception as skill_err:
+                        print(f"[whatsapp-manager] ⚠️ Erro ao registrar skill '{skill_folder.name}': {skill_err}")
+            if registered:
+                print(f"[whatsapp-manager] ✓ Skills registradas: {', '.join(registered)}")
+    except Exception as skills_err:
+        print(f"[whatsapp-manager] ⚠️ Erro ao registrar skills: {skills_err}")
+
     # Hook 1: pre_gateway_dispatch (Filtro e controle de comandos)
     async def pre_gateway_dispatch(event_type, context):
         event = context.get("event")

@@ -44,9 +44,17 @@ if [ ! -d "/opt/data/.hermes/plugins/whatsapp-manager" ]; then
     curl -sSL "$RAW_URL/__init__.py" -o "/opt/data/.hermes/plugins/whatsapp-manager/__init__.py"
     curl -sSL "$RAW_URL/bridge.js" -o "/opt/data/.hermes/plugins/whatsapp-manager/bridge.js"
     curl -sSL "$RAW_URL/package.json" -o "/opt/data/.hermes/plugins/whatsapp-manager/package.json"
-    echo "  ✓ Plugin whatsapp-manager instalado com sucesso."
+    # Instalar skills bundled do plugin
+    mkdir -p "/opt/data/.hermes/plugins/whatsapp-manager/skills/google-oauth"
+    curl -sSL "$RAW_URL/skills/google-oauth/SKILL.md" -o "/opt/data/.hermes/plugins/whatsapp-manager/skills/google-oauth/SKILL.md"
+    echo "  ✓ Plugin whatsapp-manager instalado com sucesso (incluindo skills)."
 else
-    echo "  - Plugin whatsapp-manager já instalado, pulando para evitar sobrescrever edições visuais."
+    echo "  - Plugin whatsapp-manager já instalado. Atualizando apenas skills e __init__.py..."
+    # Sempre atualiza o __init__.py e as skills (não sobrescreve configurações visuais)
+    curl -sSL "$RAW_URL/__init__.py" -o "/opt/data/.hermes/plugins/whatsapp-manager/__init__.py"
+    mkdir -p "/opt/data/.hermes/plugins/whatsapp-manager/skills/google-oauth"
+    curl -sSL "$RAW_URL/skills/google-oauth/SKILL.md" -o "/opt/data/.hermes/plugins/whatsapp-manager/skills/google-oauth/SKILL.md"
+    echo "  ✓ __init__.py e skills atualizados."
 fi
 
 # Baixa o modelo de config.yaml se ele não existir localmente
