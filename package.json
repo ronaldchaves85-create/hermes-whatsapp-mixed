@@ -1,7 +1,7 @@
 {
   "type": "module",
   "scripts": {
-    "test": "node --test tests/bridge.test.js"
+    "test": "node --test tests/bridge.test.js && python3 -m unittest tests/plugin_test.py"
   },
   "dependencies": {
     "@hapi/boom": "^10.0.1",
