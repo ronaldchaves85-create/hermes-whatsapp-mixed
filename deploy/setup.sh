@@ -20,30 +20,30 @@ RAW_URL="https://raw.githubusercontent.com/$GITHUB_USER/hermes-whatsapp-mixed/ma
 echo "⏳ 1. Baixando arquivos de configuração e personas de $RAW_URL..."
 
 # Baixa e atualiza o arquivo de persona (SOUL.md) direto do repositório/fork do aluno
-curl -sSL "$RAW_URL/SOUL.md" -o "/opt/data/SOUL.md"
+curl -sSL "$RAW_URL/deploy/SOUL.md" -o "/opt/data/SOUL.md"
 cp "/opt/data/SOUL.md" "$BASE_DIR/SOUL.md"
 echo "  ✓ Persona SOUL.md sincronizada com seu GitHub"
 
 # Baixa e atualiza o arquivo de persona do suporte do WhatsApp (SOUL_WHATSAPP.md) direto do repositório/fork do aluno
-curl -sSL "$RAW_URL/SOUL_WHATSAPP.md" -o "/opt/data/SOUL_WHATSAPP.md"
+curl -sSL "$RAW_URL/deploy/SOUL_WHATSAPP.md" -o "/opt/data/SOUL_WHATSAPP.md"
 echo "  ✓ Persona do WhatsApp SOUL_WHATSAPP.md sincronizada"
 
 # Baixa e atualiza o arquivo de persona do suporte de E-mail (SOUL_EMAIL.md) direto do repositório/fork do aluno
-curl -sSL "$RAW_URL/SOUL_EMAIL.md" -o "/opt/data/SOUL_EMAIL.md"
+curl -sSL "$RAW_URL/deploy/SOUL_EMAIL.md" -o "/opt/data/SOUL_EMAIL.md"
 echo "  ✓ Persona de E-mail SOUL_EMAIL.md sincronizada"
 
 # Baixa e atualiza a base de conhecimento de suporte (support_rules.md) direto do repositório/fork do aluno
-curl -sSL "$RAW_URL/support_rules.md" -o "/opt/data/support_rules.md"
+curl -sSL "$RAW_URL/deploy/support_rules.md" -o "/opt/data/support_rules.md"
 echo "  ✓ Regras de suporte support_rules.md sincronizadas com seu GitHub"
 
 # Instala o plugin whatsapp-manager automaticamente caso não esteja presente no volume
 if [ ! -d "/opt/data/.hermes/plugins/whatsapp-manager" ]; then
     echo "⏳ Instalando o plugin whatsapp-manager..."
     mkdir -p "/opt/data/.hermes/plugins/whatsapp-manager"
-    curl -sSL "$RAW_URL/plugins/whatsapp-manager/plugin.yaml" -o "/opt/data/.hermes/plugins/whatsapp-manager/plugin.yaml"
-    curl -sSL "$RAW_URL/plugins/whatsapp-manager/__init__.py" -o "/opt/data/.hermes/plugins/whatsapp-manager/__init__.py"
-    curl -sSL "$RAW_URL/plugins/whatsapp-manager/bridge.js" -o "/opt/data/.hermes/plugins/whatsapp-manager/bridge.js"
-    curl -sSL "$RAW_URL/plugins/whatsapp-manager/package.json" -o "/opt/data/.hermes/plugins/whatsapp-manager/package.json"
+    curl -sSL "$RAW_URL/plugin.yaml" -o "/opt/data/.hermes/plugins/whatsapp-manager/plugin.yaml"
+    curl -sSL "$RAW_URL/__init__.py" -o "/opt/data/.hermes/plugins/whatsapp-manager/__init__.py"
+    curl -sSL "$RAW_URL/bridge.js" -o "/opt/data/.hermes/plugins/whatsapp-manager/bridge.js"
+    curl -sSL "$RAW_URL/package.json" -o "/opt/data/.hermes/plugins/whatsapp-manager/package.json"
     echo "  ✓ Plugin whatsapp-manager instalado com sucesso."
 else
     echo "  - Plugin whatsapp-manager já instalado, pulando para evitar sobrescrever edições visuais."
@@ -51,7 +51,7 @@ fi
 
 # Baixa o modelo de config.yaml se ele não existir localmente
 if [ ! -f "$BASE_DIR/config.yaml" ]; then
-    curl -sSL "$RAW_URL/config.yaml.example" -o "$BASE_DIR/config.yaml"
+    curl -sSL "$RAW_URL/deploy/config.yaml.example" -o "$BASE_DIR/config.yaml"
     echo "  ✓ config.yaml inicial configurado."
 else
     echo "  - config.yaml já existe localmente, pulando."
@@ -59,7 +59,7 @@ fi
 
 # Baixa o modelo de chaves de API (.env) se ele não existir localmente
 if [ ! -f "$BASE_DIR/.env" ]; then
-    curl -sSL "$RAW_URL/env.example" -o "$BASE_DIR/.env" || curl -sSL "$RAW_URL/.env.example" -o "$BASE_DIR/.env"
+    curl -sSL "$RAW_URL/deploy/env.example" -o "$BASE_DIR/.env" || curl -sSL "$RAW_URL/deploy/.env.example" -o "$BASE_DIR/.env"
     echo "  ✓ Arquivo de chaves .env inicial criado."
 else
     echo "  - Arquivo .env já existe localmente, pulando."
@@ -73,7 +73,7 @@ curl -sSL "$RAW_URL/docs/bridge-artifacts/package.json" -o "/opt/data/.hermes/pl
 echo "  ✓ Arquivos bridge.js e package.json sincronizados."
 
 # Baixa e executa o patch_whatsapp.py para verificar a integridade
-curl -sSL "$RAW_URL/patch_whatsapp.py" -o "/tmp/patch_whatsapp.py"
+curl -sSL "$RAW_URL/deploy/patch_whatsapp.py" -o "/tmp/patch_whatsapp.py"
 python3 /tmp/patch_whatsapp.py
 
 echo "⏳ 3. Instalando dependências da ponte e de geração de imagem do QR Code..."
