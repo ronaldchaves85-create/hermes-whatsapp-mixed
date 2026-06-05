@@ -268,8 +268,12 @@ def register(ctx):
         if msg_text in ["🐼 *Bot Paused*\n\nO chatbot está descansando. Use `start_bot` para retomar.", "🚀 *Bot Ativo*\n\nO chatbot voltou a funcionar!"]:
             return {"action": "skip", "reason": "bot-status-message"}
 
-        # Se for mensagem do Dono (André) e começar com !suporte
-        if is_owner and msg_text.startswith("!suporte"):
+        chat_id = str(event.source.chat_id) if event.source.chat_id else ""
+        clean_chat = chat_id.split("@")[0]
+        is_personal_chat = (clean_chat == clean_owner)
+
+        # Se for mensagem do Dono (André) no chat pessoal e começar com !suporte
+        if is_owner and is_personal_chat and msg_text.startswith("!suporte"):
             parts = msg_text.split()
             cmd = parts[1].lower() if len(parts) > 1 else ""
 

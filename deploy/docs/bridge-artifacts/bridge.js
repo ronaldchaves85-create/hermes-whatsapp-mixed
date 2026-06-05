@@ -348,7 +348,10 @@ async function startSocket() {
         (myLid && senderClean === myLid) ||
         (WHATSAPP_OWNER_NUMBER && senderClean === WHATSAPP_OWNER_NUMBER);
 
-      if (isOwner && !isGroup && !chatId.includes('status')) {
+      const chatNumber = chatId.replace(/@.*/, '');
+      const isSelfChat = (myNumber && chatNumber === myNumber) || (myLid && chatNumber === myLid);
+
+      if (isOwner && isSelfChat && !isGroup && !chatId.includes('status')) {
         if (['stop_bot', '!pausar', '!parar'].includes(textLower)) {
           botPaused = true;
           saveBotState();
