@@ -57,7 +57,7 @@ services:
   hermes:
     image: nousresearch/hermes-agent:v2026.5.16
     # Bootstrap externo/visual: plugins ficam para o dashboard do Hermes.
-    command: gateway run
+    command: hermes gateway run
 
     volumes:
       # Volume principal: persiste /opt/data (SOUL.md, support_rules.md, workspace, .hermes/)

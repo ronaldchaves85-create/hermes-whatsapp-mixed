@@ -53,7 +53,7 @@ services:
     image: nousresearch/hermes-agent:v2026.5.16
     # O setup.sh sincroniza personas, regras, config e patch do WhatsApp.
     # Plugins são gerenciados pelo dashboard do Hermes.
-    command: bash -lc 'curl -fsSL https://raw.githubusercontent.com/${HERMES_SETUP_GITHUB_USER:-empreendedorserial}/hermes-whatsapp-mixed/main/setup.sh | bash -s "${HERMES_SETUP_GITHUB_USER:-empreendedorserial}" && exec /opt/hermes/.venv/bin/gateway run'
+    command: bash -lc 'curl -fsSL https://raw.githubusercontent.com/${HERMES_SETUP_GITHUB_USER:-empreendedorserial}/hermes-whatsapp-mixed/main/setup.sh | bash -s "${HERMES_SETUP_GITHUB_USER:-empreendedorserial}" && exec /opt/hermes/.venv/bin/hermes gateway run'
 
     volumes:
       - hermes_agent_hermes_data_v5:/opt/data
@@ -63,9 +63,9 @@ services:
       - HOME=/opt/data
       - HERMES_HOME=/opt/data/.hermes
       - PATH=/opt/hermes/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
-      - TZ=${TZ:-America/Sao_Paulo}
       - WORKSPACE=/opt/data/workspace
       - HERMES_WORKSPACE=/opt/data/workspace
+      - TZ=${TZ:-America/Sao_Paulo}
 
       # Providers
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
