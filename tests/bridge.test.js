@@ -1,6 +1,8 @@
 import test from 'node:test';
 import assert from 'node:assert';
-import {
+process.env.WHATSAPP_OWNER_NUMBER = '99999';
+
+const {
   onChatsUpdate,
   onMessagesUpsert,
   getBotPaused,
@@ -10,7 +12,7 @@ import {
   getRecentlySentIds,
   getMessageQueue,
   setSock
-} from '../bridge.js';
+} = await import('../bridge.js');
 
 // Setup Mock Socket
 const mockSock = {
@@ -194,5 +196,50 @@ test('WhatsApp Bridge Regression Tests', async (t) => {
 
     const silenced = getSilencedChats();
     assert.strictEqual(silenced[selfJid], undefined, 'Self-chat should never be silenced');
+  });
+
+  await t.test('7. Commands in Bot Mode from owner private chat should pause and resume the bot globally', async () => {
+    const ownerJid = '99999@s.whatsapp.net';
+    
+    // Simulate stop_bot message from owner in their private chat with the bot
+    await onMessagesUpsert({
+      messages: [{
+        key: {
+          id: 'msg-6',
+          fromMe: false,
+          remoteJid: ownerJid
+        },
+        message: {
+          conversation: 'stop_bot'
+        }
+      }],
+      type: 'notify'
+    });
+
+    assert.strictEqual(getBotPaused(), true, 'Bot should be paused after stop_bot from owner in direct chat');
+    assert.ok(mockSock.sentMessages.length > 0, 'Should send pause confirmation message');
+    assert.ok(mockSock.sentMessages[0].payload.text.includes('pausado'), 'Confirmation should contain paused text');
+
+    // Clear confirmation message
+    mockSock.sentMessages = [];
+
+    // Simulate start_bot message from owner in direct chat
+    await onMessagesUpsert({
+      messages: [{
+        key: {
+          id: 'msg-7',
+          fromMe: false,
+          remoteJid: ownerJid
+        },
+        message: {
+          conversation: 'start_bot'
+        }
+      }],
+      type: 'notify'
+    });
+
+    assert.strictEqual(getBotPaused(), false, 'Bot should be resumed after start_bot from owner in direct chat');
+    assert.ok(mockSock.sentMessages.length > 0, 'Should send resume confirmation message');
+    assert.ok(mockSock.sentMessages[0].payload.text.includes('ativo'), 'Confirmation should contain active text');
   });
 });

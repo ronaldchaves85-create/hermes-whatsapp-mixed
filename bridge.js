@@ -281,8 +281,9 @@ let onMessagesUpsert = async ({ messages, type }) => {
 
     const chatNumber = chatId.replace(/@.*/, '');
     const isSelfChat = (myNumber && chatNumber === myNumber) || (myLid && chatNumber === myLid);
+    const isOwnerChat = isSelfChat || (WHATSAPP_OWNER_NUMBER && chatNumber === WHATSAPP_OWNER_NUMBER);
 
-    if (isOwner && isSelfChat && !isGroup && !chatId.includes('status')) {
+    if (isOwner && isOwnerChat && !isGroup && !chatId.includes('status')) {
       if (['stop_bot', '!pausar', '!parar'].includes(textLower)) {
         botPaused = true;
         saveBotState();

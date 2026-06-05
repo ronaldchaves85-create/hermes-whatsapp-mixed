@@ -234,7 +234,7 @@ def register(ctx):
 
         # Identificar remetente
         sender_id = event.source.user_id or ""
-        clean_sender = sender_id.split("@")[0]
+        clean_sender = sender_id.split("@")[0].split(":")[0]
 
         # Identificar dono (André)
         owner_number = os.getenv("WHATSAPP_OWNER_NUMBER", "").strip()
@@ -243,18 +243,23 @@ def register(ctx):
             print("[whatsapp-manager] DEBUG: owner_number vazio, returning None")
             return None  # Não definido → plugin não faz nada
 
-        clean_owner = owner_number.split("@")[0]
+        clean_owner = owner_number.split("@")[0].split(":")[0]
         is_owner = (clean_sender == clean_owner)
         print(f"[whatsapp-manager] DEBUG: clean_owner='{clean_owner}', is_owner={is_owner}")
 
         msg_text = (event.text or "").strip()
 
         # Ignorar mensagens de status do bot (stop_bot/start_bot responses)
-        if msg_text in ["🐼 *Bot Paused*\n\nO chatbot está descansando. Use `start_bot` para retomar.", "🚀 *Bot Ativo*\n\nO chatbot voltou a funcionar!"]:
+        if msg_text in [
+            "🐼 *Bot Paused*\n\nO chatbot está descansando. Use `start_bot` para retomar.",
+            "🚀 *Bot Ativo*\n\nO chatbot voltou a funcionar!",
+            "⏸️ *Atendimento do WhatsApp pausado.* Os clientes não receberão respostas da IA a partir de agora.",
+            "▶️ *Atendimento do WhatsApp ativo.* A IA voltará a responder os clientes automaticamente."
+        ]:
             return {"action": "skip", "reason": "bot-status-message"}
 
         chat_id = str(event.source.chat_id) if event.source.chat_id else ""
-        clean_chat = chat_id.split("@")[0]
+        clean_chat = chat_id.split("@")[0].split(":")[0]
         is_personal_chat = (clean_chat == clean_owner)
 
         # Se não for o dono, verificar status de pausa e injetar histórico da conversa
