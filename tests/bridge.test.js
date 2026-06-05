@@ -287,4 +287,91 @@ test('WhatsApp Bridge Regression Tests', async (t) => {
     const queue = getMessageQueue();
     assert.strictEqual(queue.length, 0, 'Unauthorized client message should be ignored and not enqueued');
   });
+
+  await t.test('10. Owner manual message in group chat should NOT trigger silence', async () => {
+    const groupJid = 'group123@g.us';
+    const ownerJid = '99999@s.whatsapp.net';
+
+    await onMessagesUpsert({
+      messages: [{
+        key: {
+          id: 'msg-10',
+          fromMe: true,
+          remoteJid: groupJid,
+          participant: ownerJid
+        },
+        message: {
+          conversation: 'Hello group!'
+        }
+      }],
+      type: 'notify'
+    });
+
+    const silenced = getSilencedChats();
+    assert.strictEqual(silenced[groupJid], undefined, 'Group chat should never be silenced');
+  });
+
+  await t.test('11. Owner command in group chat should NOT be intercepted', async () => {
+    const groupJid = 'group123@g.us';
+    const ownerJid = '99999@s.whatsapp.net';
+
+    await onMessagesUpsert({
+      messages: [{
+        key: {
+          id: 'msg-11',
+          fromMe: false,
+          remoteJid: groupJid,
+          participant: ownerJid
+        },
+        message: {
+          conversation: 'stop_bot'
+        }
+      }],
+      type: 'notify'
+    });
+
+    assert.strictEqual(getBotPaused(), false, 'Bot should NOT be paused when command is sent in a group chat');
+    assert.strictEqual(mockSock.sentMessages.length, 0, 'No bridge confirmation should be sent to group chat');
+  });
+
+  await t.test('12. Commands with trailing/leading spaces and newlines should be successfully intercepted', async () => {
+    const ownerJid = '99999@s.whatsapp.net';
+    
+    // Simulate stop_bot with spaces and capitalization
+    await onMessagesUpsert({
+      messages: [{
+        key: {
+          id: 'msg-12',
+          fromMe: false,
+          remoteJid: ownerJid
+        },
+        message: {
+          conversation: ' \n STOP_BOT \n '
+        }
+      }],
+      type: 'notify'
+    });
+
+    assert.strictEqual(getBotPaused(), true, 'Bot should be paused even with spaces/newlines in command');
+    assert.ok(mockSock.sentMessages.length > 0, 'Should send pause confirmation');
+    
+    // Clear and resume
+    mockSock.sentMessages = [];
+    await onMessagesUpsert({
+      messages: [{
+        key: {
+          id: 'msg-13',
+          fromMe: false,
+          remoteJid: ownerJid
+        },
+        message: {
+          conversation: '\r\n !retomar \r\n'
+        }
+      }],
+      type: 'notify'
+    });
+
+    assert.strictEqual(getBotPaused(), false, 'Bot should be resumed even with spaces/newlines in command');
+    assert.ok(mockSock.sentMessages.length > 0, 'Should send resume confirmation');
+  });
 });

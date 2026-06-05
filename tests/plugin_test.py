@@ -119,5 +119,75 @@ class TestWhatsAppManagerPlugin(unittest.IsolatedAsyncioTestCase):
             self.assertIn("SUPORTE WHATSAPP", res["context"])
             self.assertIn("Soul client rules", res["context"])
 
+    def test_non_whatsapp_platforms_are_ignored(self):
+        pre_llm = self.ctx.hooks.get("pre_llm_call")
+        
+        context = {
+            "platform": "telegram",
+            "sender_id": "5511999999999"
+        }
+        res = pre_llm("pre_llm_call", context)
+        self.assertIsNone(res)
+
+    async def test_pre_gateway_dispatch_non_whatsapp_ignored(self):
+        pre_dispatch = self.ctx.hooks.get("pre_gateway_dispatch")
+        
+        event = MagicMock()
+        event.source.platform = "telegram"
+        context = {
+            "event": event,
+            "gateway": MagicMock()
+        }
+        res = await pre_dispatch("pre_gateway_dispatch", context)
+        self.assertIsNone(res)
+
+    async def test_missing_model_env_vars_fallback(self):
+        pre_dispatch = self.ctx.hooks.get("pre_gateway_dispatch")
+        
+        event = MagicMock()
+        event.source.platform = "whatsapp"
+        event.source.user_id = "5511999999999@s.whatsapp.net"
+        event.text = "Hello"
+        event.source.chat_id = "5511999999999@s.whatsapp.net"
+
+        gateway = MagicMock()
+        gateway._session_key_for_source.return_value = "session_x"
+        gateway._session_model_overrides = {}
+
+        context = {
+            "event": event,
+            "gateway": gateway
+        }
+
+        # Clear env variables WHATSAPP_OWNER_MODEL and WHATSAPP_CLIENT_MODEL
+        with patch.dict(os.environ, {}, clear=True):
+            # We must restore WHATSAPP_OWNER_NUMBER for the owner check to pass
+            os.environ["WHATSAPP_OWNER_NUMBER"] = "5511999999999"
+            res = await pre_dispatch("pre_gateway_dispatch", context)
+            self.assertIsNone(res)
+            self.assertEqual(gateway._session_model_overrides["session_x"]["model"], "gemini-3.5-flash")
+
+    async def test_missing_session_key_handled_gracefully(self):
+        pre_dispatch = self.ctx.hooks.get("pre_gateway_dispatch")
+        
+        event = MagicMock()
+        event.source.platform = "whatsapp"
+        event.source.user_id = "5511999999999@s.whatsapp.net"
+        event.text = "Hello"
+        event.source.chat_id = "5511999999999@s.whatsapp.net"
+
+        gateway = MagicMock()
+        # Return None for session key
+        gateway._session_key_for_source.return_value = None
+
+        context = {
+            "event": event,
+            "gateway": gateway
+        }
+
+        res = await pre_dispatch("pre_gateway_dispatch", context)
+        # Should not raise exception
+        self.assertIsNone(res)
+
 if __name__ == "__main__":
     unittest.main()
