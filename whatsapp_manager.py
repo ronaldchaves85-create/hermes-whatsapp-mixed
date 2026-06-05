@@ -234,7 +234,7 @@ def register(ctx):
 
         # Identificar remetente
         sender_id = event.source.user_id or ""
-        clean_sender = sender_id.split("@")[0].split(":")[0]
+        clean_sender = "".join(c for c in sender_id.split("@")[0].split(":")[0] if c.isdigit())
 
         # Identificar dono (André)
         owner_number = os.getenv("WHATSAPP_OWNER_NUMBER", "").strip()
@@ -243,7 +243,7 @@ def register(ctx):
             print("[whatsapp-manager] DEBUG: owner_number vazio, returning None")
             return None  # Não definido → plugin não faz nada
 
-        clean_owner = owner_number.split("@")[0].split(":")[0]
+        clean_owner = "".join(c for c in owner_number.split("@")[0].split(":")[0] if c.isdigit())
         is_owner = (clean_sender == clean_owner)
         print(f"[whatsapp-manager] DEBUG: clean_owner='{clean_owner}', is_owner={is_owner}")
 
@@ -259,7 +259,7 @@ def register(ctx):
             return {"action": "skip", "reason": "bot-status-message"}
 
         chat_id = str(event.source.chat_id) if event.source.chat_id else ""
-        clean_chat = chat_id.split("@")[0].split(":")[0]
+        clean_chat = "".join(c for c in chat_id.split("@")[0].split(":")[0] if c.isdigit())
         is_personal_chat = (clean_chat == clean_owner)
 
         # Se não for o dono, verificar status de pausa e injetar histórico da conversa
@@ -321,8 +321,8 @@ def register(ctx):
         if not owner_number:
             return None
 
-        clean_sender = sender_id.split("@")[0].split(":")[0] if sender_id else ""
-        clean_owner = owner_number.split("@")[0].split(":")[0]
+        clean_sender = "".join(c for c in sender_id.split("@")[0].split(":")[0] if c.isdigit()) if sender_id else ""
+        clean_owner = "".join(c for c in owner_number.split("@")[0].split(":")[0] if c.isdigit())
 
         if clean_sender == clean_owner:
             # Assistente Pessoal do André
