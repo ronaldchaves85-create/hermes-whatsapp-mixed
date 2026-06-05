@@ -184,7 +184,7 @@ services:
 
   whatsapp-bridge:
     image: nousresearch/hermes-agent:v2026.5.16
-    command: node /opt/data/.hermes/platforms/whatsapp/bridge/bridge.js --port 3000 --session /opt/data/.hermes/platforms/whatsapp/session --mode bot
+    command: bash -lc 'sleep 8 && exec node /opt/data/.hermes/platforms/whatsapp/bridge/bridge.js --port 3000 --session /opt/data/.hermes/platforms/whatsapp/session --mode bot'
 
     volumes:
       - hermes_agent_hermes_data_v5:/opt/data
