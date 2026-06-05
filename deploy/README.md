@@ -71,7 +71,7 @@ Agora, vamos fazer com que o seu servidor baixe automaticamente os arquivos que 
 3. Substitua `SEU_USUARIO_GITHUB` pelo seu usuário real do GitHub no comando abaixo, cole-o no console e aperte Enter:
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/SEU_USUARIO_GITHUB/hermes-whatsapp-mixed/main/setup.sh | bash -s SEU_USUARIO_GITHUB
+curl -sSL https://raw.githubusercontent.com/SEU_USUARIO_GITHUB/hermes-whatsapp-mixed/main/deploy/setup.sh | bash -s SEU_USUARIO_GITHUB
 ```
 
 > **O que o script fez por você?** Ele baixou a persona global (`SOUL.md`), as personas isoladas (`SOUL_WHATSAPP.md` e `SOUL_EMAIL.md`), a base de conhecimento (`support_rules.md`) diretamente do seu GitHub Fork pessoal, configurou as otimizações no `config.yaml` e aplicou a inteligência do WhatsApp. Os plugins ficam para o dashboard do Hermes.
@@ -209,15 +209,15 @@ O Hermes expõe **duas portas** que precisam de subdomínios separados:
 3. Cole o comando abaixo e pressione Enter (substitua `SEU_USUARIO_GITHUB` pelo seu usuário):
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/SEU_USUARIO_GITHUB/hermes-whatsapp-mixed/main/setup.sh | bash -s SEU_USUARIO_GITHUB
+curl -sSL https://raw.githubusercontent.com/SEU_USUARIO_GITHUB/hermes-whatsapp-mixed/main/deploy/setup.sh | bash -s SEU_USUARIO_GITHUB
 ```
 
 **O setup irá:**
 * Configurar a persona (`SOUL.md`) em `/opt/data/SOUL.md`
 * Configurar as personas isoladas (`SOUL_WHATSAPP.md` e `SOUL_EMAIL.md`) em `/opt/data/`
 * Criar as regras de suporte (`support_rules.md`) em `/opt/data/support_rules.md`
-* Criar o `config.yaml` em `/root/.hermes/config.yaml`
-* Criar o `.env` em `/root/.hermes/.env`
+* Criar o `config.yaml` em `/opt/data/.hermes/config.yaml`
+* Criar o `.env` em `/opt/data/.hermes/.env`
 * Deixar o plugin `whatsapp-manager` ser instalado/atualizado pelo dashboard do Hermes
 * Aplicar o patch do WhatsApp
 
@@ -239,10 +239,10 @@ Acesse o gerenciador de arquivos visual do Dashboard (`https://hermes.seu-domini
 
 ### 💾 Mapa de Persistência no Easypanel
 
-| Volume | Caminho no container | O que persiste |
+| Nome do Volume | Caminho Interno | Conteúdo |
 |---|---|---|
-| `hermes_data` | `/opt/data` | SOUL.md, support_rules.md, workspace, HERMES_HOME, chaves de pareamento |
-| `hermes_root` | `/root/.hermes` | config.yaml (criado pelo setup.sh) |
+| `hermes_root` | `/opt/data/.hermes` | config.yaml (criado pelo setup.sh) |
+| `hermes_data` | `/opt/data` | SOUL.md, support_rules.md e workspace, chaves de pareamento |
 
 > Os volumes ficam em `/etc/easypanel/projects/<projeto>/hermes/volumes/` no servidor.
 
@@ -422,19 +422,22 @@ Depois de parear o seu WhatsApp no Hermes Agent, você pode controlá-lo enviand
 
 ---
 
-## 🤖 Estado do Bot (bot_paused) e Persistência
+## 🤖 Estado do Bot (bot_paused) e Silenciamento
 
-O sistema mantém o estado de pausa do bot **mesmo após reinicializações**:
+O sistema possui duas formas inteligentes de pausar e silenciar o bot comercial para clientes:
 
-* **Arquivo de estado:** `/root/.hermes/whatsapp/session/bot_state.json`
+### 1. Pausa Global (`stop_bot` / `start_bot`)
+Mantém o estado de pausa do bot **mesmo após reinicializações**:
+* **Arquivo de estado:** `/opt/data/.hermes/whatsapp/session/bot_state.json`
 * **Endpoint HTTP:** `GET /bot-status` — retorna `{ botPaused, uptime }`
-* O plugin `whatsapp-manager` consulta `/bot-status` antes de processar mensagens de clientes
-* Se o bot está pausado, mensagens de clientes são ignoradas silenciosamente
+* O plugin `whatsapp-manager` consulta `/bot-status` e ignora mensagens de clientes se estiver pausado.
 
-### Como funciona:
-1. Quando você envia `stop_bot`, o estado `botPaused: true` é salvo no arquivo `bot_state.json`
-2. Se o container é reiniciado, o `loadBotState()` restaura o estado ao iniciar a bridge
-3. O `whatsapp-manager`插件 verifica `/bot-status` e só entrega mensagens se `botPaused === false`
+### 2. Silenciamento Temporário Automático (10 minutos)
+Quando você (o proprietário) entra em uma conversa com um cliente, o bot é **silenciado especificamente naquela conversa por 10 minutos**. Isso ocorre de forma totalmente automática quando o sistema detecta que:
+1. Você leu/abriu a conversa no seu celular ou WhatsApp Web (disparando confirmação de leitura).
+2. Você respondeu manualmente ao cliente.
+* **Endpoint HTTP:** `GET /chat-status/:chatId` — retorna se a conversa está silenciada e quanto tempo falta.
+* **Endpoint HTTP:** `POST /chat-unsilence` — limpa o silêncio da conversa manualmente se desejar reativar o bot antes dos 10 minutos.
 
 ---
 

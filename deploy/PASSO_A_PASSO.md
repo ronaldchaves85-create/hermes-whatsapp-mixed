@@ -51,7 +51,7 @@ Agora faremos seu servidor puxar as regras que você salvou no seu GitHub no Pas
 4. **Substitua `SEU_USUARIO_GITHUB` pelo seu usuário real do GitHub** no comando abaixo, cole-o no terminal e aperte **Enter**:
 
 ```bash
-curl -sSL https://raw.githubusercontent.com/SEU_USUARIO_GITHUB/hermes-whatsapp-mixed/main/setup.sh | bash -s SEU_USUARIO_GITHUB
+curl -sSL https://raw.githubusercontent.com/SEU_USUARIO_GITHUB/hermes-whatsapp-mixed/main/deploy/setup.sh | bash -s SEU_USUARIO_GITHUB
 ```
 
 > **Sincronização Ativa:** O seu servidor baixou a persona (`SOUL.md`) e regras de vendas (`support_rules.md`) direto do seu GitHub pessoal, configurou o `config.yaml` e corrigiu a ponte do WhatsApp. Plugins ficam para o dashboard do Hermes.

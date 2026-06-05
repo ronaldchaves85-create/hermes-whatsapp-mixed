@@ -43,7 +43,7 @@
 #
 # 🛠️  SETUP INICIAL (após o primeiro deploy):
 #   1. Acesse o Console do serviço no Easypanel
-#   2. Execute: curl -sSL https://raw.githubusercontent.com/empreendedorserial/hermes-whatsapp-mixed/main/setup.sh | bash
+#   2. Execute: curl -sSL https://raw.githubusercontent.com/empreendedorserial/hermes-whatsapp-mixed/main/deploy/setup.sh | bash
 #   3. O setup.sh gravará em /opt/data (persistido) e /root/.hermes (também persistido via volume abaixo)
 # ==============================================================================
 #

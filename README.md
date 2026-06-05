@@ -42,6 +42,16 @@ Como o plugin agora está localizado diretamente na **raiz** do repositório, vo
 
 ---
 
+## 🕹️ Comandos e Silenciamento Inteligente
+
+O robô conta com recursos nativos de controle diretamente pelo WhatsApp:
+
+* 🚫 **`stop_bot`** (ou `!pausar` / `!parar`): Pausa globalmente o bot comercial para clientes. O seu assistente pessoal no Self-Chat continua respondendo você normalmente.
+* 🟢 **`start_bot`** (ou `!retomar` / `!iniciar`): Reativa o bot comercial para voltar a responder seus clientes no piloto automático.
+* 🔇 **Silenciamento Temporário por Conversa (10 min)**: Sempre que você ler/abrir um chat de cliente ou enviar uma mensagem manual, o bot entra automaticamente em silêncio especificamente para aquela conversa por 10 minutos, permitindo que você atenda o cliente de forma manual sem interferência da IA.
+
+---
+
 ## 🐋 Como Fazer Deploy da Stack
 
 Todos os arquivos de deploy de contêineres e configurações avançadas foram movidos para a pasta `/deploy`.

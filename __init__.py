@@ -2,10 +2,59 @@
 
 import os
 import json
+import urllib.request
+import urllib.error
 from pathlib import Path
 
 # Arquivo para persistir o status do atendimento de suporte
 STATUS_FILE = Path("/opt/data/.hermes/whatsapp_manager_status.json")
+
+# Mapeamento temporário sender_id -> chat_id (usado entre pre_gateway_dispatch e pre_llm_call)
+_sender_to_chat: dict[str, str] = {}
+
+# URL do servidor de mensagens
+MESSAGE_SERVER_URL = os.getenv("MESSAGE_SERVER_URL", "http://127.0.0.1:18732")
+
+# URL do bridge WhatsApp
+BRIDGE_URL = os.getenv("WHATSAPP_BRIDGE_URL", "http://127.0.0.1:3000")
+
+
+def _check_bot_paused() -> bool:
+    """Verifica se o bot está pausado via endpoint do bridge."""
+    try:
+        url = f"{BRIDGE_URL}/bot-status"
+        req = urllib.request.Request(url, headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=3) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            return data.get("botPaused", False)
+    except Exception:
+        return False
+
+
+def _check_chat_silenced(chat_id: str) -> bool:
+    """Verifica se uma conversa específica está silenciada temporariamente."""
+    try:
+        import urllib.parse
+        safe_chat_id = urllib.parse.quote(chat_id)
+        url = f"{BRIDGE_URL}/chat-status/{safe_chat_id}"
+        req = urllib.request.Request(url, headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=3) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            return data.get("isSilenced", False)
+    except Exception:
+        return False
+
+
+def _fetch_chat_history(chat_id: str, limit: int = 50) -> str:
+    """Busca histórico de mensagens do servidor HTTP."""
+    try:
+        url = f"{MESSAGE_SERVER_URL}/chat/{chat_id}/messages?limit={limit}"
+        req = urllib.request.Request(url, headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            return data.get("history", "")
+    except Exception:
+        return ""
 
 def load_status():
     if STATUS_FILE.exists():
@@ -33,6 +82,9 @@ def register(ctx):
 
         # 1. Copiar bridge.js do plugin para o volume
         source_bridge = plugin_dir / "bridge.js"
+        # Para suportar caso o arquivo esteja na pasta whatsapp-manager do plugin
+        if not source_bridge.exists():
+            source_bridge = plugin_dir / "whatsapp-manager" / "bridge.js"
         target_bridge = target_bridge_dir / "bridge.js"
         if source_bridge.exists():
             if not target_bridge.exists() or source_bridge.read_bytes() != target_bridge.read_bytes():
@@ -41,6 +93,8 @@ def register(ctx):
 
         # 2. Copiar package.json do plugin para o volume
         source_pkg = plugin_dir / "package.json"
+        if not source_pkg.exists():
+            source_pkg = plugin_dir / "whatsapp-manager" / "package.json"
         target_pkg = target_bridge_dir / "package.json"
         if source_pkg.exists():
             if not target_pkg.exists() or source_pkg.read_bytes() != target_pkg.read_bytes():
@@ -106,13 +160,20 @@ def register(ctx):
 
         # Identificar dono (André)
         owner_number = os.getenv("WHATSAPP_OWNER_NUMBER", "").strip()
+        print(f"[whatsapp-manager] DEBUG: owner_number='{owner_number}', sender_id='{sender_id}', clean_sender='{clean_sender}'")
         if not owner_number:
-            return None
+            print("[whatsapp-manager] DEBUG: owner_number vazio, returning None")
+            return None  # Não definido → plugin não faz nada
 
         clean_owner = owner_number.split("@")[0]
         is_owner = (clean_sender == clean_owner)
+        print(f"[whatsapp-manager] DEBUG: clean_owner='{clean_owner}', is_owner={is_owner}")
 
         msg_text = (event.text or "").strip()
+
+        # Ignorar mensagens de status do bot (stop_bot/start_bot responses)
+        if msg_text in ["🐼 *Bot Paused*\n\nO chatbot está descansando. Use `start_bot` para retomar.", "🚀 *Bot Ativo*\n\nO chatbot voltou a funcionar!"]:
+            return {"action": "skip", "reason": "bot-status-message"}
 
         # Se for mensagem do Dono (André) e começar com !suporte
         if is_owner and msg_text.startswith("!suporte"):
@@ -152,12 +213,36 @@ def register(ctx):
                     )
                 return {"action": "skip", "reason": "status-solicitado"}
 
-        # Se NÃO for o dono, verificar se o suporte está ativo
+        # Se não for o dono, verificar status de suporte/pausa e injetar histórico da conversa
         if not is_owner:
+            # Verificar se o suporte está ativo
             status = load_status()
             if not status.get("support_active", True):
-                # Ignorar silenciosamente a mensagem do cliente porque o suporte está pausado
                 return {"action": "skip", "reason": "atendimento-pausado"}
+
+            # Verificar se o bot está pausado via stop_bot
+            if _check_bot_paused():
+                return {"action": "skip", "reason": "bot-pausado"}
+
+            chat_id = str(event.source.chat_id) if event.source.chat_id else ""
+
+            # Verificar se a conversa específica está silenciada temporariamente
+            if chat_id and _check_chat_silenced(chat_id):
+                return {"action": "skip", "reason": "conversa-silenciada"}
+
+            if chat_id and sender_id:
+                _sender_to_chat[sender_id] = chat_id
+
+            # Buscar histórico e injetar no início da mensagem
+            history_context = _fetch_chat_history(chat_id, limit=50)
+            if history_context:
+                rewrite_text = f"{history_context}\n\n[ Nova mensagem do cliente ]\n{event.text or ''}"
+                return {"action": "rewrite", "text": rewrite_text}
+        else:
+            # Para o dono, salvar chat_id também
+            chat_id = str(event.source.chat_id) if event.source.chat_id else ""
+            if chat_id and sender_id:
+                _sender_to_chat[sender_id] = chat_id
 
         # Roteamento Dinâmico de Modelos (Dono vs Clientes)
         try:
@@ -247,12 +332,22 @@ def register(ctx):
             if not rules_content:
                 rules_content = "Responda de forma profissional e ajude com Chatkanban, Chatcommerce e Api Connector."
 
+            # Buscar histórico de mensagens deste chat (para contexto)
+            history_context = ""
+            chat_id = _sender_to_chat.get(sender_id, "")
+            if chat_id:
+                history_context = _fetch_chat_history(chat_id, limit=50)
+
             return {
                 "context": (
                     "### PERSONA E DIRETRIZES DO SUPORTE WHATSAPP ###\n"
                     f"{whatsapp_soul}\n\n"
+                    "### IDIOMA: APENAS PORTUGUÊS BRASILEIRO ###\n"
+                    "NUNCA use caracteres em chinês, mandarim, japonês ou qualquer outro idioma. "
+                    "O bot deve responder EXCLUSIVAMENTE em português brasileiro.\n\n"
                     "### BASE DE CONHECIMENTO E REGRAS DE NEGÓCIO ###\n"
                     f"{rules_content}\n\n"
+                    f"{history_context}\n\n"
                     "CONSTRAINTS RÍGIDAS DE SEGURANÇA:\n"
                     "- NUNCA execute comandos no terminal (terminal tool) para o cliente.\n"
                     "- NUNCA edite, remova ou crie arquivos do sistema para o cliente.\n"
