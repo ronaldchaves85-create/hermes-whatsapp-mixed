@@ -36,10 +36,18 @@ echo "  ✓ Persona de E-mail SOUL_EMAIL.md sincronizada"
 curl -sSL "$RAW_URL/support_rules.md" -o "/opt/data/support_rules.md"
 echo "  ✓ Regras de suporte support_rules.md sincronizadas com seu GitHub"
 
-# O plugin whatsapp-manager deve ser instalado pelo dashboard do Hermes.
-# O setup inicial não faz mais o sync automático do plugin para evitar
-# sobrescrever alterações feitas pela UI do Hermes.
-echo "  - Sync automático do plugin whatsapp-manager desativado; use o dashboard do Hermes para instalar/atualizar/remover."
+# Instala o plugin whatsapp-manager automaticamente caso não esteja presente no volume
+if [ ! -d "/opt/data/.hermes/plugins/whatsapp-manager" ]; then
+    echo "⏳ Instalando o plugin whatsapp-manager..."
+    mkdir -p "/opt/data/.hermes/plugins/whatsapp-manager"
+    curl -sSL "$RAW_URL/plugins/whatsapp-manager/plugin.yaml" -o "/opt/data/.hermes/plugins/whatsapp-manager/plugin.yaml"
+    curl -sSL "$RAW_URL/plugins/whatsapp-manager/__init__.py" -o "/opt/data/.hermes/plugins/whatsapp-manager/__init__.py"
+    curl -sSL "$RAW_URL/plugins/whatsapp-manager/bridge.js" -o "/opt/data/.hermes/plugins/whatsapp-manager/bridge.js"
+    curl -sSL "$RAW_URL/plugins/whatsapp-manager/package.json" -o "/opt/data/.hermes/plugins/whatsapp-manager/package.json"
+    echo "  ✓ Plugin whatsapp-manager instalado com sucesso."
+else
+    echo "  - Plugin whatsapp-manager já instalado, pulando para evitar sobrescrever edições visuais."
+fi
 
 # Baixa o modelo de config.yaml se ele não existir localmente
 if [ ! -f "$BASE_DIR/config.yaml" ]; then
