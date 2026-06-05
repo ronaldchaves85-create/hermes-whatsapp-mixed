@@ -53,6 +53,9 @@ const PAIR_ONLY = args.includes('--pair-only');
 const WHATSAPP_MODE = getArg('mode', process.env.WHATSAPP_MODE || 'self-chat'); // "bot" or "self-chat"
 const ALLOWED_USERS = parseAllowedUsers(process.env.WHATSAPP_ALLOWED_USERS || '');
 const WHATSAPP_OWNER_NUMBER = (process.env.WHATSAPP_OWNER_NUMBER || '').trim().replace(/@.*/, '');
+const WHATSAPP_SILENCE_DURATION_MIN = parseInt(process.env.WHATSAPP_SILENCE_DURATION_MIN || '10', 10);
+const SILENCE_DURATION_MS = WHATSAPP_SILENCE_DURATION_MIN * 60 * 1000;
+const silencedChats = {};
 const DEFAULT_REPLY_PREFIX = '⚕ *Hermes Agent*\n────────────\n';
 const REPLY_PREFIX = process.env.WHATSAPP_REPLY_PREFIX === undefined
   ? DEFAULT_REPLY_PREFIX
@@ -229,6 +232,43 @@ async function startSocket() {
 
   sock.ev.on('creds.update', () => { saveCreds(); lidToPhone = buildLidMap(); });
 
+  sock.ev.on('messages.update', (updates) => {
+    for (const update of updates) {
+      if (update.update && (update.update.status === 3 || update.update.read === true || update.update.status === 'read')) {
+        const chatId = update.key.remoteJid;
+        if (!chatId) continue;
+        if (chatId.includes('status') || chatId.endsWith('@g.us')) continue;
+        
+        const myNumber = (sock.user?.id || '').replace(/:.*@/, '@').replace(/@.*/, '');
+        const myLid = (sock.user?.lid || '').replace(/:.*@/, '@').replace(/@.*/, '');
+        const chatNumber = chatId.replace(/@.*/, '');
+        const isSelfChat = (myNumber && chatNumber === myNumber) || (myLid && chatNumber === myLid);
+        if (isSelfChat) continue;
+
+        silencedChats[chatId] = Date.now() + SILENCE_DURATION_MS;
+        console.log(`🔇 Chat ${chatId} silenciado por ${WHATSAPP_SILENCE_DURATION_MIN} minutos (dono leu as mensagens).`);
+      }
+    }
+  });
+
+  sock.ev.on('chats.update', (updates) => {
+    for (const update of updates) {
+      if (update.unreadCount === 0 || update.unreadCount === -1) {
+        const chatId = update.id;
+        if (!chatId || chatId.includes('status') || chatId.endsWith('@g.us')) continue;
+
+        const myNumber = (sock.user?.id || '').replace(/:.*@/, '@').replace(/@.*/, '');
+        const myLid = (sock.user?.lid || '').replace(/:.*@/, '@').replace(/@.*/, '');
+        const chatNumber = chatId.replace(/@.*/, '');
+        const isSelfChat = (myNumber && chatNumber === myNumber) || (myLid && chatNumber === myLid);
+        if (isSelfChat) continue;
+
+        silencedChats[chatId] = Date.now() + SILENCE_DURATION_MS;
+        console.log(`🔇 Chat ${chatId} silenciado por ${WHATSAPP_SILENCE_DURATION_MIN} minutos (dono abriu o chat).`);
+      }
+    }
+  });
+
   sock.ev.on('connection.update', (update) => {
     const { connection, lastDisconnect, qr } = update;
 
@@ -361,6 +401,11 @@ async function startSocket() {
         const myLid = (sock.user?.lid || '').replace(/:.*@/, '@').replace(/@.*/, '');
         const chatNumber = chatId.replace(/@.*/, '');
         const isSelfChat = (myNumber && chatNumber === myNumber) || (myLid && chatNumber === myLid);
+
+        if (!isSelfChat && !recentlySentIds.has(msg.key.id)) {
+          silencedChats[chatId] = Date.now() + SILENCE_DURATION_MS;
+          console.log(`🔇 Chat ${chatId} silenciado por ${WHATSAPP_SILENCE_DURATION_MIN} minutos (dono enviou mensagem manualmente).`);
+        }
 
         if (WHATSAPP_MODE === 'bot' && !isSelfChat) {
           // Bot mode: separate number. ALL fromMe to other users are echo-backs of our own replies — skip.
@@ -581,6 +626,29 @@ app.get('/bot-status', (req, res) => {
     botPaused,
     uptime: process.uptime(),
   });
+});
+
+app.get('/chat-status/:chatId', (req, res) => {
+  const chatId = normalizeWhatsAppId(req.params.chatId);
+  const silencedUntil = silencedChats[chatId] || 0;
+  const isSilenced = silencedUntil > Date.now();
+  res.json({
+    chatId,
+    isSilenced,
+    silencedUntil,
+    timeLeftSeconds: isSilenced ? Math.round((silencedUntil - Date.now()) / 1000) : 0,
+  });
+});
+
+app.post('/chat-unsilence', (req, res) => {
+  const { chatId } = req.body;
+  if (!chatId) {
+    return res.status(400).json({ error: 'chatId is required' });
+  }
+  const normalized = normalizeWhatsAppId(chatId);
+  delete silencedChats[normalized];
+  console.log(`🔊 Chat ${normalized} reativado manualmente.`);
+  res.json({ success: true, chatId: normalized });
 });
 
 // Poll for new messages (long-poll style)

@@ -31,6 +31,20 @@ def _check_bot_paused() -> bool:
         return False
 
 
+def _check_chat_silenced(chat_id: str) -> bool:
+    """Verifica se uma conversa específica está silenciada temporariamente."""
+    try:
+        import urllib.parse
+        safe_chat_id = urllib.parse.quote(chat_id)
+        url = f"{BRIDGE_URL}/chat-status/{safe_chat_id}"
+        req = urllib.request.Request(url, headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(req, timeout=3) as resp:
+            data = json.loads(resp.read().decode("utf-8"))
+            return data.get("isSilenced", False)
+    except Exception:
+        return False
+
+
 def _fetch_chat_history(chat_id: str, limit: int = 50) -> str:
     """Busca histórico de mensagens do servidor HTTP."""
     try:
@@ -211,6 +225,11 @@ def register(ctx):
                 return {"action": "skip", "reason": "bot-pausado"}
 
             chat_id = str(event.source.chat_id) if event.source.chat_id else ""
+
+            # Verificar se a conversa específica está silenciada temporariamente
+            if chat_id and _check_chat_silenced(chat_id):
+                return {"action": "skip", "reason": "conversa-silenciada"}
+
             if chat_id and sender_id:
                 _sender_to_chat[sender_id] = chat_id
 
