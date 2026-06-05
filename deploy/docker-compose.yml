@@ -87,6 +87,7 @@ services:
       - WHATSAPP_OWNER_NUMBER=${WHATSAPP_OWNER_NUMBER:-}
       - WHATSAPP_MODE=${WHATSAPP_MODE:-bot}
       - WHATSAPP_ALLOWED_USERS=${WHATSAPP_ALLOWED_USERS:-*}
+      - WHATSAPP_BRIDGE_URL=http://whatsapp-bridge:3000
 
       # Gateway access
       - GATEWAY_ALLOW_ALL_USERS=${GATEWAY_ALLOW_ALL_USERS:-false}
