@@ -25,10 +25,10 @@ Use quando o usuário disser algo como:
 
 ## Pré-requisitos
 
-- O repositório local está em: `/Users/andrealencar/GoogleAntigravity/hermes-whatsapp-mixed`
-- O remote `origin` aponta para `github.com/empreendedorserial/hermes-whatsapp-mixed`
+- O repositório local está no workspace ativo
+- O remote `origin` aponta para o repositório no GitHub
 - O servidor Hermes tem o plugin clonado em `/opt/data/.hermes/plugins/whatsapp-manager`
-- Acesso ao Portainer em `https://hermes.empreendedorserial.com/portainer/`
+- Acesso ao Dashboard do Hermes e ao Portainer do servidor
 
 ---
 
@@ -37,7 +37,7 @@ Use quando o usuário disser algo como:
 ### 1.1 Verificar o que mudou
 
 ```bash
-cd /Users/andrealencar/GoogleAntigravity/hermes-whatsapp-mixed && git status
+git status
 ```
 
 Revisar as alterações e confirmar com o usuário se está tudo certo.
@@ -45,7 +45,7 @@ Revisar as alterações e confirmar com o usuário se está tudo certo.
 ### 1.2 Adicionar e commitar
 
 ```bash
-cd /Users/andrealencar/GoogleAntigravity/hermes-whatsapp-mixed && git add -A && git commit -m "MENSAGEM_DO_COMMIT"
+git add -A && git commit -m "MENSAGEM_DO_COMMIT"
 ```
 
 > **Regra:** A mensagem de commit deve ser descritiva e em português. Exemplos:
@@ -56,7 +56,7 @@ cd /Users/andrealencar/GoogleAntigravity/hermes-whatsapp-mixed && git add -A && 
 ### 1.3 Push para o GitHub
 
 ```bash
-cd /Users/andrealencar/GoogleAntigravity/hermes-whatsapp-mixed && git push origin main
+git push origin main
 ```
 
 Se der erro de divergência, usar `git pull --rebase origin main` antes do push.
@@ -69,7 +69,7 @@ O plugin é atualizado diretamente pelo painel do Hermes, na aba de Plugins.
 
 ### 2.1 Acessar o Dashboard do Hermes
 
-1. Acesse `https://hermes.empreendedorserial.com/`
+1. Acesse o Dashboard do Hermes
 2. Navegue até a aba **Plugins**
 
 ### 2.2 Atualizar o plugin
@@ -88,8 +88,8 @@ As alterações no plugin só são carregadas quando o Hermes reinicia.
 
 ### Opção A — Pelo Portainer (Recomendado)
 
-1. No Portainer, vá em **Containers**
-2. Selecione o container `hermes` (ou `hermes-agent`)
+1. Acesse o Portainer do servidor
+2. Vá em **Containers** → selecione o container do Hermes
 3. Clique em **Restart**
 4. Aguarde o container subir (status `running`)
 
@@ -114,7 +114,7 @@ No Portainer → Containers → verificar que o status é `running` e que o upti
 
 ### Conferir logs do plugin
 
-No terminal do container (via Portainer Console):
+No terminal do container (via Console do Portainer):
 
 ```bash
 grep "whatsapp-manager" /opt/data/.hermes/logs/hermes.log | tail -20
@@ -136,7 +136,7 @@ Envie `start_bot` ou `stop_bot` no WhatsApp para confirmar que o bridge está re
 | Problema | Solução |
 |----------|---------|
 | `git pull` dá conflito no container | `cd /opt/data/.hermes/plugins/whatsapp-manager && git reset --hard origin/main` |
-| Container não sobe após restart | Verificar logs no Portainer → Container → Logs |
+| Container não sobe após restart | Verificar logs no Portainer → Containers → Logs |
 | Plugin não carrega as alterações | Conferir se o `git pull` trouxe os arquivos e se o container foi reiniciado |
 | `bridge.js` não atualiza no bridge | O `register()` do plugin copia automaticamente no boot — verificar logs por `bridge.js atualizado` |
 | Push rejeitado por divergência | `git pull --rebase origin main && git push origin main` |
