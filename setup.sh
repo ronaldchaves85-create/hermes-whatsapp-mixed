@@ -10,7 +10,7 @@ echo "           GitHub Fork de: $GITHUB_USER"
 echo "=========================================================="
 
 # Define o caminho base do Hermes dentro do container
-BASE_DIR="/root/.hermes"
+BASE_DIR="/opt/data/.hermes"
 mkdir -p "$BASE_DIR"
 mkdir -p "/opt/data"
 
