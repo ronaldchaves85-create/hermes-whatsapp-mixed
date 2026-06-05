@@ -62,4 +62,28 @@ Todos os arquivos de deploy de contêineres e configurações avançadas foram m
 > 📖 **Instruções Detalhadas:** Para um guia de implantação completo passo a passo, personalização de personas (`SOUL_WHATSAPP.md`), regras de negócio (`support_rules.md`) e pareamento de múltiplas contas, leia o manual completo em [deploy/README.md](file:///Users/andrealencar/GoogleAntigravity/hermes-whatsapp-mixed/deploy/README.md).
 
 ---
+
+## 🧪 Testes de Regressão
+
+Este repositório possui uma suite de testes de regressão automatizados para validar o comportamento da ponte do WhatsApp, garantindo que alterações futuras não quebrem regras de negócio críticas (como comandos de pausa e silenciamento de chats).
+
+### O que é testado:
+1. **Comandos globais no Self-Chat:** Garante que `start_bot`/`stop_bot` pausam e resumem o bot comercial apenas no chat pessoal.
+2. **Ignorar comandos no chat de clientes:** Garante que os comandos de controle digitados em chats comerciais de clientes não são executados pela ponte.
+3. **Silenciamento temporário por mensagem manual:** Garante que o bot seja silenciado por exatamente 10 minutos (600.000 ms) quando o dono responde manualmente a um cliente.
+4. **Isenção de comandos no silenciamento:** Garante que comandos como `!suporte status` ou semelhantes enviados pelo dono no chat de clientes não ativem o silenciamento por engano.
+5. **Silenciamento temporário por leitura:** Garante que o bot seja silenciado por exatamente 10 minutos quando o dono marca/lê a conversa no celular ou web (evento `chats.update` com contagem zero).
+6. **Isenção de silêncio no Self-Chat:** Garante que o chat pessoal do dono nunca seja silenciado.
+
+### Como rodar os testes localmente:
+1. Instale as dependências:
+   ```bash
+   npm install
+   ```
+2. Execute a suite de testes:
+   ```bash
+   npm test
+   ```
+
+---
 *Desenvolvido e mantido pela Comunidade Empreendedor Serial (André Alencar).*

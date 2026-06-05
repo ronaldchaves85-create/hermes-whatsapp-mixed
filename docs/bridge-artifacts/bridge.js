@@ -23,6 +23,7 @@ import express from 'express';
 import { Boom } from '@hapi/boom';
 import pino from 'pino';
 import path from 'path';
+import { fileURLToPath } from 'url';
 import { mkdirSync, readFileSync, writeFileSync, existsSync, readdirSync, unlinkSync, rmSync } from 'fs';
 import { randomBytes } from 'crypto';
 import { execSync } from 'child_process';
@@ -209,6 +210,311 @@ let connectionState = 'disconnected';
 let currentQr = '';
 let currentQrAt = null;
 
+const isMain = process.argv[1] && (
+  fileURLToPath(import.meta.url) === process.argv[1] ||
+  path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
+);
+
+let onChatsUpdate = (updates) => {
+  for (const update of updates) {
+    if (update.unreadCount === 0 || update.unreadCount === -1) {
+      const chatId = update.id;
+      if (!chatId || chatId.includes('status') || chatId.endsWith('@g.us')) continue;
+
+      const myNumber = (sock?.user?.id || '').replace(/:.*@/, '@').replace(/@.*/, '');
+      const myLid = (sock?.user?.lid || '').replace(/:.*@/, '@').replace(/@.*/, '');
+      const chatNumber = chatId.replace(/@.*/, '');
+      const isSelfChat = (myNumber && chatNumber === myNumber) || (myLid && chatNumber === myLid);
+      if (isSelfChat) continue;
+
+      silencedChats[chatId] = Date.now() + SILENCE_DURATION_MS;
+      console.log(`🔇 Chat ${chatId} silenciado por ${WHATSAPP_SILENCE_DURATION_MIN} min (chats.update unread=0).`);
+    }
+  }
+};
+
+let onMessagesUpsert = async ({ messages, type }) => {
+  // In self-chat mode, your own messages commonly arrive as 'append' rather
+  // than 'notify'. Accept both and filter agent echo-backs below.
+  if (type !== 'notify' && type !== 'append') return;
+
+  const botIds = Array.from(new Set([
+    normalizeWhatsAppId(sock?.user?.id),
+    normalizeWhatsAppId(sock?.user?.lid),
+  ].filter(Boolean)));
+
+  for (const msg of messages) {
+    if (!msg.message) continue;
+
+    const chatId = msg.key.remoteJid;
+    if (WHATSAPP_DEBUG) {
+      try {
+        console.log(JSON.stringify({
+          event: 'upsert', type,
+          fromMe: !!msg.key.fromMe, chatId,
+          senderId: msg.key.participant || chatId,
+          messageKeys: Object.keys(msg.message || {}),
+        }));
+      } catch {}
+    }
+    const senderId = msg.key.participant || chatId;
+    const isGroup = chatId.endsWith('@g.us');
+    const senderNumber = senderId.replace(/@.*/, '');
+
+    // Intercept owner bot commands (stop_bot / start_bot)
+    const messageContentForCmd = getMessageContent(msg);
+    let bodyForCmd = '';
+    if (messageContentForCmd.conversation) {
+      bodyForCmd = messageContentForCmd.conversation;
+    } else if (messageContentForCmd.extendedTextMessage?.text) {
+      bodyForCmd = messageContentForCmd.extendedTextMessage.text;
+    }
+    const textLower = bodyForCmd.trim().toLowerCase();
+
+    const myNumber = (sock?.user?.id || '').replace(/:.*@/, '@').replace(/@.*/, '');
+    const myLid = (sock?.user?.lid || '').replace(/:.*@/, '@').replace(/@.*/, '');
+    const senderClean = senderId.replace(/@.*/, '').replace(/:.*/, '');
+    const isOwner =
+      (myNumber && senderClean === myNumber) ||
+      (myLid && senderClean === myLid) ||
+      (WHATSAPP_OWNER_NUMBER && senderClean === WHATSAPP_OWNER_NUMBER);
+
+    const chatNumber = chatId.replace(/@.*/, '');
+    const isSelfChat = (myNumber && chatNumber === myNumber) || (myLid && chatNumber === myLid);
+
+    if (isOwner && isSelfChat && !isGroup && !chatId.includes('status')) {
+      if (['stop_bot', '!pausar', '!parar'].includes(textLower)) {
+        botPaused = true;
+        saveBotState();
+        console.log('⏸️ Bot paused by owner command.');
+        try {
+          const sent = await sendWithTimeout(chatId, { text: '⏸️ *Atendimento do WhatsApp pausado.* Os clientes não receberão respostas da IA a partir de agora.' });
+          trackSentMessageId(sent);
+        } catch (err) {
+          console.error('Failed to send pause response:', err.message);
+        }
+        continue;
+      } else if (['start_bot', '!retomar', '!iniciar'].includes(textLower)) {
+        botPaused = false;
+        saveBotState();
+        delete silencedChats[chatId]; // Unsilence this specific chat!
+        console.log(`▶️ Bot activated by owner command. Chat ${chatId} unsilenced.`);
+        try {
+          const sent = await sendWithTimeout(chatId, { text: '▶️ *Atendimento do WhatsApp ativo.* A IA voltará a responder os clientes automaticamente.' });
+          trackSentMessageId(sent);
+        } catch (err) {
+          console.error('Failed to send resume response:', err.message);
+        }
+        continue;
+      }
+    }
+
+    // If bot is paused, drop messages from non-owner users immediately
+    // (don't enqueue them — the Python gateway should never see them)
+    if (botPaused && !isOwner) {
+      if (WHATSAPP_DEBUG) {
+        try { console.log(JSON.stringify({ event: 'ignored', reason: 'bot_paused', chatId, senderId })); } catch {}
+      }
+      continue;
+    }
+
+    // If this specific chat is silenced (owner is actively reading/responding),
+    // drop the message at bridge level — don't enqueue it.
+    if (!isOwner && !isGroup) {
+      const silencedUntil = silencedChats[chatId] || 0;
+      if (silencedUntil > Date.now()) {
+        console.log(`🔇 Mensagem de ${chatId} ignorada — chat silenciado (${Math.round((silencedUntil - Date.now()) / 1000)}s restantes).`);
+        continue;
+      }
+    }
+
+    // Handle fromMe messages based on mode
+    if (msg.key.fromMe) {
+      if (isGroup || chatId.includes('status')) continue;
+
+      if (!isSelfChat && !recentlySentIds.has(msg.key.id)) {
+        // If the message is a command (starts with ! or is start_bot / stop_bot), do NOT silence the chat.
+        const isCommand = textLower.startsWith('!') || ['start_bot', 'stop_bot'].includes(textLower);
+        if (isCommand) {
+          console.log(`ℹ️ Chat ${chatId} não silenciado porque a mensagem é um comando: "${textLower}"`);
+          if (['start_bot', '!retomar', '!iniciar', '!suporte on'].includes(textLower)) {
+            delete silencedChats[chatId];
+            console.log(`🔊 Chat ${chatId} reativado/unsilenced via comando.`);
+          }
+        } else {
+          silencedChats[chatId] = Date.now() + SILENCE_DURATION_MS;
+          console.log(`🔇 Chat ${chatId} silenciado por ${WHATSAPP_SILENCE_DURATION_MIN} minutos (dono enviou mensagem manualmente).`);
+        }
+      }
+
+      if (WHATSAPP_MODE === 'bot' && !isSelfChat) {
+        // Bot mode: separate number. ALL fromMe to other users are echo-backs of our own replies — skip.
+        continue;
+      }
+
+      // Self-chat mode or self-chat in bot mode: only allow messages in the user's own self-chat
+      if (!isSelfChat) continue;
+    }
+
+    // Handle !fromMe messages (from other people) based on mode.
+    if (!msg.key.fromMe) {
+      if (WHATSAPP_MODE === 'self-chat') {
+        try {
+          console.log(JSON.stringify({
+            event: 'ignored',
+            reason: 'self_chat_mode_rejects_non_self',
+            chatId,
+            senderId,
+          }));
+        } catch {}
+        continue;
+      }
+      if (!matchesAllowedUser(senderId, ALLOWED_USERS, SESSION_DIR)) {
+        try {
+          console.log(JSON.stringify({
+            event: 'ignored',
+            reason: 'allowlist_mismatch',
+            chatId,
+            senderId,
+          }));
+        } catch {}
+        continue;
+      }
+    }
+
+    const messageContent = getMessageContent(msg);
+    const contextInfo = getContextInfo(messageContent);
+    const mentionedIds = Array.from(new Set((contextInfo?.mentionedJid || []).map(normalizeWhatsAppId).filter(Boolean)));
+    const quotedMessageId = contextInfo?.stanzaId || null;
+    const quotedParticipant = normalizeWhatsAppId(contextInfo?.participant || '') || null;
+    const quotedRemoteJid = normalizeWhatsAppId(contextInfo?.remoteJid || '') || null;
+    const hasQuotedMessage = !!contextInfo?.quotedMessage;
+
+    // Extract message body
+    let body = '';
+    let hasMedia = false;
+    let mediaType = '';
+    const mediaUrls = [];
+
+    if (messageContent.conversation) {
+      body = messageContent.conversation;
+    } else if (messageContent.extendedTextMessage?.text) {
+      body = messageContent.extendedTextMessage.text;
+    } else if (messageContent.imageMessage) {
+      body = messageContent.imageMessage.caption || '';
+      hasMedia = true;
+      mediaType = 'image';
+      try {
+        const buf = await downloadMediaMessage(msg, 'buffer', {}, { logger, reuploadRequest: sock.updateMediaMessage });
+        const mime = messageContent.imageMessage.mimetype || 'image/jpeg';
+        const extMap = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp', 'image/gif': '.gif' };
+        const ext = extMap[mime] || '.jpg';
+        mkdirSync(IMAGE_CACHE_DIR, { recursive: true });
+        const filePath = path.join(IMAGE_CACHE_DIR, `img_${randomBytes(6).toString('hex')}${ext}`);
+        writeFileSync(filePath, buf);
+        mediaUrls.push(filePath);
+      } catch (err) {
+        console.error('[bridge] Failed to download image:', err.message);
+      }
+    } else if (messageContent.videoMessage) {
+      body = messageContent.videoMessage.caption || '';
+      hasMedia = true;
+      mediaType = 'video';
+      try {
+        const buf = await downloadMediaMessage(msg, 'buffer', {}, { logger, reuploadRequest: sock.updateMediaMessage });
+        const mime = messageContent.videoMessage.mimetype || 'video/mp4';
+        const ext = mime.includes('mp4') ? '.mp4' : '.mkv';
+        mkdirSync(DOCUMENT_CACHE_DIR, { recursive: true });
+        const filePath = path.join(DOCUMENT_CACHE_DIR, `vid_${randomBytes(6).toString('hex')}${ext}`);
+        writeFileSync(filePath, buf);
+        mediaUrls.push(filePath);
+      } catch (err) {
+        console.error('[bridge] Failed to download video:', err.message);
+      }
+    } else if (messageContent.audioMessage || messageContent.pttMessage) {
+      hasMedia = true;
+      mediaType = messageContent.pttMessage ? 'ptt' : 'audio';
+      try {
+        const audioMsg = messageContent.pttMessage || messageContent.audioMessage;
+        const buf = await downloadMediaMessage(msg, 'buffer', {}, { logger, reuploadRequest: sock.updateMediaMessage });
+        const mime = audioMsg.mimetype || 'audio/ogg';
+        const ext = mime.includes('ogg') ? '.ogg' : mime.includes('mp4') ? '.m4a' : '.ogg';
+        mkdirSync(AUDIO_CACHE_DIR, { recursive: true });
+        const filePath = path.join(AUDIO_CACHE_DIR, `aud_${randomBytes(6).toString('hex')}${ext}`);
+        writeFileSync(filePath, buf);
+        mediaUrls.push(filePath);
+      } catch (err) {
+        console.error('[bridge] Failed to download audio:', err.message);
+      }
+    } else if (messageContent.documentMessage) {
+      body = messageContent.documentMessage.caption || '';
+      hasMedia = true;
+      mediaType = 'document';
+      const fileName = messageContent.documentMessage.fileName || 'document';
+      try {
+        const buf = await downloadMediaMessage(msg, 'buffer', {}, { logger, reuploadRequest: sock.updateMediaMessage });
+        mkdirSync(DOCUMENT_CACHE_DIR, { recursive: true });
+        const safeFileName = path.basename(fileName).replace(/[^a-zA-Z0-9._-]/g, '_');
+        const filePath = path.join(DOCUMENT_CACHE_DIR, `doc_${randomBytes(6).toString('hex')}_${safeFileName}`);
+        writeFileSync(filePath, buf);
+        mediaUrls.push(filePath);
+      } catch (err) {
+        console.error('[bridge] Failed to download document:', err.message);
+      }
+    }
+
+    // For media without caption, use a placeholder so the API message is never empty
+    if (hasMedia && !body) {
+      body = `[${mediaType} received]`;
+    }
+
+    // Ignore Hermes' own reply messages in self-chat mode to avoid loops.
+    if (msg.key.fromMe && ((REPLY_PREFIX && body.startsWith(REPLY_PREFIX)) || recentlySentIds.has(msg.key.id))) {
+      if (WHATSAPP_DEBUG) {
+        try { console.log(JSON.stringify({ event: 'ignored', reason: 'agent_echo', chatId, messageId: msg.key.id })); } catch {}
+      }
+      continue;
+    }
+
+    // Skip empty messages
+    if (!body && !hasMedia) {
+      if (WHATSAPP_DEBUG) {
+        try {
+          console.log(JSON.stringify({ event: 'ignored', reason: 'empty', chatId, messageKeys: Object.keys(msg.message || {}) }));
+        } catch (err) {
+          console.error('Failed to log empty message event:', err);
+        }
+      }
+      continue;
+    }
+
+    const event = {
+      messageId: msg.key.id,
+      chatId,
+      senderId,
+      senderName: msg.pushName || senderNumber,
+      chatName: isGroup ? (chatId.split('@')[0]) : (msg.pushName || senderNumber),
+      isGroup,
+      body,
+      hasMedia,
+      mediaType,
+      mediaUrls,
+      mentionedIds,
+      quotedMessageId,
+      quotedParticipant,
+      quotedRemoteJid,
+      hasQuotedMessage,
+      botIds,
+      timestamp: msg.messageTimestamp,
+    };
+
+    messageQueue.push(event);
+    if (messageQueue.length > MAX_QUEUE_SIZE) {
+      messageQueue.shift();
+    }
+  }
+};
+
 async function startSocket() {
   const { state, saveCreds } = await useMultiFileAuthState(SESSION_DIR);
   const { version } = await fetchLatestBaileysVersion();
@@ -233,23 +539,7 @@ async function startSocket() {
   sock.ev.on('creds.update', () => { saveCreds(); lidToPhone = buildLidMap(); });
 
 
-  sock.ev.on('chats.update', (updates) => {
-    for (const update of updates) {
-      if (update.unreadCount === 0 || update.unreadCount === -1) {
-        const chatId = update.id;
-        if (!chatId || chatId.includes('status') || chatId.endsWith('@g.us')) continue;
-
-        const myNumber = (sock.user?.id || '').replace(/:.*@/, '@').replace(/@.*/, '');
-        const myLid = (sock.user?.lid || '').replace(/:.*@/, '@').replace(/@.*/, '');
-        const chatNumber = chatId.replace(/@.*/, '');
-        const isSelfChat = (myNumber && chatNumber === myNumber) || (myLid && chatNumber === myLid);
-        if (isSelfChat) continue;
-
-        silencedChats[chatId] = Date.now() + SILENCE_DURATION_MS;
-        console.log(`🔇 Chat ${chatId} silenciado por ${WHATSAPP_SILENCE_DURATION_MIN} min (chats.update unread=0).`);
-      }
-    }
-  });
+  sock.ev.on('chats.update', onChatsUpdate);
 
   sock.ev.on('connection.update', (update) => {
     const { connection, lastDisconnect, qr } = update;
@@ -302,299 +592,7 @@ async function startSocket() {
     }
   });
 
-  sock.ev.on('messages.upsert', async ({ messages, type }) => {
-    // In self-chat mode, your own messages commonly arrive as 'append' rather
-    // than 'notify'. Accept both and filter agent echo-backs below.
-    if (type !== 'notify' && type !== 'append') return;
-
-    const botIds = Array.from(new Set([
-      normalizeWhatsAppId(sock.user?.id),
-      normalizeWhatsAppId(sock.user?.lid),
-    ].filter(Boolean)));
-
-    for (const msg of messages) {
-      if (!msg.message) continue;
-
-      const chatId = msg.key.remoteJid;
-      if (WHATSAPP_DEBUG) {
-        try {
-          console.log(JSON.stringify({
-            event: 'upsert', type,
-            fromMe: !!msg.key.fromMe, chatId,
-            senderId: msg.key.participant || chatId,
-            messageKeys: Object.keys(msg.message || {}),
-          }));
-        } catch {}
-      }
-      const senderId = msg.key.participant || chatId;
-      const isGroup = chatId.endsWith('@g.us');
-      const senderNumber = senderId.replace(/@.*/, '');
-
-      // Intercept owner bot commands (stop_bot / start_bot)
-      const messageContentForCmd = getMessageContent(msg);
-      let bodyForCmd = '';
-      if (messageContentForCmd.conversation) {
-        bodyForCmd = messageContentForCmd.conversation;
-      } else if (messageContentForCmd.extendedTextMessage?.text) {
-        bodyForCmd = messageContentForCmd.extendedTextMessage.text;
-      }
-      const textLower = bodyForCmd.trim().toLowerCase();
-
-      const myNumber = (sock.user?.id || '').replace(/:.*@/, '@').replace(/@.*/, '');
-      const myLid = (sock.user?.lid || '').replace(/:.*@/, '@').replace(/@.*/, '');
-      const senderClean = senderId.replace(/@.*/, '').replace(/:.*/, '');
-      const isOwner =
-        (myNumber && senderClean === myNumber) ||
-        (myLid && senderClean === myLid) ||
-        (WHATSAPP_OWNER_NUMBER && senderClean === WHATSAPP_OWNER_NUMBER);
-
-      const chatNumber = chatId.replace(/@.*/, '');
-      const isSelfChat = (myNumber && chatNumber === myNumber) || (myLid && chatNumber === myLid);
-
-      if (isOwner && isSelfChat && !isGroup && !chatId.includes('status')) {
-        if (['stop_bot', '!pausar', '!parar'].includes(textLower)) {
-          botPaused = true;
-          saveBotState();
-          console.log('⏸️ Bot paused by owner command.');
-          try {
-            const sent = await sendWithTimeout(chatId, { text: '⏸️ *Atendimento do WhatsApp pausado.* Os clientes não receberão respostas da IA a partir de agora.' });
-            trackSentMessageId(sent);
-          } catch (err) {
-            console.error('Failed to send pause response:', err.message);
-          }
-          continue;
-        } else if (['start_bot', '!retomar', '!iniciar'].includes(textLower)) {
-          botPaused = false;
-          saveBotState();
-          delete silencedChats[chatId]; // Unsilence this specific chat!
-          console.log(`▶️ Bot activated by owner command. Chat ${chatId} unsilenced.`);
-          try {
-            const sent = await sendWithTimeout(chatId, { text: '▶️ *Atendimento do WhatsApp ativo.* A IA voltará a responder os clientes automaticamente.' });
-            trackSentMessageId(sent);
-          } catch (err) {
-            console.error('Failed to send resume response:', err.message);
-          }
-          continue;
-        }
-      }
-
-      // If bot is paused, drop messages from non-owner users immediately
-      // (don't enqueue them — the Python gateway should never see them)
-      if (botPaused && !isOwner) {
-        if (WHATSAPP_DEBUG) {
-          try { console.log(JSON.stringify({ event: 'ignored', reason: 'bot_paused', chatId, senderId })); } catch {}
-        }
-        continue;
-      }
-
-      // If this specific chat is silenced (owner is actively reading/responding),
-      // drop the message at bridge level — don't enqueue it.
-      if (!isOwner && !isGroup) {
-        const silencedUntil = silencedChats[chatId] || 0;
-        if (silencedUntil > Date.now()) {
-          console.log(`🔇 Mensagem de ${chatId} ignorada — chat silenciado (${Math.round((silencedUntil - Date.now()) / 1000)}s restantes).`);
-          continue;
-        }
-      }
-
-      // Handle fromMe messages based on mode
-      if (msg.key.fromMe) {
-        if (isGroup || chatId.includes('status')) continue;
-
-        // WhatsApp now uses LID (Linked Identity Device) format: 67427329167522@lid
-        // AND classic format: 34652029134@s.whatsapp.net
-        // sock.user has both: { id: "number:10@s.whatsapp.net", lid: "lid_number:10@lid" }
-        const myNumber = (sock.user?.id || '').replace(/:.*@/, '@').replace(/@.*/, '');
-        const myLid = (sock.user?.lid || '').replace(/:.*@/, '@').replace(/@.*/, '');
-        const chatNumber = chatId.replace(/@.*/, '');
-        const isSelfChat = (myNumber && chatNumber === myNumber) || (myLid && chatNumber === myLid);
-
-        if (!isSelfChat && !recentlySentIds.has(msg.key.id)) {
-          // If the message is a command (starts with ! or is start_bot / stop_bot), do NOT silence the chat.
-          const isCommand = textLower.startsWith('!') || ['start_bot', 'stop_bot'].includes(textLower);
-          if (isCommand) {
-            console.log(`ℹ️ Chat ${chatId} não silenciado porque a mensagem é um comando: "${textLower}"`);
-            if (['start_bot', '!retomar', '!iniciar', '!suporte on'].includes(textLower)) {
-              delete silencedChats[chatId];
-              console.log(`🔊 Chat ${chatId} reativado/unsilenced via comando.`);
-            }
-          } else {
-            silencedChats[chatId] = Date.now() + SILENCE_DURATION_MS;
-            console.log(`🔇 Chat ${chatId} silenciado por ${WHATSAPP_SILENCE_DURATION_MIN} minutos (dono enviou mensagem manualmente).`);
-          }
-        }
-
-        if (WHATSAPP_MODE === 'bot' && !isSelfChat) {
-          // Bot mode: separate number. ALL fromMe to other users are echo-backs of our own replies — skip.
-          continue;
-        }
-
-        // Self-chat mode or self-chat in bot mode: only allow messages in the user's own self-chat
-        if (!isSelfChat) continue;
-      }
-
-      // Handle !fromMe messages (from other people) based on mode.
-      // Self-chat mode only responds to the user's own messages to
-      // themselves — stranger DMs / group pings must never reach the
-      // Python gateway, otherwise a pairing-code reply fires in response
-      // to arbitrary incoming messages (#8389).
-      if (!msg.key.fromMe) {
-        if (WHATSAPP_MODE === 'self-chat') {
-          try {
-            console.log(JSON.stringify({
-              event: 'ignored',
-              reason: 'self_chat_mode_rejects_non_self',
-              chatId,
-              senderId,
-            }));
-          } catch {}
-          continue;
-        }
-        if (!matchesAllowedUser(senderId, ALLOWED_USERS, SESSION_DIR)) {
-          try {
-            console.log(JSON.stringify({
-              event: 'ignored',
-              reason: 'allowlist_mismatch',
-              chatId,
-              senderId,
-            }));
-          } catch {}
-          continue;
-        }
-      }
-
-      const messageContent = getMessageContent(msg);
-      const contextInfo = getContextInfo(messageContent);
-      const mentionedIds = Array.from(new Set((contextInfo?.mentionedJid || []).map(normalizeWhatsAppId).filter(Boolean)));
-      const quotedMessageId = contextInfo?.stanzaId || null;
-      const quotedParticipant = normalizeWhatsAppId(contextInfo?.participant || '') || null;
-      const quotedRemoteJid = normalizeWhatsAppId(contextInfo?.remoteJid || '') || null;
-      const hasQuotedMessage = !!contextInfo?.quotedMessage;
-
-      // Extract message body
-      let body = '';
-      let hasMedia = false;
-      let mediaType = '';
-      const mediaUrls = [];
-
-      if (messageContent.conversation) {
-        body = messageContent.conversation;
-      } else if (messageContent.extendedTextMessage?.text) {
-        body = messageContent.extendedTextMessage.text;
-      } else if (messageContent.imageMessage) {
-        body = messageContent.imageMessage.caption || '';
-        hasMedia = true;
-        mediaType = 'image';
-        try {
-          const buf = await downloadMediaMessage(msg, 'buffer', {}, { logger, reuploadRequest: sock.updateMediaMessage });
-          const mime = messageContent.imageMessage.mimetype || 'image/jpeg';
-          const extMap = { 'image/jpeg': '.jpg', 'image/png': '.png', 'image/webp': '.webp', 'image/gif': '.gif' };
-          const ext = extMap[mime] || '.jpg';
-          mkdirSync(IMAGE_CACHE_DIR, { recursive: true });
-          const filePath = path.join(IMAGE_CACHE_DIR, `img_${randomBytes(6).toString('hex')}${ext}`);
-          writeFileSync(filePath, buf);
-          mediaUrls.push(filePath);
-        } catch (err) {
-          console.error('[bridge] Failed to download image:', err.message);
-        }
-      } else if (messageContent.videoMessage) {
-        body = messageContent.videoMessage.caption || '';
-        hasMedia = true;
-        mediaType = 'video';
-        try {
-          const buf = await downloadMediaMessage(msg, 'buffer', {}, { logger, reuploadRequest: sock.updateMediaMessage });
-          const mime = messageContent.videoMessage.mimetype || 'video/mp4';
-          const ext = mime.includes('mp4') ? '.mp4' : '.mkv';
-          mkdirSync(DOCUMENT_CACHE_DIR, { recursive: true });
-          const filePath = path.join(DOCUMENT_CACHE_DIR, `vid_${randomBytes(6).toString('hex')}${ext}`);
-          writeFileSync(filePath, buf);
-          mediaUrls.push(filePath);
-        } catch (err) {
-          console.error('[bridge] Failed to download video:', err.message);
-        }
-      } else if (messageContent.audioMessage || messageContent.pttMessage) {
-        hasMedia = true;
-        mediaType = messageContent.pttMessage ? 'ptt' : 'audio';
-        try {
-          const audioMsg = messageContent.pttMessage || messageContent.audioMessage;
-          const buf = await downloadMediaMessage(msg, 'buffer', {}, { logger, reuploadRequest: sock.updateMediaMessage });
-          const mime = audioMsg.mimetype || 'audio/ogg';
-          const ext = mime.includes('ogg') ? '.ogg' : mime.includes('mp4') ? '.m4a' : '.ogg';
-          mkdirSync(AUDIO_CACHE_DIR, { recursive: true });
-          const filePath = path.join(AUDIO_CACHE_DIR, `aud_${randomBytes(6).toString('hex')}${ext}`);
-          writeFileSync(filePath, buf);
-          mediaUrls.push(filePath);
-        } catch (err) {
-          console.error('[bridge] Failed to download audio:', err.message);
-        }
-      } else if (messageContent.documentMessage) {
-        body = messageContent.documentMessage.caption || '';
-        hasMedia = true;
-        mediaType = 'document';
-        const fileName = messageContent.documentMessage.fileName || 'document';
-        try {
-          const buf = await downloadMediaMessage(msg, 'buffer', {}, { logger, reuploadRequest: sock.updateMediaMessage });
-          mkdirSync(DOCUMENT_CACHE_DIR, { recursive: true });
-          const safeFileName = path.basename(fileName).replace(/[^a-zA-Z0-9._-]/g, '_');
-          const filePath = path.join(DOCUMENT_CACHE_DIR, `doc_${randomBytes(6).toString('hex')}_${safeFileName}`);
-          writeFileSync(filePath, buf);
-          mediaUrls.push(filePath);
-        } catch (err) {
-          console.error('[bridge] Failed to download document:', err.message);
-        }
-      }
-
-      // For media without caption, use a placeholder so the API message is never empty
-      if (hasMedia && !body) {
-        body = `[${mediaType} received]`;
-      }
-
-      // Ignore Hermes' own reply messages in self-chat mode to avoid loops.
-      if (msg.key.fromMe && ((REPLY_PREFIX && body.startsWith(REPLY_PREFIX)) || recentlySentIds.has(msg.key.id))) {
-        if (WHATSAPP_DEBUG) {
-          try { console.log(JSON.stringify({ event: 'ignored', reason: 'agent_echo', chatId, messageId: msg.key.id })); } catch {}
-        }
-        continue;
-      }
-
-      // Skip empty messages
-      if (!body && !hasMedia) {
-        if (WHATSAPP_DEBUG) {
-          try { 
-            console.log(JSON.stringify({ event: 'ignored', reason: 'empty', chatId, messageKeys: Object.keys(msg.message || {}) })); 
-          } catch (err) {
-            console.error('Failed to log empty message event:', err);
-          }
-        }
-        continue;
-      }
-
-      const event = {
-        messageId: msg.key.id,
-        chatId,
-        senderId,
-        senderName: msg.pushName || senderNumber,
-        chatName: isGroup ? (chatId.split('@')[0]) : (msg.pushName || senderNumber),
-        isGroup,
-        body,
-        hasMedia,
-        mediaType,
-        mediaUrls,
-        mentionedIds,
-        quotedMessageId,
-        quotedParticipant,
-        quotedRemoteJid,
-        hasQuotedMessage,
-        botIds,
-        timestamp: msg.messageTimestamp,
-      };
-
-      messageQueue.push(event);
-      if (messageQueue.length > MAX_QUEUE_SIZE) {
-        messageQueue.shift();
-      }
-    }
-  });
+  sock.ev.on('messages.upsert', onMessagesUpsert);
 }
 
 // HTTP server
@@ -937,26 +935,50 @@ app.get('/health', (req, res) => {
 });
 
 // Start
-if (PAIR_ONLY) {
-  // Pair-only mode: just connect, show QR, save creds, exit. No HTTP server.
-  console.log('📱 WhatsApp pairing mode');
-  console.log(`📁 Session: ${SESSION_DIR}`);
-  console.log();
-  startSocket();
-} else {
-  app.listen(PORT, '0.0.0.0', () => {
-    console.log(`🌉 WhatsApp bridge listening on port ${PORT} (mode: ${WHATSAPP_MODE})`);
-    console.log(`📁 Session stored in: ${SESSION_DIR}`);
-    if (ALLOWED_USERS.size > 0) {
-      console.log(`🔒 Allowed users: ${Array.from(ALLOWED_USERS).join(', ')}`);
-    } else if (WHATSAPP_MODE === 'self-chat') {
-      console.log(`🔒 Self-chat mode — only your own messages to yourself are processed.`);
-    } else {
-      console.log(`🔒 No WHATSAPP_ALLOWED_USERS set — incoming messages are rejected.`);
-      console.log(`   Set WHATSAPP_ALLOWED_USERS=<phone> to authorize specific users,`);
-      console.log(`   or WHATSAPP_ALLOWED_USERS=* for an explicit open bot.`);
-    }
+if (isMain) {
+  if (PAIR_ONLY) {
+    // Pair-only mode: just connect, show QR, save creds, exit. No HTTP server.
+    console.log('📱 WhatsApp pairing mode');
+    console.log(`📁 Session: ${SESSION_DIR}`);
     console.log();
     startSocket();
-  });
+  } else {
+    app.listen(PORT, '0.0.0.0', () => {
+      console.log(`🌉 WhatsApp bridge listening on port ${PORT} (mode: ${WHATSAPP_MODE})`);
+      console.log(`📁 Session stored in: ${SESSION_DIR}`);
+      if (ALLOWED_USERS.size > 0) {
+        console.log(`🔒 Allowed users: ${Array.from(ALLOWED_USERS).join(', ')}`);
+      } else if (WHATSAPP_MODE === 'self-chat') {
+        console.log(`🔒 Self-chat mode — only your own messages to yourself are processed.`);
+      } else {
+        console.log(`🔒 No WHATSAPP_ALLOWED_USERS set — incoming messages are rejected.`);
+        console.log(`   Set WHATSAPP_ALLOWED_USERS=<phone> to authorize specific users,`);
+        console.log(`   or WHATSAPP_ALLOWED_USERS=* for an explicit open bot.`);
+      }
+      console.log();
+      startSocket();
+    });
+  }
 }
+
+// Exports for unit/regression tests
+export {
+  isMain,
+  onChatsUpdate,
+  onMessagesUpsert,
+  getBotPaused,
+  setBotPaused,
+  getSilencedChats,
+  clearSilencedChats,
+  getRecentlySentIds,
+  getMessageQueue,
+  setSock
+};
+
+function getBotPaused() { return botPaused; }
+function setBotPaused(val) { botPaused = val; }
+function getSilencedChats() { return silencedChats; }
+function clearSilencedChats() { for (const k in silencedChats) delete silencedChats[k]; }
+function getRecentlySentIds() { return recentlySentIds; }
+function getMessageQueue() { return messageQueue; }
+function setSock(s) { sock = s; }

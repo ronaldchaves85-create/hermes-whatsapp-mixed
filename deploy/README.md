@@ -439,6 +439,21 @@ Quando você (o proprietário) entra em uma conversa com um cliente, o bot é **
 * **Endpoint HTTP:** `GET /chat-status/:chatId` — retorna se a conversa está silenciada e quanto tempo falta.
 * **Endpoint HTTP:** `POST /chat-unsilence` — limpa o silêncio da conversa manualmente se desejar reativar o bot antes dos 10 minutos.
 
+### 3. Testes de Regressão (Automatizados)
+Para testar e garantir a estabilidade de todas as regras de pausa global e silenciamento temporário por conversa, a stack possui uma suite de testes de regressão automatizados. 
+
+Você pode rodar os testes localmente a partir da raiz do repositório:
+```bash
+npm install
+npm test
+```
+Esses testes validam automaticamente:
+* Ativação e desativação da pausa global via Self-Chat.
+* Prevenção de execução de comandos em chats de clientes comerciais.
+* Ativação do silêncio de exatamente 10 minutos (600.000 ms) via leitura (`chats.update`) ou resposta manual.
+* Isenção de comandos e mensagens iniciadas por `!` do silenciamento automático.
+* Prevenção de silenciamento no Self-Chat.
+
 ---
 
 ## 👥 Configuração Avançada de Múltiplos Perfis (Profiles Nativo) 🚀

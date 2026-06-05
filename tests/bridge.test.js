@@ -1,0 +1,198 @@
+import test from 'node:test';
+import assert from 'node:assert';
+import {
+  onChatsUpdate,
+  onMessagesUpsert,
+  getBotPaused,
+  setBotPaused,
+  getSilencedChats,
+  clearSilencedChats,
+  getRecentlySentIds,
+  getMessageQueue,
+  setSock
+} from '../bridge.js';
+
+// Setup Mock Socket
+const mockSock = {
+  user: {
+    id: '12345:1@s.whatsapp.net',
+    lid: '67890:1@lid'
+  },
+  sendMessage: async (chatId, payload) => {
+    mockSock.sentMessages.push({ chatId, payload });
+    return {
+      key: {
+        id: 'mock-msg-' + Math.random().toString(36).substring(7),
+        fromMe: true,
+        remoteJid: chatId
+      }
+    };
+  },
+  sentMessages: [],
+  ev: {
+    on: () => {}
+  }
+};
+
+// Bind mock socket
+setSock(mockSock);
+
+test('WhatsApp Bridge Regression Tests', async (t) => {
+  
+  t.beforeEach(() => {
+    setBotPaused(false);
+    clearSilencedChats();
+    mockSock.sentMessages = [];
+    getRecentlySentIds().clear();
+    getMessageQueue().length = 0;
+  });
+
+  await t.test('1. Commands in Self-Chat should pause and resume the bot globally', async () => {
+    // Owner JID and Self-Chat JID are identical in self-chat mode
+    const selfJid = '12345@s.whatsapp.net';
+    
+    // Simulate stop_bot message
+    await onMessagesUpsert({
+      messages: [{
+        key: {
+          id: 'msg-1',
+          fromMe: true,
+          remoteJid: selfJid,
+          participant: selfJid
+        },
+        message: {
+          conversation: 'stop_bot'
+        }
+      }],
+      type: 'notify'
+    });
+
+    assert.strictEqual(getBotPaused(), true, 'Bot should be paused after stop_bot in self-chat');
+    assert.ok(mockSock.sentMessages.length > 0, 'Should send pause confirmation message');
+    assert.ok(mockSock.sentMessages[0].payload.text.includes('pausado'), 'Confirmation should contain paused text');
+
+    // Clear confirmation message
+    mockSock.sentMessages = [];
+
+    // Simulate start_bot message
+    await onMessagesUpsert({
+      messages: [{
+        key: {
+          id: 'msg-2',
+          fromMe: true,
+          remoteJid: selfJid,
+          participant: selfJid
+        },
+        message: {
+          conversation: 'start_bot'
+        }
+      }],
+      type: 'notify'
+    });
+
+    assert.strictEqual(getBotPaused(), false, 'Bot should be resumed after start_bot in self-chat');
+    assert.ok(mockSock.sentMessages.length > 0, 'Should send resume confirmation message');
+    assert.ok(mockSock.sentMessages[0].payload.text.includes('ativo'), 'Confirmation should contain active text');
+  });
+
+  await t.test('2. Commands in Client Chat should NOT be intercepted (bridge remains unchanged)', async () => {
+    const clientJid = 'client@s.whatsapp.net';
+    const ownerJid = '12345@s.whatsapp.net';
+    
+    // Owner types stop_bot in client's chat JID (not self-chat)
+    await onMessagesUpsert({
+      messages: [{
+        key: {
+          id: 'msg-3',
+          fromMe: true,
+          remoteJid: clientJid,
+          participant: ownerJid
+        },
+        message: {
+          conversation: 'stop_bot'
+        }
+      }],
+      type: 'notify'
+    });
+
+    // It should not be intercepted, so:
+    // - botPaused should remain false
+    // - no confirmation message sent by bridge
+    assert.strictEqual(getBotPaused(), false, 'Bot should NOT be paused if stop_bot is typed in client chat');
+    assert.strictEqual(mockSock.sentMessages.length, 0, 'No bridge confirmation message should be sent');
+  });
+
+  await t.test('3. Regular owner message in client chat should trigger temporary silence', async () => {
+    const clientJid = 'client@s.whatsapp.net';
+    const ownerJid = '12345@s.whatsapp.net';
+
+    await onMessagesUpsert({
+      messages: [{
+        key: {
+          id: 'msg-4',
+          fromMe: true,
+          remoteJid: clientJid,
+          participant: ownerJid
+        },
+        message: {
+          conversation: 'Hello client, how can I help you?'
+        }
+      }],
+      type: 'notify'
+    });
+
+    const silenced = getSilencedChats();
+    const duration = silenced[clientJid] - Date.now();
+    assert.ok(duration > 0, 'Client chat should be silenced after manual message');
+    assert.ok(duration > 590000 && duration <= 600000, `Silence duration should be ~10 minutes, got ${duration} ms`);
+  });
+
+  await t.test('4. Command starting with ! in client chat should NOT trigger temporary silence', async () => {
+    const clientJid = 'client@s.whatsapp.net';
+    const ownerJid = '12345@s.whatsapp.net';
+
+    await onMessagesUpsert({
+      messages: [{
+        key: {
+          id: 'msg-5',
+          fromMe: true,
+          remoteJid: clientJid,
+          participant: ownerJid
+        },
+        message: {
+          conversation: '!suporte status'
+        }
+      }],
+      type: 'notify'
+    });
+
+    const silenced = getSilencedChats();
+    assert.strictEqual(silenced[clientJid], undefined, 'Client chat should NOT be silenced for commands starting with !');
+  });
+
+  await t.test('5. chats.update with unreadCount=0 should trigger temporary silence', async () => {
+    const clientJid = 'client@s.whatsapp.net';
+
+    await onChatsUpdate([{
+      id: clientJid,
+      unreadCount: 0
+    }]);
+
+    const silenced = getSilencedChats();
+    const duration = silenced[clientJid] - Date.now();
+    assert.ok(duration > 0, 'Client chat should be silenced when owner reads it');
+    assert.ok(duration > 590000 && duration <= 600000, `Silence duration should be ~10 minutes, got ${duration} ms`);
+  });
+
+  await t.test('6. chats.update with unreadCount=0 in self-chat should NOT trigger silence', async () => {
+    const selfJid = '12345@s.whatsapp.net';
+
+    await onChatsUpdate([{
+      id: selfJid,
+      unreadCount: 0
+    }]);
+
+    const silenced = getSilencedChats();
+    assert.strictEqual(silenced[selfJid], undefined, 'Self-chat should never be silenced');
+  });
+});
