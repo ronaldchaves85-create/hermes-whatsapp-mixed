@@ -54,7 +54,7 @@ Agora faremos seu servidor puxar as regras que você salvou no seu GitHub no Pas
 curl -sSL https://raw.githubusercontent.com/SEU_USUARIO_GITHUB/hermes-whatsapp-mixed/main/setup.sh | bash -s SEU_USUARIO_GITHUB
 ```
 
-> **Sincronização Ativa:** O seu servidor baixou a persona (`SOUL.md`) e regras de vendas (`support_rules.md`) direto do seu GitHub pessoal, configurou o `config.yaml` e corrigiu a ponte do WhatsApp! 
+> **Sincronização Ativa:** O seu servidor baixou a persona (`SOUL.md`) e regras de vendas (`support_rules.md`) direto do seu GitHub pessoal, configurou o `config.yaml` e corrigiu a ponte do WhatsApp. Plugins ficam para o dashboard do Hermes.
 > 
 > 💡 **Dica de Sincronização:** Sempre que quiser mudar os preços ou as regras do seu negócio de forma definitiva, o ideal é editar no seu GitHub e rodar este comando acima novamente!
 

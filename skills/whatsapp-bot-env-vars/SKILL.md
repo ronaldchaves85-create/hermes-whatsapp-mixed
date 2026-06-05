@@ -17,7 +17,7 @@ whatsapp_message_server.py (porta 18732, loopback)
     ↓ SQLite INSERT
 whatsapp_messages.db (30 dias retention)
     ↓ GET /chat/:id/messages
-whatsapp-manager (plugin Hermes)
+whatsapp-manager (plugin gerenciado pelo dashboard do Hermes)
     ↓ injeta contexto
 pre_gateway_dispatch → reescreve mensagem com histórico
 pre_llm_call → aplica persona (Modo A = André, Modo B = Cliente)
@@ -50,7 +50,7 @@ pre_llm_call → aplica persona (Modo A = André, Modo B = Cliente)
 |---|---|
 | `/opt/data/.hermes/scripts/whatsapp_message_server.py` | HTTP server — POST /messages (salva), GET /chat/:id/messages (busca) |
 | `/opt/data/.hermes/scripts/whatsapp_message_history.py` | Módulo SQLite — save_message, get_chat_history, format_history_for_context |
-| `/opt/data/.hermes/plugins/whatsapp-manager/__init__.py` | Plugin com hooks pre_gateway_dispatch e pre_llm_call |
+| `/opt/data/.hermes/plugins/whatsapp-manager/__init__.py` | Plugin com hooks pre_gateway_dispatch e pre_llm_call (instalado/atualizado pelo dashboard do Hermes) |
 | `/opt/data/.hermes/whatsapp_messages.db` | SQLite com 30 dias de retention |
 | `/opt/data/start_whatsapp_message_server.sh` | Script de start do message server |
 | `/opt/data/.hermes/platforms/whatsapp/bridge/bridge.js` | Bridge Baileys (NÃO edite — é wipeado em rebuild) |
@@ -67,7 +67,7 @@ pre_llm_call → aplica persona (Modo A = André, Modo B = Cliente)
 | Produção (Portainer) | `5586981612061` (setado na stack) |
 | Docker-compose fallback | `${WHATSAPP_OWNABLE_NUMBER:-5586981612061}` |
 
-**O que faz:** Número do dono (André). O plugin `whatsapp-manager` usa essa variável para decidir se uma mensagem é do dono (comportamento admin) ou de um cliente (comportamento suporte).
+**O que faz:** Número do dono (André). O plugin `whatsapp-manager` — gerenciado pelo dashboard do Hermes — usa essa variável para decidir se uma mensagem é do dono (comportamento admin) ou de um cliente (comportamento suporte).
 
 **Importante:** Não é lida do `.env` — é definida diretamente nas env vars da stack no Portainer.
 
@@ -107,6 +107,7 @@ environment:
 
 ### Plugin (`/opt/data/.hermes/plugins/whatsapp-manager/__init__.py`)
 Lê variáveis com `os.getenv()`. Se `WHATSAPP_OWNER_NUMBER` vier vazia, o plugin retorna `None` prematuramente e **não injeta histórico**.
+O arquivo do plugin é instalado/atualizado pelo dashboard do Hermes, não pelo `setup.sh`.
 
 ### `.env` (`/opt/data/.env`)
 Arquivo local de desenvolvimento. **Não é usado em produção** — o Portainer define as variáveis diretamente na stack. O `env_file` não deve ser adicionado ao docker-compose de produção.
@@ -344,8 +345,8 @@ grep "auxiliary_client.*Auxiliary auto-detect" /opt/data/.hermes/logs/agent.log 
 ```
 - `.hermes/scripts/whatsapp_message_server.py`
 - `.hermes/scripts/whatsapp_message_history.py`
-- `.hermes/plugins/whatsapp-manager/__init__.py`
-- `.hermes/plugins/whatsapp-manager/plugin.yaml`
+- `.hermes/plugins/whatsapp-manager/__init__.py` (dashboard-managed)
+- `.hermes/plugins/whatsapp-manager/plugin.yaml` (dashboard-managed)
 - `scripts/start_whatsapp_message_server.sh`
 - `README.md`
 

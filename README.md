@@ -14,7 +14,7 @@ Esse modo permite que seu agente desempenhe duas funções ao mesmo tempo:
 * 🟣 **`docker-compose.easypanel.yml`**: Arquivo adaptado para implantação no Easypanel (sem Swarm, sem Traefik externo — SSL e proxy gerenciados automaticamente).
 * ⚡ **`setup.sh`**: Script de configuração e sincronização de 1 clique que vincula seu servidor ao seu repositório pessoal no GitHub.
 * 🐍 **`patch_whatsapp.py`**: Script de automação universal que reconfigura a ponte do WhatsApp (filtro de assinaturas inteligente e novos comandos).
-* 🔄 **Sincronização automática no deploy**: a stack executa o `setup.sh` ao subir o container principal, mantendo o plugin e as personas sincronizados com o GitHub.
+* 🔄 **Sincronização automática no deploy**: a stack executa o `setup.sh` ao subir o container principal, mantendo as personas, regras e configurações sincronizadas com o GitHub. Os plugins são gerenciados pelo dashboard do Hermes.
 * ⚙️ **`config.yaml.example`**: Configuração pré-otimizada para alta performance, ativação de memória persistente e prevenção de spam em grupos de WhatsApp.
 * 🔑 **`.env.example`**: Modelo de exemplo para as variáveis de ambiente necessárias (ignorado por segurança pelo `.gitignore` para evitar vazamentos).
 * 👤 **`SOUL.md`**: Persona pré-configurada para o funcionamento do Modo Duplo (Dono vs Clientes).
@@ -74,7 +74,7 @@ Agora, vamos fazer com que o seu servidor baixe automaticamente os arquivos que 
 curl -sSL https://raw.githubusercontent.com/SEU_USUARIO_GITHUB/hermes-whatsapp-mixed/main/setup.sh | bash -s SEU_USUARIO_GITHUB
 ```
 
-> **O que o script fez por você?** Ele baixou a persona global (`SOUL.md`), as personas isoladas (`SOUL_WHATSAPP.md` e `SOUL_EMAIL.md`), a base de conhecimento (`support_rules.md`) diretamente do seu GitHub Fork pessoal, configurou as otimizações no `config.yaml` e aplicou a inteligência do plugin do WhatsApp!
+> **O que o script fez por você?** Ele baixou a persona global (`SOUL.md`), as personas isoladas (`SOUL_WHATSAPP.md` e `SOUL_EMAIL.md`), a base de conhecimento (`support_rules.md`) diretamente do seu GitHub Fork pessoal, configurou as otimizações no `config.yaml` e aplicou a inteligência do WhatsApp. Os plugins ficam para o dashboard do Hermes.
 
 💡 **Dica de Sincronização:** Toda vez que você quiser alterar as regras do seu negócio ou atualizar sua persona, basta editá-las no seu GitHub e rodar este mesmo comando de novo. Seu servidor atualizará tudo em segundos!
 
@@ -218,7 +218,7 @@ curl -sSL https://raw.githubusercontent.com/SEU_USUARIO_GITHUB/hermes-whatsapp-m
 * Criar as regras de suporte (`support_rules.md`) em `/opt/data/support_rules.md`
 * Criar o `config.yaml` em `/root/.hermes/config.yaml`
 * Criar o `.env` em `/root/.hermes/.env`
-* Configurar o plugin `whatsapp-manager` automaticamente
+* Deixar o plugin `whatsapp-manager` ser instalado/atualizado pelo dashboard do Hermes
 * Aplicar o patch do WhatsApp
 
 > Todos os arquivos são salvos em volumes persistentes — sobrevivem a restarts e atualizações de imagem.
@@ -302,9 +302,8 @@ Se o arquivo $DATA_DIR/SOUL_EMAIL.md NÃO existir:
 Se o arquivo $DATA_DIR/support_rules.md NÃO existir:
   curl -sSL $REPO_BASE/support_rules.md -o $DATA_DIR/support_rules.md
 
-**PASSO 6 — Baixar o Plugin whatsapp-manager**
-curl -sSL $REPO_BASE/plugins/whatsapp-manager/plugin.yaml -o $HERMES_HOME/plugins/whatsapp-manager/plugin.yaml
-curl -sSL $REPO_BASE/plugins/whatsapp-manager/__init__.py -o $HERMES_HOME/plugins/whatsapp-manager/__init__.py
+**PASSO 6 — Plugin whatsapp-manager pelo dashboard do Hermes**
+O plugin `whatsapp-manager` deve ser instalado/atualizado no dashboard do Hermes. O `setup.sh` não baixa mais os arquivos do plugin automaticamente.
 
 **PASSO 7 — Baixar config.yaml inicial**
 Se o arquivo $HERMES_HOME/config.yaml NÃO existir:
