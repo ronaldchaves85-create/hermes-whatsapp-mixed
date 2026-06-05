@@ -69,12 +69,11 @@ Após o push com sucesso, informe o usuário com as seguintes orientações em p
 ```text
 ✅ Deploy enviado para o GitHub com sucesso!
 
-Para atualizar o seu contêiner em produção, siga estes passos:
+Para aplicar as alterações no seu servidor de produção:
 
-1. Acesse o console do contêiner `hermes-agent` no seu painel (Portainer ou Easypanel).
-2. Execute o comando de setup abaixo para baixar as alterações mais recentes:
-   curl -sSL https://raw.githubusercontent.com/empreendedorserial/hermes-whatsapp-mixed/main/deploy/setup.sh | bash -s empreendedorserial
-3. Reinicie a stack/serviço no painel para que o processo da bridge do WhatsApp seja recarregado com o novo código.
+1. Acesse o seu painel do Portainer ou Easypanel.
+2. Vá até a sua stack/serviço `hermes-agent` e clique em **Restart** (ou **Update/Redeploy** marcando a opção para puxar a imagem/código mais recente).
+   - O contêiner executa automaticamente o script `setup.sh` durante a inicialização, garantindo que todas as personas, regras e atualizações do GitHub sejam sincronizadas e aplicadas de forma limpa, sem necessidade de console manual.
 ```
 
 ---
