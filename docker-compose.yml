@@ -32,6 +32,7 @@
 #   - WHATSAPP_OWNER_NUMBER : Número do proprietário do WhatsApp (ex: "5511999999999")
 #   - WHATSAPP_MODE         : Modo de funcionamento do WhatsApp (padrão: bot)
 #   - WHATSAPP_ALLOWED_USERS: Números/contatos autorizados a usar o bot (padrão: *)
+#   - WHATSAPP_BRIDGE_HOST  : Domínio opcional para o endpoint do bridge/QR (ex: whatsapp-bridge.seu-dominio.com)
 #
 # 🔑 GOOGLE CLOUD / OAUTH (Opcional)
 #   - GOOGLE_CLIENT_ID      : Client ID do Google Cloud para autenticação/ferramentas
@@ -100,6 +101,9 @@ services:
       - HERMES_DASHBOARD_PORT=9119
       - HERMES_DASHBOARD_TUI=1
 
+      # WhatsApp bridge QR/status endpoint
+      - WHATSAPP_BRIDGE_HOST=${WHATSAPP_BRIDGE_HOST:-}
+
       # Timeouts
       - HERMES_API_TIMEOUT=${HERMES_API_TIMEOUT:-1800}
       - HERMES_API_CALL_STALE_TIMEOUT=${HERMES_API_CALL_STALE_TIMEOUT:-300}
@@ -144,6 +148,15 @@ services:
         - "traefik.http.routers.hermes-dash.service=hermes-dash"
         - "traefik.http.services.hermes-dash.loadbalancer.server.port=9119"
         - "traefik.http.services.hermes-dash.loadbalancer.responseforwarding.flushinterval=100ms"
+
+        # WhatsApp bridge / QR/status (optional external host)
+        - "traefik.http.routers.whatsapp-bridge.rule=Host(`${WHATSAPP_BRIDGE_HOST}`)"
+        - "traefik.http.routers.whatsapp-bridge.entrypoints=websecure"
+        - "traefik.http.routers.whatsapp-bridge.tls=true"
+        - "traefik.http.routers.whatsapp-bridge.tls.certresolver=le"
+        - "traefik.http.routers.whatsapp-bridge.service=whatsapp-bridge"
+        - "traefik.http.routers.whatsapp-bridge.priority=350"
+        - "traefik.http.services.whatsapp-bridge.loadbalancer.server.port=3000"
 
         # WebSocket /api/ws
         - "traefik.http.routers.hermes-ws.rule=Host(`${HERMES_DASH_HOST}`) && PathPrefix(`/api/ws`)"

@@ -61,6 +61,9 @@ Toda a infraestrutura de rede, domínios SSL e chaves de API é gerenciada de fo
 
 Agora, vamos fazer com que o seu servidor baixe automaticamente os arquivos que você personalizou no seu repositório pessoal do GitHub:
 
+> **QR do WhatsApp sem Telegram:** se você configurar `WHATSAPP_BRIDGE_HOST`, o bridge expõe `https://SEU-DOMINIO/whatsapp/qr` e `https://SEU-DOMINIO/whatsapp/status`.
+> O QR também pode ser retornado como `?format=png` ou `?format=svg`.
+
 1. No Portainer, clique em **Containers** e clique no ícone de **Console** (`>_`) do container `hermes-agent`.
 2. Clique em **Connect** para abrir o terminal integrado.
 3. Substitua `SEU_USUARIO_GITHUB` pelo seu usuário real do GitHub no comando abaixo, cole-o no console e aperte Enter:

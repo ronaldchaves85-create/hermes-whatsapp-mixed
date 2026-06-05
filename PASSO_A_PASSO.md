@@ -41,6 +41,9 @@ Todo o gerenciamento de chaves e domínios é feito de forma visual na interface
 
 Agora faremos seu servidor puxar as regras que você salvou no seu GitHub no Passo 1!
 
+> **QR do WhatsApp sem Telegram:** se a variável `WHATSAPP_BRIDGE_HOST` estiver configurada na stack, o QR ficará disponível em `https://SEU-DOMINIO/whatsapp/qr` e o status em `https://SEU-DOMINIO/whatsapp/status`.
+> Você também pode pedir `?format=png` ou `?format=svg`.
+
 1. No painel do Portainer, clique em **Containers** e encontre o container `hermes-agent`.
 2. Clique no ícone de **Console** (`>_`) correspondente a ele.
 3. Clique em **Connect** para abrir o terminal integrado.
