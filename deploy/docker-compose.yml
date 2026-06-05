@@ -152,15 +152,6 @@ services:
         - "traefik.http.services.hermes-dash.loadbalancer.server.port=9119"
         - "traefik.http.services.hermes-dash.loadbalancer.responseforwarding.flushinterval=100ms"
 
-        # WhatsApp bridge / QR/status (same dashboard host, /whatsapp prefix)
-        - "traefik.http.routers.whatsapp-bridge.rule=Host(`${HERMES_DASH_HOST}`) && PathPrefix(`${WHATSAPP_QR_PATH:-/whatsapp}`)"
-        - "traefik.http.routers.whatsapp-bridge.entrypoints=websecure"
-        - "traefik.http.routers.whatsapp-bridge.tls=true"
-        - "traefik.http.routers.whatsapp-bridge.tls.certresolver=le"
-        - "traefik.http.routers.whatsapp-bridge.service=whatsapp-bridge"
-        - "traefik.http.routers.whatsapp-bridge.priority=350"
-        - "traefik.http.services.whatsapp-bridge.loadbalancer.server.port=3000"
-
         # WebSocket /api/ws
         - "traefik.http.routers.hermes-ws.rule=Host(`${HERMES_DASH_HOST}`) && PathPrefix(`/api/ws`)"
         - "traefik.http.routers.hermes-ws.entrypoints=websecure"
