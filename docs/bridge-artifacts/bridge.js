@@ -234,7 +234,12 @@ async function startSocket() {
 
   sock.ev.on('messages.update', (updates) => {
     for (const update of updates) {
-      if (update.update && (update.update.status === 3 || update.update.read === true || update.update.status === 'read')) {
+      // status >= 3 covers DELIVERY_ACK(3), READ(4), PLAYED(5)
+      const st = update.update?.status;
+      const isReadOrDelivered = (typeof st === 'number' && st >= 3) ||
+        update.update?.read === true ||
+        st === 'read' || st === 'delivered';
+      if (update.update && isReadOrDelivered) {
         const chatId = update.key.remoteJid;
         if (!chatId) continue;
         if (chatId.includes('status') || chatId.endsWith('@g.us')) continue;
@@ -246,7 +251,30 @@ async function startSocket() {
         if (isSelfChat) continue;
 
         silencedChats[chatId] = Date.now() + SILENCE_DURATION_MS;
-        console.log(`🔇 Chat ${chatId} silenciado por ${WHATSAPP_SILENCE_DURATION_MIN} minutos (dono leu as mensagens).`);
+        console.log(`🔇 Chat ${chatId} silenciado por ${WHATSAPP_SILENCE_DURATION_MIN} min (messages.update status=${st}).`);
+      }
+    }
+  });
+
+  // Detect read receipts — fires when owner reads client messages on any device
+  sock.ev.on('message-receipt.update', (updates) => {
+    for (const update of updates) {
+      const chatId = update.key?.remoteJid;
+      if (!chatId) continue;
+      if (chatId.includes('status') || chatId.endsWith('@g.us')) continue;
+
+      const myNumber = (sock.user?.id || '').replace(/:.*@/, '@').replace(/@.*/, '');
+      const myLid = (sock.user?.lid || '').replace(/:.*@/, '@').replace(/@.*/, '');
+      const chatNumber = chatId.replace(/@.*/, '');
+      const isSelfChat = (myNumber && chatNumber === myNumber) || (myLid && chatNumber === myLid);
+      if (isSelfChat) continue;
+
+      // Check if any receipt is a read receipt
+      const receipts = update.receipt ? [update.receipt] : (update.userReceipt || []);
+      const hasRead = receipts.some(r => r.readTimestamp || r.receiptTimestamp);
+      if (hasRead) {
+        silencedChats[chatId] = Date.now() + SILENCE_DURATION_MS;
+        console.log(`🔇 Chat ${chatId} silenciado por ${WHATSAPP_SILENCE_DURATION_MIN} min (message-receipt.update).`);
       }
     }
   });
@@ -264,7 +292,7 @@ async function startSocket() {
         if (isSelfChat) continue;
 
         silencedChats[chatId] = Date.now() + SILENCE_DURATION_MS;
-        console.log(`🔇 Chat ${chatId} silenciado por ${WHATSAPP_SILENCE_DURATION_MIN} minutos (dono abriu o chat).`);
+        console.log(`🔇 Chat ${chatId} silenciado por ${WHATSAPP_SILENCE_DURATION_MIN} min (chats.update unread=0).`);
       }
     }
   });
@@ -397,6 +425,16 @@ async function startSocket() {
           try { console.log(JSON.stringify({ event: 'ignored', reason: 'bot_paused', chatId, senderId })); } catch {}
         }
         continue;
+      }
+
+      // If this specific chat is silenced (owner is actively reading/responding),
+      // drop the message at bridge level — don't enqueue it.
+      if (!isOwner && !isGroup) {
+        const silencedUntil = silencedChats[chatId] || 0;
+        if (silencedUntil > Date.now()) {
+          console.log(`🔇 Mensagem de ${chatId} ignorada — chat silenciado (${Math.round((silencedUntil - Date.now()) / 1000)}s restantes).`);
+          continue;
+        }
       }
 
       // Handle fromMe messages based on mode
