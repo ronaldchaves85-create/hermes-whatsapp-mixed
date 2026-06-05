@@ -43,6 +43,7 @@ Agora faremos seu servidor puxar as regras que você salvou no seu GitHub no Pas
 
 > **QR do WhatsApp sem Telegram:** a stack sobe um serviço separado `whatsapp-bridge` e o QR fica no próprio domínio do dashboard, em `https://SEU-DOMINIO/whatsapp/qr` e `https://SEU-DOMINIO/whatsapp/status`.
 > Você também pode pedir `?format=png` ou `?format=svg`.
+> Depois de reiniciar a stack, aguarde o serviço `whatsapp-bridge` ficar `Running` antes de abrir a URL.
 
 1. No painel do Portainer, clique em **Containers** e encontre o container `hermes-agent`.
 2. Clique no ícone de **Console** (`>_`) correspondente a ele.

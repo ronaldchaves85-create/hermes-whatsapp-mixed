@@ -63,6 +63,7 @@ Agora, vamos fazer com que o seu servidor baixe automaticamente os arquivos que 
 
 > **QR do WhatsApp sem Telegram:** a stack sobe um serviço separado `whatsapp-bridge` e o QR fica no próprio domínio do dashboard, em `https://SEU-DOMINIO/whatsapp/qr` e `https://SEU-DOMINIO/whatsapp/status`.
 > O QR também pode ser retornado como `?format=png` ou `?format=svg`.
+> Depois de reiniciar a stack, aguarde o serviço `whatsapp-bridge` ficar `Running` antes de abrir a URL.
 
 1. No Portainer, clique em **Containers** e clique no ícone de **Console** (`>_`) do container `hermes-agent`.
 2. Clique em **Connect** para abrir o terminal integrado.
