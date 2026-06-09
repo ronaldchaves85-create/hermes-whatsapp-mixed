@@ -274,6 +274,9 @@ let onMessagesUpsert = async ({ messages, type }) => {
     if (!msg.message) continue;
 
     const chatId = msg.key.remoteJid;
+    if (chatId === 'status@broadcast' || (chatId && chatId.includes('status'))) {
+      continue;
+    }
     if (WHATSAPP_DEBUG) {
       try {
         console.log(JSON.stringify({
