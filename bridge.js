@@ -791,13 +791,22 @@ app.post('/send', async (req, res) => {
 
   try {
     const trimmedMessage = (message || '').trim();
+    const lowercaseMsg = trimmedMessage.toLowerCase();
     const isSystemError = 
       trimmedMessage.startsWith('❌ Rate limited') ||
-      trimmedMessage.includes('HTTP 402') ||
-      trimmedMessage.includes('more credits, or fewer max_tokens') ||
-      trimmedMessage.includes('https://openrouter.ai') ||
-      trimmedMessage.includes('Quota exceeded') ||
-      trimmedMessage.includes('Rate limited after');
+      trimmedMessage.startsWith('⏱️ Rate limited') ||
+      trimmedMessage.startsWith('⚠️ Max retries') ||
+      lowercaseMsg.includes('http 402') ||
+      lowercaseMsg.includes('more credits') ||
+      lowercaseMsg.includes('quota exceeded') ||
+      lowercaseMsg.includes('openrouter.ai') ||
+      lowercaseMsg.includes('max_tokens') ||
+      lowercaseMsg.includes('rate limited after') ||
+      lowercaseMsg.includes('max retries') ||
+      lowercaseMsg.includes('trying fallback') ||
+      lowercaseMsg.includes('exhausted') ||
+      (lowercaseMsg.includes('rate limited') && lowercaseMsg.includes('waiting')) ||
+      (lowercaseMsg.includes('attempt') && (lowercaseMsg.includes('waiting') || lowercaseMsg.includes('rate limited')));
 
     if (isSystemError) {
       console.error(`[bridge] Intercepted and blocked system error message to ${chatId}: ${message}`);
