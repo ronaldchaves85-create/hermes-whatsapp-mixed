@@ -35,6 +35,8 @@ class TestWhatsAppManagerPlugin(unittest.IsolatedAsyncioTestCase):
         
         # Avoid running bootstrap/shutil operations during register
         with patch("pathlib.Path.mkdir"), \
+             patch("pathlib.Path.symlink_to"), \
+             patch("pathlib.Path.is_symlink", return_value=True), \
              patch("shutil.copy2"), \
              patch("urllib.request.urlopen"), \
              patch("whatsapp_manager._ensure_google_libs"):

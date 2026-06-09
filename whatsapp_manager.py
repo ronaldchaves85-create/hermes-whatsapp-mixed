@@ -112,6 +112,27 @@ def register(ctx):
         import shutil
         import urllib.request
 
+        # Garantir link de compatibilidade para evitar path mismatch da sessão (whatsapp/session vs platforms/whatsapp/session)
+        old_session = Path("/opt/data/.hermes/whatsapp/session")
+        new_session = Path("/opt/data/.hermes/platforms/whatsapp/session")
+        new_session.mkdir(parents=True, exist_ok=True)
+        old_session.parent.mkdir(parents=True, exist_ok=True)
+        if old_session.exists() and not old_session.is_symlink():
+            print("[whatsapp-manager] 🔄 Migrando sessão antiga para o novo caminho...")
+            for f in old_session.iterdir():
+                if f.is_file():
+                    try:
+                        shutil.copy2(f, new_session / f.name)
+                    except Exception as cp_err:
+                        print(f"[whatsapp-manager] ⚠️ Erro ao copiar {f.name}: {cp_err}")
+            shutil.rmtree(old_session, ignore_errors=True)
+        if not old_session.exists():
+            try:
+                old_session.symlink_to(new_session, target_is_directory=True)
+                print("[whatsapp-manager] ✅ Link de compatibilidade da sessão criado.")
+            except Exception as link_err:
+                print(f"[whatsapp-manager] ⚠️ Erro ao criar link simbólico da sessão: {link_err}")
+
         # 1. Copiar bridge.js do plugin para o volume
         source_bridge = plugin_dir / "bridge.js"
         # Para suportar caso o arquivo esteja na pasta whatsapp-manager do plugin

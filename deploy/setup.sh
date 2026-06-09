@@ -86,6 +86,18 @@ curl -sSL "$RAW_ROOT/docs/bridge-artifacts/bridge.js" -o "/opt/data/.hermes/plat
 curl -sSL "$RAW_ROOT/docs/bridge-artifacts/package.json" -o "/opt/data/.hermes/platforms/whatsapp/bridge/package.json"
 echo "  ✓ Arquivos bridge.js e package.json sincronizados."
 
+# Corrige o desalinhamento de caminhos da sessão do WhatsApp (symlink antiga -> nova)
+mkdir -p "/opt/data/.hermes/platforms/whatsapp/session"
+if [ -d "/opt/data/.hermes/whatsapp/session" ] && [ ! -L "/opt/data/.hermes/whatsapp/session" ]; then
+    echo "  🔄 Movendo arquivos de sessão do caminho antigo para o novo..."
+    mv /opt/data/.hermes/whatsapp/session/* /opt/data/.hermes/platforms/whatsapp/session/ 2>/dev/null || true
+    rm -rf "/opt/data/.hermes/whatsapp/session"
+fi
+if [ ! -e "/opt/data/.hermes/whatsapp/session" ]; then
+    ln -sfn "/opt/data/.hermes/platforms/whatsapp/session" "/opt/data/.hermes/whatsapp/session"
+    echo "  ✓ Link de compatibilidade da sessão configurado automaticamente."
+fi
+
 # Baixa os scripts do agente de suporte de e-mail direto do repositório
 mkdir -p "/opt/data/.hermes/scripts"
 curl -sSL "$RAW_URL/scripts/support_agent.py" -o "/opt/data/.hermes/scripts/support_agent.py"

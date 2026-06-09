@@ -87,6 +87,7 @@ services:
       - WHATSAPP_MODE=${WHATSAPP_MODE:-bot}
       - WHATSAPP_ALLOWED_USERS=${WHATSAPP_ALLOWED_USERS:-*}
       - WHATSAPP_BRIDGE_URL=http://whatsapp-bridge:3000
+      - WHATSAPP_CONNECTION_NAME=${WHATSAPP_CONNECTION_NAME:-Hermes Agent}
 
       # Gateway access
       - GATEWAY_ALLOW_ALL_USERS=${GATEWAY_ALLOW_ALL_USERS:-false}
@@ -194,6 +195,7 @@ services:
       - WHATSAPP_MODE=${WHATSAPP_MODE:-bot}
       - WHATSAPP_ALLOWED_USERS=${WHATSAPP_ALLOWED_USERS:-*}
       - WHATSAPP_OWNER_NUMBER=${WHATSAPP_OWNER_NUMBER}
+      - WHATSAPP_CONNECTION_NAME=${WHATSAPP_CONNECTION_NAME:-Hermes Agent}
 
     networks:
       - traefik_public
