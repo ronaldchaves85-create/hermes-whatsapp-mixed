@@ -790,6 +790,20 @@ app.post('/send', async (req, res) => {
   }
 
   try {
+    const trimmedMessage = (message || '').trim();
+    const isSystemError = 
+      trimmedMessage.startsWith('❌ Rate limited') ||
+      trimmedMessage.includes('HTTP 402') ||
+      trimmedMessage.includes('more credits, or fewer max_tokens') ||
+      trimmedMessage.includes('https://openrouter.ai') ||
+      trimmedMessage.includes('Quota exceeded') ||
+      trimmedMessage.includes('Rate limited after');
+
+    if (isSystemError) {
+      console.error(`[bridge] Intercepted and blocked system error message to ${chatId}: ${message}`);
+      return res.json({ success: true, info: 'System error message blocked and logged' });
+    }
+
     const chunks = splitLongMessage(formatOutgoingMessage(message));
     const messageIds = [];
     for (let i = 0; i < chunks.length; i += 1) {

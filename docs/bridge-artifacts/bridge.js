@@ -79,7 +79,7 @@ const AUDIO_CACHE_DIR = path.join(process.env.HOME || '~', '.hermes', 'audio_cac
 const PAIR_ONLY = args.includes('--pair-only');
 const WHATSAPP_MODE = getArg('mode', process.env.WHATSAPP_MODE || 'self-chat'); // "bot" or "self-chat"
 const ALLOWED_USERS = parseAllowedUsers(process.env.WHATSAPP_ALLOWED_USERS || '');
-const WHATSAPP_OWNER_NUMBER = (process.env.WHATSAPP_OWNER_NUMBER || '').trim().replace(/@.*/, '');
+const WHATSAPP_OWNER_NUMBER = (process.env.WHATSAPP_OWNER_NUMBER || '').replace(/\D/g, '');
 const WHATSAPP_CONNECTION_NAME = process.env.WHATSAPP_CONNECTION_NAME || 'Hermes Agent';
 const WHATSAPP_SILENCE_DURATION_MIN = parseInt(process.env.WHATSAPP_SILENCE_DURATION_MIN || '10', 10);
 const SILENCE_DURATION_MS = WHATSAPP_SILENCE_DURATION_MIN * 60 * 1000;
@@ -306,10 +306,11 @@ let onMessagesUpsert = async ({ messages, type }) => {
       (myLid && senderClean === myLid) ||
       (WHATSAPP_OWNER_NUMBER && senderClean === WHATSAPP_OWNER_NUMBER);
 
-    const chatNumber = chatId.replace(/@.*/, '');
+    const chatNumber = chatId.replace(/@.*/, '').replace(/:.*/, '');
     const isSelfChat = (myNumber && chatNumber === myNumber) || (myLid && chatNumber === myLid);
+    const isOwnerChat = isSelfChat || (WHATSAPP_OWNER_NUMBER && chatNumber === WHATSAPP_OWNER_NUMBER);
 
-    if (isOwner && isSelfChat && !isGroup && !chatId.includes('status')) {
+    if (isOwner && isOwnerChat && !isGroup && !chatId.includes('status')) {
       if (['stop_bot', '!pausar', '!parar'].includes(textLower)) {
         botPaused = true;
         saveBotState();
@@ -396,7 +397,7 @@ let onMessagesUpsert = async ({ messages, type }) => {
         } catch {}
         continue;
       }
-      if (!matchesAllowedUser(senderId, ALLOWED_USERS, SESSION_DIR)) {
+      if (!isOwner && !matchesAllowedUser(senderId, ALLOWED_USERS, SESSION_DIR)) {
         try {
           console.log(JSON.stringify({
             event: 'ignored',
@@ -789,6 +790,20 @@ app.post('/send', async (req, res) => {
   }
 
   try {
+    const trimmedMessage = (message || '').trim();
+    const isSystemError = 
+      trimmedMessage.startsWith('❌ Rate limited') ||
+      trimmedMessage.includes('HTTP 402') ||
+      trimmedMessage.includes('more credits, or fewer max_tokens') ||
+      trimmedMessage.includes('https://openrouter.ai') ||
+      trimmedMessage.includes('Quota exceeded') ||
+      trimmedMessage.includes('Rate limited after');
+
+    if (isSystemError) {
+      console.error(`[bridge] Intercepted and blocked system error message to ${chatId}: ${message}`);
+      return res.json({ success: true, info: 'System error message blocked and logged' });
+    }
+
     const chunks = splitLongMessage(formatOutgoingMessage(message));
     const messageIds = [];
     for (let i = 0; i < chunks.length; i += 1) {
