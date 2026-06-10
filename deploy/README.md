@@ -78,6 +78,18 @@ curl -sSL https://raw.githubusercontent.com/SEU_USUARIO_GITHUB/hermes-whatsapp-m
 
 💡 **Dica de Sincronização:** Toda vez que você quiser alterar as regras do seu negócio ou atualizar sua persona, basta editá-las no seu GitHub e rodar este mesmo comando de novo. Seu servidor atualizará tudo em segundos!
 
+#### 🔒 Opção A: Sincronização de Contatos Pessoais e Personas via Repositório Privado (Seguro)
+
+Para manter seus contatos pessoais (`personal_contacts.json`) ou suas personas totalmente privados (sem expor em repositórios públicos):
+1. Crie um repositório **privado** no GitHub (ex: `hermes-config-privado`).
+2. Adicione nele o arquivo `personal_contacts.json` (veja o formato em [personal_contacts.json.example](file:///Users/andrealencar/GoogleAntigravity/hermes-whatsapp-mixed/deploy/personal_contacts.json.example)). Você também pode mover seus arquivos `.md` (personas/regras) para lá se quiser mantê-los privados.
+3. Crie um **Personal Access Token (PAT)** clássico ou fine-grained no GitHub com permissão de leitura de repositório (`repo`).
+4. Execute o setup passando os argumentos extras de Token e Repositório Privado no console do container:
+   ```bash
+   curl -sSL https://raw.githubusercontent.com/SEU_USUARIO_GITHUB/hermes-whatsapp-mixed/main/deploy/setup.sh | bash -s SEU_USUARIO_GITHUB <SEU_TOKEN_PAT_GITHUB> <SEU_USUARIO_GITHUB/NOME_DO_REPO_PRIVADO>
+   ```
+
+
 ---
 
 ### Passo Extra: Ajustes Rápidos pela Web UI (Dashboard do Hermes) 🎨
@@ -211,6 +223,11 @@ O Hermes expõe **duas portas** que precisam de subdomínios separados:
 ```bash
 curl -sSL https://raw.githubusercontent.com/SEU_USUARIO_GITHUB/hermes-whatsapp-mixed/main/deploy/setup.sh | bash -s SEU_USUARIO_GITHUB
 ```
+
+> 🔒 **Dica de Sincronização Privada (Opção A):** Caso queira utilizar um repositório privado para contatos e personas (para mantê-los seguros), passe o seu token do GitHub e o repositório como argumentos adicionais:
+> ```bash
+> curl -sSL https://raw.githubusercontent.com/SEU_USUARIO_GITHUB/hermes-whatsapp-mixed/main/deploy/setup.sh | bash -s SEU_USUARIO_GITHUB <SEU_TOKEN_PAT_GITHUB> <SEU_USUARIO_GITHUB/NOME_DO_REPO_PRIVADO>
+> ```
 
 **O setup irá:**
 * Configurar a persona (`SOUL.md`) em `/opt/data/SOUL.md`

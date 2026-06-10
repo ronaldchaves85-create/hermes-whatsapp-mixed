@@ -60,6 +60,26 @@ curl -sSL https://raw.githubusercontent.com/SEU_USUARIO_GITHUB/hermes-whatsapp-m
 
 ---
 
+### 🔒 Opção A: Sincronização Segura com Repositório Privado (Para Contatos Pessoais e Configurações Privadas)
+
+Se você quer salvar seus contatos pessoais (`personal_contacts.json`) ou suas personas (`SOUL.md`, etc.) de forma totalmente privada e segura (para não expor em repositórios públicos), siga estes passos:
+
+1. Crie um repositório **privado** no seu GitHub (ex: `hermes-config-privado`).
+2. Adicione nele os arquivos que deseja manter seguros:
+   * 📄 **`personal_contacts.json`** (Use o modelo de exemplo disponível em [personal_contacts.json.example](file:///Users/andrealencar/GoogleAntigravity/hermes-whatsapp-mixed/deploy/personal_contacts.json.example) como base).
+   * 📄 **`SOUL.md`**, **`SOUL_WHATSAPP.md`**, **`SOUL_EMAIL.md`**, **`support_rules.md`** (opcionais, se você preferir não deixá-los expostos no seu fork público).
+3. Gere um **Personal Access Token (PAT)** clássico ou fine-grained no GitHub com permissão de leitura de repositório (`repo`).
+4. Conecte-se ao console do container no Portainer e execute a sincronização passando os parâmetros de token e do repositório privado:
+
+```bash
+curl -sSL https://raw.githubusercontent.com/SEU_USUARIO_GITHUB/hermes-whatsapp-mixed/main/deploy/setup.sh | bash -s SEU_USUARIO_GITHUB <SEU_TOKEN_PAT_GITHUB> <SEU_USUARIO_GITHUB/NOME_DO_REPO_PRIVADO>
+```
+
+O script baixará os arquivos de código público do seu fork e puxará automaticamente as suas configurações e contatos do repositório privado de forma segura.
+
+
+---
+
 ## 🎨 PASSO BÔNUS: Ajustes Rápidos via Web UI (Dashboard Visual)
 
 Se você precisar fazer uma mudança rápida e pontual e não quiser acessar o GitHub:
