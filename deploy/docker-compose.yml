@@ -105,6 +105,9 @@ services:
       - HERMES_DASHBOARD_PORT=9119
       - HERMES_DASHBOARD_TUI=1
       - HERMES_SETUP_GITHUB_USER=${HERMES_SETUP_GITHUB_USER:-empreendedorserial}
+      - GITHUB_TOKEN=${GITHUB_TOKEN:-}
+      - CONFIG_REPO=${CONFIG_REPO:-}
+      - CONFIG_GITHUB_TOKEN=${CONFIG_GITHUB_TOKEN:-}
 
       # WhatsApp bridge QR/status endpoint
       - WHATSAPP_QR_PATH=${WHATSAPP_QR_PATH:-/whatsapp}
