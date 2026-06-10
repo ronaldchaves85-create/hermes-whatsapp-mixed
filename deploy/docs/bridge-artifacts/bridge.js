@@ -799,67 +799,46 @@ function isSystemError(message) {
   const trimmedMessage = message.trim();
   const lowercaseMsg = trimmedMessage.toLowerCase();
 
-  // Emojis typically used for system statuses/errors/warnings
-  const hasSystemEmojiPrefix = /^[❌⚠️⏱️💾⚙️🤖🛠️]/.test(trimmedMessage);
-
-  // General list of system/error keywords
-  const systemKeywords = [
-    'rate limit', 'rate-limit', 'ratelimit', 
-    'max retries', 'max-retries', 'retry attempt',
-    'quota exceeded', 'quota-exceeded',
-    'more credits', 'no credits', 'add credits',
-    'openrouter', 'openai', 'anthropic', 'gemini',
-    'self-improvement', 'memory updated', 'memory update',
-    'traceback', 'stack trace', 'most recent call last',
-    'http 402', 'http 429', 'http 500', 'http 502', 'http 503', 'http 504',
-    'max_tokens', 'tokens limit', 'api key', 'auth failed',
-    'bad gateway', 'service unavailable', 'connection refused',
-    'socket hang up', 'error running tool', 'unexpected error',
-    'internal server error', 'unhandled rejection', 'uncaught exception',
-    'failed to fetch', 'failed to connect', 'dns rebinding',
-    'trying fallback'
-  ];
-
-  // If it starts with a system emoji, we are much more aggressive:
-  // we block it if it has any system-like keyword or is a specific system status emoji.
-  if (hasSystemEmojiPrefix) {
-    const emojiKeywords = [
-      'rate', 'limit', 'retry', 'retry', 'exhausted', 'fallback',
-      'error', 'warn', 'fail', 'err', 'status', 'memory', 'updated',
-      'credits', 'token', 'quota', 'improvement', 'update', 'system'
-    ];
-    // Always block if starts with 💾 or ⏱️
-    if (/^[💾⏱️]/.test(trimmedMessage)) {
-      return true;
-    }
-    // For other system emojis (❌, ⚠️, etc), only block if it contains technical/status keywords
-    if (emojiKeywords.some(keyword => lowercaseMsg.includes(keyword))) {
-      return true;
-    }
+  // 1. Exact status messages from self-improvement / memory skills
+  if (trimmedMessage.startsWith('💾') && (lowercaseMsg.includes('self-improvement') || lowercaseMsg.includes('memory updated') || lowercaseMsg.includes('memory update'))) {
+    return true;
+  }
+  if (trimmedMessage === '💾 Memory updated' || trimmedMessage === '💾 Self-improvement review: Memory updated') {
+    return true;
   }
 
-  // Otherwise, match any standard system keywords:
-  if (systemKeywords.some(keyword => lowercaseMsg.includes(keyword))) {
+  // 2. Exact API rate limit & retries alerts from the gateway/libs
+  if (trimmedMessage.startsWith('❌ Rate limited after') && lowercaseMsg.includes('http 402')) {
+    return true;
+  }
+  if (trimmedMessage.startsWith('⏱️ Rate limited. Waiting') && lowercaseMsg.includes('attempt')) {
+    return true;
+  }
+  if (trimmedMessage.startsWith('⚠️ Max retries') && lowercaseMsg.includes('exhausted')) {
+    return true;
+  }
+
+  // 3. Specific OpenRouter credit exhaustion error text
+  if (lowercaseMsg.includes('openrouter.ai/settings/credits') && lowercaseMsg.includes('credits') && lowercaseMsg.includes('max_tokens')) {
+    return true;
+  }
+
+  // 4. Raw python traceback (system exception leakage)
+  if (lowercaseMsg.startsWith('traceback (most recent call last):') || 
+      (lowercaseMsg.includes('line ') && lowercaseMsg.includes('in ') && lowercaseMsg.includes('file "') && lowercaseMsg.includes('error:'))) {
     return true;
   }
 
   // Check for common programming error pattern: "Error: ..." or "Exception: ..."
-  // specifically if followed by typical technical wording
   if (/^(error|exception|runtimeerror|typeerror|valueerror|syntaxerror|nameerror):\s/i.test(trimmedMessage)) {
     return true;
   }
 
-  // Check for Python Traceback format
-  if (lowercaseMsg.includes('traceback (most recent call last):') || 
-      (lowercaseMsg.includes('line ') && lowercaseMsg.includes('in ') && lowercaseMsg.includes('file "'))) {
-    return true;
-  }
-
-  // Check for JSON error payload
+  // 5. Raw JSON error payloads (system exception leakage)
   if (trimmedMessage.startsWith('{') && trimmedMessage.endsWith('}')) {
     try {
       const parsed = JSON.parse(trimmedMessage);
-      if (parsed.error || (parsed.message && (lowercaseMsg.includes('error') || lowercaseMsg.includes('status')))) {
+      if (parsed && (parsed.error !== undefined || parsed.errors !== undefined || parsed.exception !== undefined)) {
         return true;
       }
     } catch (_) {}
