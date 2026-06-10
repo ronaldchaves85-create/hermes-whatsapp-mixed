@@ -812,6 +812,10 @@ app.post('/send', async (req, res) => {
       trimmedMessage.startsWith('❌ Rate limited') ||
       trimmedMessage.startsWith('⏱️ Rate limited') ||
       trimmedMessage.startsWith('⚠️ Max retries') ||
+      trimmedMessage.startsWith('💾') ||
+      lowercaseMsg.includes('self-improvement') ||
+      lowercaseMsg.includes('memory updated') ||
+      lowercaseMsg.includes('memory update') ||
       lowercaseMsg.includes('http 402') ||
       lowercaseMsg.includes('more credits') ||
       lowercaseMsg.includes('quota exceeded') ||
@@ -825,19 +829,26 @@ app.post('/send', async (req, res) => {
       (lowercaseMsg.includes('attempt') && (lowercaseMsg.includes('waiting') || lowercaseMsg.includes('rate limited')));
 
     if (isSystemError) {
-      let apiName = 'Unknown API';
-      if (lowercaseMsg.includes('openrouter')) {
-        apiName = 'OpenRouter';
-      } else if (lowercaseMsg.includes('openai')) {
-        apiName = 'OpenAI';
-      } else if (lowercaseMsg.includes('anthropic') || lowercaseMsg.includes('claude')) {
-        apiName = 'Anthropic';
-      } else if (lowercaseMsg.includes('gemini')) {
-        apiName = 'Google Gemini';
+      const isStatusMessage = trimmedMessage.startsWith('💾') || 
+                              lowercaseMsg.includes('self-improvement') || 
+                              lowercaseMsg.includes('memory update');
+      
+      if (isStatusMessage) {
+        console.log(`[bridge] 💾 SYSTEM STATUS BLOCKED FOR CLIENT ${chatId}:\n[CONTENT]: ${message}`);
+      } else {
+        let apiName = 'Unknown API';
+        if (lowercaseMsg.includes('openrouter')) {
+          apiName = 'OpenRouter';
+        } else if (lowercaseMsg.includes('openai')) {
+          apiName = 'OpenAI';
+        } else if (lowercaseMsg.includes('anthropic') || lowercaseMsg.includes('claude')) {
+          apiName = 'Anthropic';
+        } else if (lowercaseMsg.includes('gemini')) {
+          apiName = 'Google Gemini';
+        }
+        console.error(`[bridge] ⚠️ ERROR DETECTED ON ${apiName.toUpperCase()} API FOR CLIENT ${chatId}:\n[CONTENT]: ${message}`);
       }
-
-      console.error(`[bridge] ⚠️ ERROR DETECTED ON ${apiName.toUpperCase()} API FOR CLIENT ${chatId}:\n[CONTENT]: ${message}`);
-      return res.json({ success: true, info: 'System error message blocked and logged' });
+      return res.json({ success: true, info: 'System status/error message blocked and logged' });
     }
 
     const chunks = splitLongMessage(formatOutgoingMessage(message));
