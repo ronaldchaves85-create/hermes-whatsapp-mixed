@@ -158,6 +158,15 @@ def register(ctx):
         github_user = os.getenv("HERMES_SETUP_GITHUB_USER", "empreendedorserial").strip()
         raw_base_url = f"https://raw.githubusercontent.com/{github_user}/hermes-whatsapp-mixed/main/deploy"
 
+        personal_contacts_path = Path("/opt/data/personal_contacts.json")
+        if not personal_contacts_path.exists():
+            print("[whatsapp-manager] Inicializando personal_contacts.json...")
+            try:
+                personal_contacts_path.write_text("{}", encoding="utf-8")
+                print("[whatsapp-manager] ✓ personal_contacts.json criado.")
+            except Exception as pc_err:
+                print(f"[whatsapp-manager] ⚠️ Erro ao inicializar personal_contacts.json: {pc_err}")
+
         bootstrap_files = {
             "/opt/data/SOUL.md": f"{raw_base_url}/SOUL.md",
             "/opt/data/SOUL_WHATSAPP.md": f"{raw_base_url}/SOUL_WHATSAPP.md",
@@ -416,6 +425,58 @@ def register(ctx):
                 )
             else:
                 history_section = ""
+
+            # Carregar contatos pessoais
+            personal_contacts = {}
+            clean_jid = sender_id
+            parts = sender_id.split("@")
+            if len(parts) == 2:
+                jid_part, domain_part = parts
+                clean_jid = f"{jid_part.split(':')[0]}@{domain_part}"
+            phone_number = clean_jid.split("@")[0]
+
+            try:
+                pc_file = "/opt/data/personal_contacts.json"
+                if os.path.exists(pc_file):
+                    with open(pc_file, "r", encoding="utf-8") as f:
+                        personal_contacts = json.load(f)
+            except Exception as pc_load_err:
+                print(f"[whatsapp-manager] ⚠️ Erro ao carregar personal_contacts.json: {pc_load_err}")
+
+            contact_info = None
+            if clean_jid in personal_contacts:
+                contact_info = personal_contacts[clean_jid]
+            elif phone_number in personal_contacts:
+                contact_info = personal_contacts[phone_number]
+
+            if contact_info:
+                name = contact_info.get("name", "Contato Pessoal")
+                relationship = contact_info.get("relationship", "amigo/namorada")
+                tone = contact_info.get("tone", "informal e amigável")
+                guidelines = contact_info.get("guidelines", "Responda como André.")
+
+                return {
+                    "context": (
+                        "### PERSONA E DIRETRIZES PESSOAIS (RESPONDENDO COMO ANDRÉ ALENCAR) ###\n"
+                        "Você está respondendo em nome de André Alencar (o dono deste WhatsApp) para um contato pessoal.\n"
+                        "Você DEVE agir como se fosse o próprio André conversando diretamente com a pessoa.\n\n"
+                        f"Nome do contato: {name}\n"
+                        f"Relação com o André: {relationship}\n"
+                        f"Tom de voz recomendado: {tone}\n"
+                        f"Diretrizes específicas: {guidelines}\n\n"
+                        "### DIRETRIZES IMPORTANTES DE COMPORTAMENTO ###\n"
+                        "1. Analise o histórico recente fornecido abaixo para identificar os apelidos mútuos, gírias e o nível de formalidade/descontração com que vocês conversam.\n"
+                        "2. Adote o mesmo estilo de escrita do André nas mensagens anteriores. Se o André escreve de forma curta, informal e com abreviações normais (como 'vc', 'tb', 'pq', 'hj', 'blz'), você DEVE escrever exatamente assim.\n"
+                        "3. Responda de forma extremamente natural e fluida. Seja breve e direto (evite textos longos, a menos que o contexto exija).\n"
+                        "4. NUNCA mencione que você é uma IA, assistente virtual, chatbot ou que está rodando em um servidor. Você é o próprio André.\n\n"
+                        f"{history_section}"
+                        "CONSTRAINTS RÍGIDAS DE SEGURANÇA:\n"
+                        "- NUNCA execute comandos no terminal (terminal tool) para esta pessoa.\n"
+                        "- NUNCA edite, remova ou crie arquivos do sistema para ela.\n"
+                        "- Mantenha total sigilo sobre o fato de você rodar em um servidor ou ter ferramentas.\n"
+                        "- NUNCA escreva ou exiba em suas respostas qualquer representação de ferramentas como '📖 read_file: ...' ou 'terminal'."
+                    )
+                }
 
             return {
                 "context": (

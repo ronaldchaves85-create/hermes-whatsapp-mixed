@@ -37,6 +37,7 @@ class TestWhatsAppManagerPlugin(unittest.IsolatedAsyncioTestCase):
         with patch("pathlib.Path.mkdir"), \
              patch("pathlib.Path.symlink_to"), \
              patch("pathlib.Path.is_symlink", return_value=True), \
+             patch("pathlib.Path.write_text"), \
              patch("shutil.copy2"), \
              patch("urllib.request.urlopen"), \
              patch("whatsapp_manager._ensure_google_libs"):
@@ -163,6 +164,34 @@ class TestWhatsAppManagerPlugin(unittest.IsolatedAsyncioTestCase):
             self.assertIn("Chat history content", res["context"])
             # Assert fallback JID derivation was used
             mock_fetch.assert_called_once_with("5511888888888@s.whatsapp.net", limit=50)
+
+    def test_pre_llm_call_personal_contact_context(self):
+        pre_llm = self.ctx.hooks.get("pre_llm_call")
+
+        context = {
+            "platform": "whatsapp",
+            "sender_id": "5511777777777:2@s.whatsapp.net" # A personal contact (Bruna)
+        }
+
+        personal_json = '{"5511777777777@s.whatsapp.net": {"name": "Bruna", "relationship": "namorada", "tone": "romantico", "guidelines": "Seja fofo"}}'
+        mock_pc_open = unittest.mock.mock_open(read_data=personal_json)
+        mock_rules_open = unittest.mock.mock_open(read_data="Soul/Rules content")
+
+        def mock_open_file(path, *args, **kwargs):
+            if "personal_contacts.json" in str(path):
+                return mock_pc_open(path, *args, **kwargs)
+            return mock_rules_open(path, *args, **kwargs)
+
+        with patch("os.path.exists", return_value=True), \
+             patch("builtins.open", mock_open_file), \
+             patch("whatsapp_manager._fetch_chat_history", return_value=""):
+            res = pre_llm("pre_llm_call", context)
+            self.assertIsNotNone(res)
+            self.assertIn("RESPONDENDO COMO ANDRÉ ALENCAR", res["context"])
+            self.assertIn("Nome do contato: Bruna", res["context"])
+            self.assertIn("Relação com o André: namorada", res["context"])
+            self.assertIn("Tom de voz recomendado: romantico", res["context"])
+            self.assertIn("Diretrizes específicas: Seja fofo", res["context"])
 
     def test_non_whatsapp_platforms_are_ignored(self):
         pre_llm = self.ctx.hooks.get("pre_llm_call")
