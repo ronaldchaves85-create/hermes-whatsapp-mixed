@@ -13,7 +13,8 @@ const {
   clearSilencedChats,
   getRecentlySentIds,
   getMessageQueue,
-  setSock
+  setSock,
+  isSystemError
 } = await import('../bridge.js');
 
 // Setup Mock Socket
@@ -373,5 +374,23 @@ test('WhatsApp Bridge Regression Tests', async (t) => {
 
     assert.strictEqual(getBotPaused(), false, 'Bot should be resumed even with spaces/newlines in command');
     assert.ok(mockSock.sentMessages.length > 0, 'Should send resume confirmation');
+  });
+
+  await t.test('13. isSystemError filter should catch technical/system messages and allow normal client messages', () => {
+    // Blocked system/error messages
+    assert.ok(isSystemError('💾 Self-improvement review: Memory updated'), 'Should block memory updates');
+    assert.ok(isSystemError('💾 Memory updated'), 'Should block memory updates');
+    assert.ok(isSystemError('❌ Rate limited after 3 retries — HTTP 402: This request requires more credits, or fewer max_tokens. You requested up to 65536 tokens, but can only afford 64850. To increase, visit https://openrouter.ai/settings/credits and add more credits'), 'Should block OpenRouter credit errors');
+    assert.ok(isSystemError('⏱️ Rate limited. Waiting 2.3s (attempt 2/3)...'), 'Should block rate limit alerts');
+    assert.ok(isSystemError('⚠️ Max retries (3) exhausted — trying fallback...'), 'Should block fallback logs');
+    assert.ok(isSystemError('Traceback (most recent call last):\n  File "agent.py", line 42, in call_llm\n    raise ValueError("API Key missing")\nValueError: API Key missing'), 'Should block python stack traces');
+    assert.ok(isSystemError('Error: connection timed out while calling anthropic API'), 'Should block connection timeouts');
+    assert.ok(isSystemError('{"error": "Unauthorized Access", "status": 401}'), 'Should block JSON errors');
+
+    // Allowed normal client/owner messages
+    assert.ok(!isSystemError('Oi André, tudo bem?'), 'Should allow simple greeting');
+    assert.ok(!isSystemError('Oi, o cliente está sem créditos no painel de Chatcommerce?'), 'Should allow normal credit discussion in Portuguese');
+    assert.ok(!isSystemError('Preciso resolver um problema de integração com a API'), 'Should allow normal developer API discussion in Portuguese');
+    assert.ok(!isSystemError('⚠️ Obrigado por avisar!'), 'Should allow regular emoji messages without technical keywords');
   });
 });
