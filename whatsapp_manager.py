@@ -168,7 +168,7 @@ def _classify_contact_via_llm(name: str, chat_history: str, stats_info: str) -> 
     # 1. Tentar Gemini API
     if google_key:
         try:
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key={google_key}"
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={google_key}"
             headers = {"Content-Type": "application/json"}
             payload = {
                 "contents": [{"parts": [{"text": prompt}]}],
@@ -1140,7 +1140,7 @@ def register(ctx):
                     url = f"{BRIDGE_URL}/send"
                     payload = json.dumps({
                         "chatId": chat_id,
-                        "text": response_msg
+                        "message": response_msg
                     }).encode("utf-8")
                     req = urllib.request.Request(url, data=payload, method="POST")
                     req.add_header("Content-Type", "application/json")
