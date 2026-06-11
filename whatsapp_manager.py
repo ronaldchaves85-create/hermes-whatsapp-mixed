@@ -27,6 +27,13 @@ def _resolve_phone_from_jid(jid: str) -> str:
     else:
         jid_part, domain_part = clean_jid, "s.whatsapp.net"
 
+    # Se for LID e não estiver no cache, forçar atualização chamando _check_bot_paused
+    if domain_part == "lid" and jid_part not in _lid_to_phone:
+        try:
+            _check_bot_paused()
+        except Exception:
+            pass
+
     # Se for LID, tentar mapear
     if domain_part == "lid" or jid_part in _lid_to_phone:
         phone = _lid_to_phone.get(jid_part)
@@ -1417,17 +1424,19 @@ def register(ctx):
             session_key = gateway._session_key_for_source(event.source)
             if session_key:
                 owner_model = os.getenv("WHATSAPP_OWNER_MODEL", "gemini-3.5-flash").strip()
+                owner_provider = os.getenv("WHATSAPP_OWNER_PROVIDER", "gemini").strip()
                 client_model = os.getenv("WHATSAPP_CLIENT_MODEL", "gemini-3.5-flash").strip()
+                client_provider = os.getenv("WHATSAPP_CLIENT_PROVIDER", "gemini").strip()
                 
                 if is_owner:
                     gateway._session_model_overrides[session_key] = {
                         "model": owner_model,
-                        "provider": "gemini"
+                        "provider": owner_provider
                     }
                 else:
                     gateway._session_model_overrides[session_key] = {
                         "model": client_model,
-                        "provider": "gemini"
+                        "provider": client_provider
                     }
         except Exception as e:
             print(f"[whatsapp-manager] Erro ao aplicar override de modelo: {e}")

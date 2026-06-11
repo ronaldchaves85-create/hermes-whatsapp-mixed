@@ -751,6 +751,54 @@ class TestWhatsAppManagerPlugin(unittest.IsolatedAsyncioTestCase):
         # Limpar cache após teste
         whatsapp_manager._lid_to_phone.clear()
 
+    def test_custom_providers_env_vars(self):
+        """Pre-dispatch deve honrar as variáveis WHATSAPP_OWNER_PROVIDER e WHATSAPP_CLIENT_PROVIDER."""
+        pre_dispatch = self.ctx.hooks.get("pre_gateway_dispatch")
+        self.assertIsNotNone(pre_dispatch)
+
+        # 1. Testar Owner com provider customizado
+        event_owner = MagicMock()
+        event_owner.source.platform = "whatsapp"
+        event_owner.source.user_id = "5511999999999@s.whatsapp.net"
+        event_owner.text = "Hello"
+        event_owner.source.chat_id = "5511999999999@s.whatsapp.net"
+
+        gateway_owner = MagicMock()
+        gateway_owner._session_key_for_source.return_value = "session_owner"
+        gateway_owner._session_model_overrides = {}
+
+        # 2. Testar Cliente com provider customizado
+        event_client = MagicMock()
+        event_client.source.platform = "whatsapp"
+        event_client.source.user_id = "5511888888888@s.whatsapp.net"
+        event_client.text = "Hello"
+        event_client.source.chat_id = "5511888888888@s.whatsapp.net"
+
+        gateway_client = MagicMock()
+        gateway_client._session_key_for_source.return_value = "session_client"
+        gateway_client._session_model_overrides = {}
+
+        with patch.dict(os.environ, {
+            "WHATSAPP_OWNER_NUMBER": "5511999999999",
+            "WHATSAPP_OWNER_MODEL": "my-owner-model",
+            "WHATSAPP_OWNER_PROVIDER": "openrouter",
+            "WHATSAPP_CLIENT_MODEL": "my-client-model",
+            "WHATSAPP_CLIENT_PROVIDER": "openai"
+        }):
+            # Rodar dispatch pro owner
+            res_owner = pre_dispatch("pre_gateway_dispatch", {"event": event_owner, "gateway": gateway_owner})
+            self.assertIsNone(res_owner)
+            self.assertEqual(gateway_owner._session_model_overrides["session_owner"]["model"], "my-owner-model")
+            self.assertEqual(gateway_owner._session_model_overrides["session_owner"]["provider"], "openrouter")
+
+            # Rodar dispatch pro client
+            with patch("whatsapp_manager._check_bot_paused", return_value=False), \
+                 patch("whatsapp_manager._check_chat_silenced", return_value=False):
+                res_client = pre_dispatch("pre_gateway_dispatch", {"event": event_client, "gateway": gateway_client})
+                self.assertIsNone(res_client)
+                self.assertEqual(gateway_client._session_model_overrides["session_client"]["model"], "my-client-model")
+                self.assertEqual(gateway_client._session_model_overrides["session_client"]["provider"], "openai")
+
 
 if __name__ == "__main__":
     unittest.main()

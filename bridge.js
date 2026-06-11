@@ -378,7 +378,7 @@ let onMessagesUpsert = async ({ messages, type }) => {
   for (const msg of messages) {
     if (!msg.message) continue;
 
-    const chatId = msg.key.remoteJid;
+    let chatId = msg.key.remoteJid;
     if (chatId === 'status@broadcast' || (chatId && chatId.includes('status'))) {
       continue;
     }
@@ -392,7 +392,61 @@ let onMessagesUpsert = async ({ messages, type }) => {
         }));
       } catch {}
     }
-    const senderId = msg.key.participant || chatId;
+    let senderId = msg.key.participant || chatId;
+
+    // Resolve LID to phone JID if necessary
+    if (senderId && senderId.endsWith('@lid')) {
+      const cleanLid = senderId.split(':')[0].split('@')[0];
+      if (lidToPhone[cleanLid]) {
+        senderId = `${lidToPhone[cleanLid]}@s.whatsapp.net`;
+      } else {
+        try {
+          const res = await sock.onWhatsApp(senderId);
+          if (Array.isArray(res) && res[0] && res[0].exists) {
+            const phoneJid = res[0].jid;
+            const phone = phoneJid.split('@')[0];
+            lidToPhone[cleanLid] = phone;
+            senderId = phoneJid;
+            console.log(`[bridge] Dinamicamente mapeado LID ${cleanLid} para telefone ${phone}`);
+            try {
+              writeFileSync(
+                path.join(SESSION_DIR, `lid-mapping-${phone}.json`),
+                JSON.stringify(cleanLid)
+              );
+            } catch (err) {}
+          }
+        } catch (err) {
+          console.error(`[bridge] Falha ao resolver LID ${senderId}:`, err.message);
+        }
+      }
+    }
+
+    if (chatId && chatId.endsWith('@lid')) {
+      const cleanLid = chatId.split(':')[0].split('@')[0];
+      if (lidToPhone[cleanLid]) {
+        chatId = `${lidToPhone[cleanLid]}@s.whatsapp.net`;
+      } else {
+        try {
+          const res = await sock.onWhatsApp(chatId);
+          if (Array.isArray(res) && res[0] && res[0].exists) {
+            const phoneJid = res[0].jid;
+            const phone = phoneJid.split('@')[0];
+            lidToPhone[cleanLid] = phone;
+            chatId = phoneJid;
+            console.log(`[bridge] Dinamicamente mapeado LID ${cleanLid} para telefone ${phone}`);
+            try {
+              writeFileSync(
+                path.join(SESSION_DIR, `lid-mapping-${phone}.json`),
+                JSON.stringify(cleanLid)
+              );
+            } catch (err) {}
+          }
+        } catch (err) {
+          console.error(`[bridge] Falha ao resolver LID ${chatId}:`, err.message);
+        }
+      }
+    }
+
     const isGroup = chatId.endsWith('@g.us');
     const senderNumber = senderId.replace(/@.*/, '');
 

@@ -42,6 +42,59 @@ function addRecentLog(level, message) {
     recentLogs.shift();
   }
 }
+
+// Buckets de erros para o /whatsapp/debug
+const errorCounters = {
+  llm_400: 0,           // API key invalid / expired
+  llm_403: 0,           // Forbidden (quota/billing/revoked)
+  llm_429: 0,           // Rate limit
+  llm_5xx: 0,           // Upstream errors
+  llm_timeout: 0,       // Timeout na chamada
+  llm_other: 0,         // Outros erros LLM
+  bridge_send_failed: 0,
+  bridge_send_timeout: 0,
+  auth_revoked: 0,      // WhatsApp desconectou por revogacao
+  lastErrors: [],       // Ultimos 20 erros categorizados
+};
+const MAX_LAST_ERRORS = 20;
+
+function classifyAndCountError(message) {
+  if (!message || typeof message !== 'string') return;
+  const m = message.toLowerCase();
+  let category = null;
+  if (m.includes('http 400') || m.includes('invalid_argument') || m.includes('api key expired') || m.includes('api key not valid')) {
+    errorCounters.llm_400++; category = 'llm_400';
+  } else if (m.includes('http 403') || m.includes('forbidden') || m.includes('permission_denied')) {
+    errorCounters.llm_403++; category = 'llm_403';
+  } else if (m.includes('http 429') || m.includes('rate limit') || m.includes('too many requests')) {
+    errorCounters.llm_429++; category = 'llm_429';
+  } else if (m.includes('http 5') || m.includes('internal server error') || m.includes('bad gateway') || m.includes('service unavailable')) {
+    errorCounters.llm_5xx++; category = 'llm_5xx';
+  } else if (m.includes('timed out') || m.includes('timeout') || m.includes('etimedout')) {
+    errorCounters.llm_timeout++; category = 'llm_timeout';
+  }
+  if (category) {
+    errorCounters.lastErrors.push({
+      ts: new Date().toISOString(),
+      category,
+      message: message.slice(0, 300),
+    });
+    if (errorCounters.lastErrors.length > MAX_LAST_ERRORS) {
+      errorCounters.lastErrors.shift();
+    }
+  }
+}
+
+// Contadores de atividade
+const activityCounters = {
+  messagesReceived: 0,
+  messagesSent: 0,
+  messagesSendFailed: 0,
+  messagesEnqueued: 0,
+  classificationSuccess: 0,
+  classificationFailed: 0,
+  startTime: new Date().toISOString(),
+};
 const originalLog = console.log;
 const originalError = console.error;
 const originalWarn = console.warn;
@@ -51,11 +104,15 @@ console.log = (...args) => {
 };
 console.error = (...args) => {
   originalError.apply(console, args);
-  addRecentLog('error', args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '));
+  const msg = args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ');
+  addRecentLog('error', msg);
+  classifyAndCountError(msg);
 };
 console.warn = (...args) => {
   originalWarn.apply(console, args);
-  addRecentLog('warn', args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '));
+  const msg = args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ');
+  addRecentLog('warn', msg);
+  classifyAndCountError(msg);
 };
 
 // Parse CLI args
@@ -237,6 +294,54 @@ let connectionState = 'disconnected';
 let currentQr = '';
 let currentQrAt = null;
 
+// Cache de nomes de contatos: { jid -> { name, expiresAt } }
+const contactNameCache = new Map();
+const CONTACT_CACHE_TTL_MS = 24 * 60 * 60 * 1000; // 24h
+
+async function resolveContactName(jid) {
+  if (!sock || !jid) return null;
+  const cleanJid = String(jid).split(':')[0].split('@')[0];
+  const cached = contactNameCache.get(cleanJid);
+  if (cached && cached.expiresAt > Date.now()) {
+    return cached.name;
+  }
+  try {
+    // Tenta varias fontes de nome em ordem de preferencia
+    let name = null;
+
+    // 1) contacts map do Baileys (carregado no boot via sock.contacts)
+    if (sock.contacts && typeof sock.contacts === 'object') {
+      const stored = sock.contacts[jid] || sock.contacts[cleanJid + '@s.whatsapp.net'] || sock.contacts[cleanJid + '@lid'];
+      if (stored) {
+        name = stored.name || stored.verifiedName || stored.pushName || stored.notify || null;
+      }
+    }
+
+    // 2) onWhatsApp: retorna presence/numero, nao o nome, mas confirma existencia
+    if (!name) {
+      try {
+        const result = await sock.onWhatsApp(jid);
+        if (Array.isArray(result) && result[0] && result[0].exists) {
+          // existence confirmed; nome ainda nao veio
+        }
+      } catch {}
+    }
+
+    // 3) fetchStatus como sanity check (nao retorna nome, mas confirma vivo)
+    // deixado como comentario para nao atrasar sync
+    // if (!name) { try { await sock.fetchStatus(jid); } catch {} }
+
+    if (name) {
+      contactNameCache.set(cleanJid, { name, expiresAt: Date.now() + CONTACT_CACHE_TTL_MS });
+      console.log(`[bridge] Nome resolvido para ${cleanJid}: ${name}`);
+    }
+    return name;
+  } catch (err) {
+    console.error(`[bridge] Erro ao resolver nome de ${jid}:`, err.message);
+    return null;
+  }
+}
+
 const isMain = process.argv[1] && (
   fileURLToPath(import.meta.url) === process.argv[1] ||
   path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)
@@ -273,7 +378,7 @@ let onMessagesUpsert = async ({ messages, type }) => {
   for (const msg of messages) {
     if (!msg.message) continue;
 
-    const chatId = msg.key.remoteJid;
+    let chatId = msg.key.remoteJid;
     if (chatId === 'status@broadcast' || (chatId && chatId.includes('status'))) {
       continue;
     }
@@ -287,7 +392,61 @@ let onMessagesUpsert = async ({ messages, type }) => {
         }));
       } catch {}
     }
-    const senderId = msg.key.participant || chatId;
+    let senderId = msg.key.participant || chatId;
+
+    // Resolve LID to phone JID if necessary
+    if (senderId && senderId.endsWith('@lid')) {
+      const cleanLid = senderId.split(':')[0].split('@')[0];
+      if (lidToPhone[cleanLid]) {
+        senderId = `${lidToPhone[cleanLid]}@s.whatsapp.net`;
+      } else {
+        try {
+          const res = await sock.onWhatsApp(senderId);
+          if (Array.isArray(res) && res[0] && res[0].exists) {
+            const phoneJid = res[0].jid;
+            const phone = phoneJid.split('@')[0];
+            lidToPhone[cleanLid] = phone;
+            senderId = phoneJid;
+            console.log(`[bridge] Dinamicamente mapeado LID ${cleanLid} para telefone ${phone}`);
+            try {
+              writeFileSync(
+                path.join(SESSION_DIR, `lid-mapping-${phone}.json`),
+                JSON.stringify(cleanLid)
+              );
+            } catch (err) {}
+          }
+        } catch (err) {
+          console.error(`[bridge] Falha ao resolver LID ${senderId}:`, err.message);
+        }
+      }
+    }
+
+    if (chatId && chatId.endsWith('@lid')) {
+      const cleanLid = chatId.split(':')[0].split('@')[0];
+      if (lidToPhone[cleanLid]) {
+        chatId = `${lidToPhone[cleanLid]}@s.whatsapp.net`;
+      } else {
+        try {
+          const res = await sock.onWhatsApp(chatId);
+          if (Array.isArray(res) && res[0] && res[0].exists) {
+            const phoneJid = res[0].jid;
+            const phone = phoneJid.split('@')[0];
+            lidToPhone[cleanLid] = phone;
+            chatId = phoneJid;
+            console.log(`[bridge] Dinamicamente mapeado LID ${cleanLid} para telefone ${phone}`);
+            try {
+              writeFileSync(
+                path.join(SESSION_DIR, `lid-mapping-${phone}.json`),
+                JSON.stringify(cleanLid)
+              );
+            } catch (err) {}
+          }
+        } catch (err) {
+          console.error(`[bridge] Falha ao resolver LID ${chatId}:`, err.message);
+        }
+      }
+    }
+
     const isGroup = chatId.endsWith('@g.us');
     const senderNumber = senderId.replace(/@.*/, '');
 
@@ -340,22 +499,20 @@ let onMessagesUpsert = async ({ messages, type }) => {
       }
     }
 
-    // If bot is paused, drop messages from non-owner users immediately
-    // (don't enqueue them — the Python gateway should never see them)
+    // If bot is paused, do NOT drop messages from non-owner users (so they can be enqueued and persisted to SQLite history),
+    // but log it so the gateway/hook can know it should be skipped from LLM response.
     if (botPaused && !isOwner) {
       if (WHATSAPP_DEBUG) {
-        try { console.log(JSON.stringify({ event: 'ignored', reason: 'bot_paused', chatId, senderId })); } catch {}
+        try { console.log(JSON.stringify({ event: 'logged_paused', chatId, senderId })); } catch {}
       }
-      continue;
     }
 
     // If this specific chat is silenced (owner is actively reading/responding),
-    // drop the message at bridge level — don't enqueue it.
+    // do NOT drop it at bridge level, let it flow to queue for history persistence.
     if (!isOwner && !isGroup) {
       const silencedUntil = silencedChats[chatId] || 0;
       if (silencedUntil > Date.now()) {
-        console.log(`🔇 Mensagem de ${chatId} ignorada — chat silenciado (${Math.round((silencedUntil - Date.now()) / 1000)}s restantes).`);
-        continue;
+        console.log(`🔇 Mensagem de ${chatId} recebida em chat silenciado (enfileirada para histórico).`);
       }
     }
 
@@ -378,13 +535,14 @@ let onMessagesUpsert = async ({ messages, type }) => {
         }
       }
 
-      if (WHATSAPP_MODE === 'bot' && !isSelfChat) {
-        // Bot mode: separate number. ALL fromMe to other users are echo-backs of our own replies — skip.
-        continue;
-      }
-
       // Self-chat mode or self-chat in bot mode: only allow messages in the user's own self-chat
-      if (!isSelfChat) continue;
+      if (!isSelfChat) {
+        const isBotReply = recentlySentIds.has(msg.key.id) || (REPLY_PREFIX && getMessageContent(msg).conversation?.startsWith(REPLY_PREFIX));
+        if (isBotReply || WHATSAPP_MODE === 'bot') {
+          continue;
+        }
+        // Manual message sent by owner on their phone: let it flow to queue so it can be saved in SQLite history.
+      }
     }
 
     // Handle !fromMe messages (from other people) based on mode.
@@ -548,6 +706,12 @@ let onMessagesUpsert = async ({ messages, type }) => {
     if (messageQueue.length > MAX_QUEUE_SIZE) {
       messageQueue.shift();
     }
+    activityCounters.messagesEnqueued++;
+    if (event && event.fromMe) {
+      activityCounters.messagesSent++;
+    } else {
+      activityCounters.messagesReceived++;
+    }
   }
 };
 
@@ -597,6 +761,7 @@ async function startSocket() {
       connectionState = 'disconnected';
 
       if (reason === DisconnectReason.loggedOut) {
+        errorCounters.auth_revoked++;
         console.log('❌ Logged out. Delete session and restart to re-authenticate.');
         try {
           if (existsSync(SESSION_DIR)) {
@@ -675,6 +840,7 @@ app.use((req, res, next) => {
 app.get('/bot-status', (req, res) => {
   res.json({
     botPaused,
+    lidToPhone,
     uptime: process.uptime(),
   });
 });
@@ -763,12 +929,20 @@ app.get('/whatsapp/debug', (req, res) => {
     sessionFilesCount = readdirSync(SESSION_DIR).length;
   } catch {}
 
+  // Caches em memoria (para inspecao)
+  const silencedCount = Object.keys(silencedChats).length;
+  const cachedContacts = contactNameCache.size;
+
+  // Throttling de erros no output para nao estourar tamanho da resposta
+  const filteredLogs = recentLogs.slice(-30);
+
   res.json({
     status: connectionState,
     qrAvailable: !!currentQr,
     currentQrAt,
     botPaused,
     uptime: process.uptime(),
+    uptimeHuman: formatUptime(process.uptime()),
     memoryUsage: process.memoryUsage(),
     session: {
       directory: SESSION_DIR,
@@ -781,10 +955,67 @@ app.get('/whatsapp/debug', (req, res) => {
       WHATSAPP_OWNER_NUMBER,
       WHATSAPP_CONNECTION_NAME,
       PORT,
+      WHATSAPP_SILENCE_DURATION_MIN,
+      WHATSAPP_DEBUG: !!WHATSAPP_DEBUG,
     },
-    recentLogs,
+    counters: {
+      ...activityCounters,
+      silencedChatsActive: silencedCount,
+      silencedChats: silencedChats,
+      queueSize: messageQueue.length,
+      recentlySentIdsSize: recentlySentIds.size,
+      cachedContactNames: cachedContacts,
+      lidToPhoneMappings: Object.keys(lidToPhone).length,
+    },
+    errors: errorCounters,
+    // Lista de problemas ativos detectados
+    alerts: buildAlerts(errorCounters, activityCounters, connectionState, botPaused),
+    recentLogs: filteredLogs,
   });
 });
+
+function formatUptime(seconds) {
+  const d = Math.floor(seconds / 86400);
+  const h = Math.floor((seconds % 86400) / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = Math.floor(seconds % 60);
+  if (d > 0) return `${d}d ${h}h ${m}m ${s}s`;
+  if (h > 0) return `${h}h ${m}m ${s}s`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
+}
+
+function buildAlerts(errors, activity, connState, paused) {
+  const alerts = [];
+  if (connState !== 'connected') {
+    alerts.push({ severity: 'critical', message: `Bridge desconectada do WhatsApp (status: ${connState})` });
+  }
+  if (errors.llm_400 > 0) {
+    alerts.push({ severity: 'critical', message: `Gemini retornou 400 ${errors.llm_400}x - chave API provavelmente expirada ou invalida` });
+  }
+  if (errors.llm_403 > 0) {
+    alerts.push({ severity: 'critical', message: `Gemini retornou 403 ${errors.llm_403}x - chave revogada, billing bloqueado, ou IP bloqueado` });
+  }
+  if (errors.llm_429 > 5) {
+    alerts.push({ severity: 'warning', message: `Rate limit do Gemini atingido ${errors.llm_429}x - considere throttling ou upgrade de plano` });
+  }
+  if (errors.llm_5xx > 3) {
+    alerts.push({ severity: 'warning', message: `Gemini retornou 5xx ${errors.llm_5xx}x - problemas no upstream do Google` });
+  }
+  if (errors.llm_timeout > 3) {
+    alerts.push({ severity: 'warning', message: `${errors.llm_timeout} timeouts na chamada ao Gemini - rede instavel ou modelo lento` });
+  }
+  if (errors.bridge_send_failed > 5) {
+    alerts.push({ severity: 'warning', message: `${errors.bridge_send_failed} envios para WhatsApp falharam - verificar conectividade` });
+  }
+  if (paused) {
+    alerts.push({ severity: 'info', message: 'Bot esta globalmente pausado (stop_bot foi acionado)' });
+  }
+  if (activity.messagesSendFailed > 0 && activity.messagesSendFailed > activity.messagesSent * 0.1) {
+    alerts.push({ severity: 'warning', message: `Taxa de falha de envio alta: ${activity.messagesSendFailed}/${activity.messagesSent}` });
+  }
+  return alerts;
+}
 
 function isSystemError(message) {
   if (!message || typeof message !== 'string') return false;
@@ -894,6 +1125,12 @@ app.post('/send', async (req, res) => {
       messageIds,
     });
   } catch (err) {
+    if (err && err.message && err.message.includes('timed out')) {
+      errorCounters.bridge_send_timeout++;
+    } else {
+      errorCounters.bridge_send_failed++;
+    }
+    activityCounters.messagesSendFailed++;
     res.status(500).json({ error: err.message });
   }
 });
@@ -1048,9 +1285,7 @@ app.post('/typing', async (req, res) => {
 // Chat info
 app.get('/chat/:id', async (req, res) => {
   const chatId = req.params.id;
-  const isGroup = chatId.endsWith('@g.us');
-
-  if (isGroup && sock) {
+  const isGroup = chatId.endsWith('@g.us');  if (isGroup && sock) {
     try {
       const metadata = await sock.groupMetadata(chatId);
       return res.json({
@@ -1068,6 +1303,23 @@ app.get('/chat/:id', async (req, res) => {
     isGroup,
     participants: [],
   });
+});
+
+// Resolver nome de contato via WhatsApp (consulta sock.contacts)
+app.get('/contact/:jid', async (req, res) => {
+  const jid = req.params.jid;
+  if (!jid) {
+    return res.status(400).json({ error: 'jid required' });
+  }
+  if (!sock) {
+    return res.status(503).json({ error: 'bridge not connected' });
+  }
+  try {
+    const name = await resolveContactName(decodeURIComponent(jid));
+    res.json({ jid, name, cached: name !== null });
+  } catch (err) {
+    res.status(500).json({ error: err.message });
+  }
 });
 
 // Health check
