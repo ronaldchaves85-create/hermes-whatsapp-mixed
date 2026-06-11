@@ -820,9 +820,12 @@ def _self_update_plugin_code() -> bool:
             with urllib.request.urlopen(req, timeout=15) as response:
                 content = response.read()
                 if content:
-                    if not local_path.exists() or local_path.read_bytes() != content:
+                    # Normaliza line endings para comparação (evita loop por CRLF vs LF)
+                    content_normalized = content.replace(b"\r\n", b"\n")
+                    local_normalized = local_path.read_bytes().replace(b"\r\n", b"\n") if local_path.exists() else b""
+                    if local_normalized != content_normalized:
                         local_path.parent.mkdir(parents=True, exist_ok=True)
-                        local_path.write_bytes(content)
+                        local_path.write_bytes(content_normalized)
                         print(f"[whatsapp-manager] Code Update: {filename} atualizado com sucesso.")
                         if filename in ["whatsapp_manager.py", "bridge.js"]:
                             updated_any = True
@@ -840,9 +843,11 @@ def _self_update_plugin_code() -> bool:
             with urllib.request.urlopen(req, timeout=15) as response:
                 content = response.read()
                 if content:
-                    if not local_path.exists() or local_path.read_bytes() != content:
+                    content_normalized = content.replace(b"\r\n", b"\n")
+                    local_normalized = local_path.read_bytes().replace(b"\r\n", b"\n") if local_path.exists() else b""
+                    if local_normalized != content_normalized:
                         local_path.parent.mkdir(parents=True, exist_ok=True)
-                        local_path.write_bytes(content)
+                        local_path.write_bytes(content_normalized)
                         print(f"[whatsapp-manager] Code Update: {relative_path} atualizado.")
         except Exception as e:
             print(f"[whatsapp-manager] Code Update: Falha ao atualizar skill {relative_path}: {e}")
