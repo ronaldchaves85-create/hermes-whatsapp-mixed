@@ -240,6 +240,7 @@ if [ ! -d "/opt/data/.hermes/plugins/whatsapp-manager" ]; then
     mkdir -p "/opt/data/.hermes/plugins/whatsapp-manager"
     safe_download "$RAW_ROOT/plugin.yaml"     "/opt/data/.hermes/plugins/whatsapp-manager/plugin.yaml" "$CURL_CODE_AUTH_HEADER" "plugin.yaml"
     safe_download "$RAW_ROOT/__init__.py"     "/opt/data/.hermes/plugins/whatsapp-manager/__init__.py" "$CURL_CODE_AUTH_HEADER" "__init__.py"
+    safe_download "$RAW_ROOT/whatsapp_manager.py" "/opt/data/.hermes/plugins/whatsapp-manager/whatsapp_manager.py" "$CURL_CODE_AUTH_HEADER" "whatsapp_manager.py"
     safe_download "$RAW_ROOT/bridge.js"       "/opt/data/.hermes/plugins/whatsapp-manager/bridge.js" "$CURL_CODE_AUTH_HEADER" "bridge.js"
     safe_download "$RAW_ROOT/package.json"    "/opt/data/.hermes/plugins/whatsapp-manager/package.json" "$CURL_CODE_AUTH_HEADER" "package.json"
     safe_download "$RAW_ROOT/google_api.py"   "/opt/data/.hermes/plugins/whatsapp-manager/google_api.py" "$CURL_CODE_AUTH_HEADER" "google_api.py"
@@ -253,8 +254,9 @@ if [ ! -d "/opt/data/.hermes/plugins/whatsapp-manager" ]; then
     safe_download "$RAW_ROOT/skills/whatsapp-logs-diagnostics/SKILL.md" "/opt/data/.hermes/plugins/whatsapp-manager/skills/whatsapp-logs-diagnostics/SKILL.md" "$CURL_CODE_AUTH_HEADER" "skills/whatsapp-logs-diagnostics/SKILL.md"
     echo "  ✓ Plugin whatsapp-manager instalado com sucesso (incluindo skills e google_api)."
 else
-    echo "  - Plugin whatsapp-manager já instalado. Atualizando __init__.py, skills e módulos..."
+    echo "  - Plugin whatsapp-manager já instalado. Atualizando __init__.py, whatsapp_manager.py, skills e módulos..."
     safe_download "$RAW_ROOT/__init__.py"   "/opt/data/.hermes/plugins/whatsapp-manager/__init__.py" "$CURL_CODE_AUTH_HEADER" "__init__.py"
+    safe_download "$RAW_ROOT/whatsapp_manager.py" "/opt/data/.hermes/plugins/whatsapp-manager/whatsapp_manager.py" "$CURL_CODE_AUTH_HEADER" "whatsapp_manager.py"
     safe_download "$RAW_ROOT/google_api.py" "/opt/data/.hermes/plugins/whatsapp-manager/google_api.py" "$CURL_CODE_AUTH_HEADER" "google_api.py"
     mkdir -p "/opt/data/.hermes/plugins/whatsapp-manager/skills/google-oauth"
     safe_download "$RAW_ROOT/skills/google-oauth/SKILL.md" "/opt/data/.hermes/plugins/whatsapp-manager/skills/google-oauth/SKILL.md" "$CURL_CODE_AUTH_HEADER" "skills/google-oauth/SKILL.md"
@@ -262,7 +264,7 @@ else
     safe_download "$RAW_ROOT/skills/research-sources/SKILL.md" "/opt/data/.hermes/plugins/whatsapp-manager/skills/research-sources/SKILL.md" "$CURL_CODE_AUTH_HEADER" "skills/research-sources/SKILL.md"
     mkdir -p "/opt/data/.hermes/plugins/whatsapp-manager/skills/whatsapp-logs-diagnostics"
     safe_download "$RAW_ROOT/skills/whatsapp-logs-diagnostics/SKILL.md" "/opt/data/.hermes/plugins/whatsapp-manager/skills/whatsapp-logs-diagnostics/SKILL.md" "$CURL_CODE_AUTH_HEADER" "skills/whatsapp-logs-diagnostics/SKILL.md"
-    echo "  ✓ __init__.py, google_api.py e skills atualizados."
+    echo "  ✓ __init__.py, whatsapp_manager.py, google_api.py e skills atualizados."
 fi
 
 # Baixa o modelo de config.yaml se ele não existir localmente
