@@ -1120,3 +1120,25 @@ def register(ctx):
         print(f"[whatsapp-manager] Resultado da sincronização no boot: {boot_result}")
     except Exception as boot_sync_err:
         print(f"[whatsapp-manager] ⚠️ Falha na sincronização de contatos no boot: {boot_sync_err}")
+
+    # Agendador periódico de sincronização de contatos (executa a cada 24 horas em segundo plano)
+    def _run_periodic_sync():
+        import time
+        # Aguarda 24 horas antes do primeiro ciclo periódico, já que o boot acabou de rodar
+        time.sleep(86400)
+        while True:
+            try:
+                print("[whatsapp-manager] Iniciando sincronização periódica automática de contatos...")
+                res = _sync_contacts_from_db_internal()
+                print(f"[whatsapp-manager] Sincronização periódica concluída: {res}")
+            except Exception as e:
+                print(f"[whatsapp-manager] ⚠️ Erro na sincronização periódica: {e}")
+            time.sleep(86400)
+
+    try:
+        import threading
+        t = threading.Thread(target=_run_periodic_sync, daemon=True)
+        t.start()
+        print("[whatsapp-manager] ✅ Agendador periódico (24h) de sincronização iniciado com sucesso.")
+    except Exception as thread_err:
+        print(f"[whatsapp-manager] ⚠️ Não foi possível iniciar o agendador periódico: {thread_err}")
