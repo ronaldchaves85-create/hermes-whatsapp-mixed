@@ -51,17 +51,6 @@ if [ -n "$CONFIG_GITHUB_TOKEN" ]; then
     CURL_CONFIG_AUTH_HEADER="Authorization: token $CONFIG_GITHUB_TOKEN"
 fi
 
-# URL Base para os arquivos de código (bridge, plugins, etc.) do GitHub
-RAW_ROOT="https://raw.githubusercontent.com/$CODE_USER/hermes-whatsapp-mixed/main"
-RAW_URL="$RAW_ROOT/deploy"
-
-# URL para os arquivos de configuração (SOULs, regras, contatos)
-if [ -n "$CONFIG_REPO" ] && [ "$CONFIG_REPO" != "hermes_agent_context_contatcs" ]; then
-    CONFIG_URL="https://raw.githubusercontent.com/$CONFIG_REPO/main"
-else
-    CONFIG_URL="$RAW_URL"
-fi
-
 # Função auxiliar para fazer download via curl tratando autenticação e erros
 download_file() {
     local url="$1"
@@ -73,6 +62,95 @@ download_file() {
         curl -f -sSL "$url" -o "$output"
     fi
 }
+
+# URL Base para os arquivos de código (bridge, plugins, etc.) do GitHub
+RAW_ROOT="https://raw.githubusercontent.com/$CODE_USER/hermes-whatsapp-mixed/main"
+RAW_URL="$RAW_ROOT/deploy"
+
+# URL para os arquivos de configuração (SOULs, regras, contatos)
+if [ -n "$CONFIG_REPO" ] && [ "$CONFIG_REPO" != "hermes_agent_context_contatcs" ]; then
+    if [[ "$CONFIG_REPO" == *"/"* ]]; then
+        REPO_USER=$(echo "$CONFIG_REPO" | cut -d'/' -f1)
+        REPO_NAME=$(echo "$CONFIG_REPO" | cut -d'/' -f2)
+    else
+        REPO_USER="${CLIENT_GITHUB_USER:-$CODE_USER}"
+        REPO_NAME="$CONFIG_REPO"
+        CONFIG_REPO="$REPO_USER/$REPO_NAME"
+    fi
+
+    echo "🔍 Verificando repositório de configurações '$REPO_USER/$REPO_NAME'..."
+    HTTP_STATUS=$(curl -o /dev/null -s -w "%{http_code}" -H "$CURL_CONFIG_AUTH_HEADER" "https://api.github.com/repos/$REPO_USER/$REPO_NAME")
+    if [ "$HTTP_STATUS" = "404" ] && [ -n "$CONFIG_GITHUB_TOKEN" ]; then
+        echo "  ⚠️ Repositório de configurações '$REPO_USER/$REPO_NAME' não existe. Tentando criar automaticamente..."
+        
+        # Cria o repositório privado via API do GitHub
+        CREATE_RESPONSE=$(curl -s -X POST \
+            -H "Authorization: token $CONFIG_GITHUB_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -d "{\"name\":\"$REPO_NAME\",\"private\":true,\"description\":\"Hermes Configuration Repository\",\"auto_init\":true}" \
+            "https://api.github.com/user/repos")
+        
+        CREATE_STATUS=$(echo "$CREATE_RESPONSE" | grep -o '"id":' | head -n1)
+        if [ -n "$CREATE_STATUS" ]; then
+            echo "  ✓ Repositório privado '$REPO_USER/$REPO_NAME' criado com sucesso!"
+            
+            # Aguarda 3 segundos para o GitHub processar a criação do repositório e do branch main
+            sleep 3
+            
+            # Função para commitar arquivo via API do GitHub
+            commit_file_to_github() {
+                local file_path="$1"
+                local github_path="$2"
+                local content_base64=""
+                if [ -f "$file_path" ]; then
+                    if command -v base64 >/dev/null 2>&1; then
+                        content_base64=$(base64 < "$file_path" | tr -d '\n\r')
+                    elif command -v openssl >/dev/null 2>&1; then
+                        content_base64=$(openssl base64 < "$file_path" | tr -d '\n\r')
+                    fi
+                fi
+                
+                if [ -n "$content_base64" ]; then
+                    curl -s -o /dev/null -X PUT \
+                        -H "Authorization: token $CONFIG_GITHUB_TOKEN" \
+                        -H "Accept: application/vnd.github+json" \
+                        -d "{\"message\":\"Add initial $github_path\",\"content\":\"$content_base64\",\"branch\":\"main\"}" \
+                        "https://api.github.com/repos/$REPO_USER/$REPO_NAME/contents/$github_path"
+                fi
+            }
+            
+            # Baixa temporariamente os templates padrão para commitar no novo repo
+            echo "  📤 Inicializando arquivos padrão no novo repositório..."
+            mkdir -p /tmp/hermes-init-templates
+            
+            download_file "$RAW_ROOT/SOUL.md" "/tmp/hermes-init-templates/SOUL.md" "$CURL_CODE_AUTH_HEADER"
+            download_file "$RAW_ROOT/SOUL_WHATSAPP.md" "/tmp/hermes-init-templates/SOUL_WHATSAPP.md" "$CURL_CODE_AUTH_HEADER"
+            download_file "$RAW_ROOT/SOUL_EMAIL.md" "/tmp/hermes-init-templates/SOUL_EMAIL.md" "$CURL_CODE_AUTH_HEADER"
+            download_file "$RAW_ROOT/support_rules.md" "/tmp/hermes-init-templates/support_rules.md" "$CURL_CODE_AUTH_HEADER"
+            download_file "$RAW_URL/personal_contacts.json.example" "/tmp/hermes-init-templates/personal_contacts.json" "$CURL_CODE_AUTH_HEADER"
+            
+            commit_file_to_github "/tmp/hermes-init-templates/SOUL.md" "SOUL.md"
+            commit_file_to_github "/tmp/hermes-init-templates/SOUL_WHATSAPP.md" "SOUL_WHATSAPP.md"
+            commit_file_to_github "/tmp/hermes-init-templates/SOUL_EMAIL.md" "SOUL_EMAIL.md"
+            commit_file_to_github "/tmp/hermes-init-templates/support_rules.md" "support_rules.md"
+            commit_file_to_github "/tmp/hermes-init-templates/personal_contacts.json" "personal_contacts.json"
+            
+            rm -rf /tmp/hermes-init-templates
+            echo "  ✓ Arquivos padrão inicializados no repositório privado."
+        else
+            echo "  ❌ Falha ao criar repositório automaticamente. Verifique se o CONFIG_GITHUB_TOKEN possui a permissão 'repo'."
+        fi
+    elif [ "$HTTP_STATUS" = "200" ]; then
+        echo "  ✓ Repositório '$REPO_USER/$REPO_NAME' já existe."
+    else
+        echo "  ⚠️ Não foi possível verificar o repositório '$REPO_USER/$REPO_NAME' (HTTP $HTTP_STATUS)."
+    fi
+
+    CONFIG_URL="https://raw.githubusercontent.com/$CONFIG_REPO/main"
+else
+    CONFIG_URL="$RAW_URL"
+fi
+
 
 echo "⏳ 1. Baixando arquivos de configuração e personas..."
 
