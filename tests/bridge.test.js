@@ -421,7 +421,7 @@ test('WhatsApp Bridge Regression Tests', async (t) => {
     assert.strictEqual(mockSock.sentMessages.length, 0, 'Should NOT send auto-reply to group chats');
   });
 
-  await t.test('15. Video message from client in private chat should trigger auto-reply', async () => {
+  await t.test('15. Video message from client in private chat should NOT trigger auto-reply', async () => {
     const clientJid = 'client123@s.whatsapp.net';
     
     mockSock.sentMessages = [];
@@ -443,8 +443,6 @@ test('WhatsApp Bridge Regression Tests', async (t) => {
       type: 'notify'
     });
 
-    assert.strictEqual(mockSock.sentMessages.length, 1, 'Should send auto-reply to private chat');
-    assert.strictEqual(mockSock.sentMessages[0].chatId, clientJid, 'Recipient should be the client');
-    assert.ok(mockSock.sentMessages[0].payload.text.includes('Recebi seu vídeo'), 'Should send correct auto-reply text');
+    assert.strictEqual(mockSock.sentMessages.length, 0, 'Should NOT send auto-reply to private chat');
   });
 });

@@ -464,19 +464,7 @@ let onMessagesUpsert = async ({ messages, type }) => {
           console.error('[bridge] Failed to download video:', err.message);
         }
       } else {
-        if (isGroup) {
-          console.log(`[bridge] Intercepted client video message from group ${chatId}. Skipping auto-reply and LLM.`);
-          continue;
-        }
-        console.log(`[bridge] Intercepted client video message from ${chatId}. Sending auto-reply and skipping LLM.`);
-        try {
-          const sent = await sendWithTimeout(chatId, {
-            text: 'Recebi seu vídeo! Vou dar uma olhada nele mais tarde.'
-          });
-          trackSentMessageId(sent);
-        } catch (err) {
-          console.error('[bridge] Failed to send video auto-reply:', err.message);
-        }
+        console.log(`[bridge] Intercepted client video message from ${chatId}. Skipping video download and ignoring.`);
         continue;
       }
     } else if (messageContent.audioMessage || messageContent.pttMessage) {
