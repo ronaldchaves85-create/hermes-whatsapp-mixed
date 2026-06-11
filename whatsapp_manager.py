@@ -16,6 +16,220 @@ _sender_to_chat: dict[str, str] = {}
 _lid_to_phone: dict[str, str] = {}
 
 
+def _get_media_info(event) -> dict:
+    """Extrai informações de mídia de um objeto de evento de forma extremamente robusta."""
+    info = {
+        "has_media": False,
+        "media_type": None,
+        "media_urls": [],
+        "message_id": None
+    }
+    if not event:
+        return info
+
+    # 1. Tentar ler atributos diretos do objeto event
+    for attr in ["has_media", "hasMedia"]:
+        if hasattr(event, attr):
+            info["has_media"] = getattr(event, attr)
+            break
+            
+    for attr in ["media_type", "mediaType"]:
+        if hasattr(event, attr):
+            info["media_type"] = getattr(event, attr)
+            break
+            
+    for attr in ["media_urls", "mediaUrls"]:
+        if hasattr(event, attr):
+            val = getattr(event, attr)
+            if isinstance(val, list):
+                info["media_urls"] = val
+            elif isinstance(val, str):
+                info["media_urls"] = [val]
+            break
+
+    for attr in ["message_id", "messageId", "id"]:
+        if hasattr(event, attr):
+            info["message_id"] = getattr(event, attr)
+            break
+
+    # 2. Tentar obter a partir de payload bruto (dict) no evento se disponível
+    raw = None
+    for attr in ["raw", "raw_event", "payload", "data"]:
+        if hasattr(event, attr):
+            val = getattr(event, attr)
+            if isinstance(val, dict):
+                raw = val
+                break
+    
+    if isinstance(raw, dict):
+        if not info["has_media"]:
+            info["has_media"] = raw.get("hasMedia") or raw.get("has_media") or False
+        if not info["media_type"]:
+            info["media_type"] = raw.get("mediaType") or raw.get("media_type")
+        if not info["media_urls"]:
+            urls = raw.get("mediaUrls") or raw.get("media_urls") or []
+            if isinstance(urls, list):
+                info["media_urls"] = urls
+            elif isinstance(urls, str):
+                info["media_urls"] = [urls]
+        if not info["message_id"]:
+            info["message_id"] = raw.get("messageId") or raw.get("message_id") or raw.get("id")
+
+    return info
+
+
+def _get_mime_type(file_path: str) -> str:
+    """Retorna o tipo MIME adequado com base na extensão do arquivo."""
+    ext = os.path.splitext(file_path.lower())[1]
+    mime_map = {
+        ".ogg": "audio/ogg",
+        ".m4a": "audio/mp4",
+        ".mp3": "audio/mpeg",
+        ".wav": "audio/wav",
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".png": "image/png",
+        ".webp": "image/webp",
+        ".gif": "image/gif"
+    }
+    return mime_map.get(ext, "application/octet-stream")
+
+
+def _process_media_message(event) -> str | None:
+    """Processa mensagem de mídia (áudio ou imagem) usando a API do Gemini.
+    
+    Retorna a transcrição ou descrição, ou None se falhar/não for mídia.
+    """
+    google_key = os.getenv("GOOGLE_API_KEY", "").strip()
+    if not google_key:
+        print("[whatsapp-manager] Google API Key não configurada para processamento de mídia.")
+        return None
+        
+    media_info = _get_media_info(event)
+    if not media_info["has_media"] or not media_info["media_urls"]:
+        return None
+        
+    media_type = media_info["media_type"]
+    file_path = media_info["media_urls"][0]
+    
+    if not os.path.exists(file_path):
+        print(f"[whatsapp-manager] Arquivo de mídia não encontrado: {file_path}")
+        return None
+        
+    mime_type = _get_mime_type(file_path)
+    
+    # Decidir o prompt com base no tipo de mídia
+    if media_type in ["ptt", "audio"]:
+        prompt = "Transcreva o áudio de forma literal e precisa, em português. Retorne APENAS o texto da transcrição, sem nenhuma introdução, explicação, aspas ou comentários."
+    elif media_type == "image":
+        prompt = "Descreva a imagem detalhadamente em português (identifique textos, objetos e o contexto geral). Retorne APENAS a descrição direta, sem nenhuma introdução, explicações adicionais ou metalinguagem."
+    else:
+        # Outros tipos de mídia não são suportados para transcrição/descrição direta
+        return None
+        
+    try:
+        # Ler o arquivo de mídia e codificar em base64
+        with open(file_path, "rb") as f:
+            base64_data = base64.b64encode(f.read()).decode("utf-8")
+    except Exception as read_err:
+        print(f"[whatsapp-manager] Erro ao ler arquivo de mídia para envio: {read_err}")
+        # Tentar remover mesmo se der erro de leitura
+        try:
+            os.remove(file_path)
+        except Exception:
+            pass
+        return None
+
+    # Remover o arquivo físico após carregar os dados em memória para honrar a diretriz de não armazenar mídias
+    try:
+        os.remove(file_path)
+        print(f"[whatsapp-manager] Arquivo temporário de mídia removido para economizar espaço: {file_path}")
+    except Exception as delete_err:
+        print(f"[whatsapp-manager] Erro ao deletar arquivo de mídia temporário: {delete_err}")
+
+    try:
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key={google_key}"
+        headers = {"Content-Type": "application/json"}
+        payload = {
+            "contents": [{
+                "parts": [
+                    {
+                        "inlineData": {
+                            "mimeType": mime_type,
+                            "data": base64_data
+                        }
+                    },
+                    {
+                        "text": prompt
+                    }
+                ]
+            }]
+        }
+        
+        req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers=headers, method="POST")
+        with urllib.request.urlopen(req, timeout=45) as resp:
+            result = json.loads(resp.read().decode("utf-8"))
+            text_content = result["candidates"][0]["content"]["parts"][0]["text"].strip()
+            return text_content
+    except Exception as e:
+        print(f"[whatsapp-manager] Erro ao processar mídia via Gemini: {e}")
+        return None
+
+
+def _update_db_message(db_path: str, msg_id: str, new_body: str) -> int:
+    """Atualiza o corpo da mensagem no SQLite detectando dinamicamente a coluna de ID."""
+    import sqlite3
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        
+        # Verificar nomes de colunas
+        cursor.execute("PRAGMA table_info(messages)")
+        columns = [row[1] for row in cursor.fetchall()]
+        
+        id_column = None
+        if "message_id" in columns:
+            id_column = "message_id"
+        elif "msg_id" in columns:
+            id_column = "msg_id"
+        elif "id" in columns:
+            id_column = "id"
+            
+        if id_column:
+            cursor.execute(f"UPDATE messages SET body = ? WHERE {id_column} = ?", (new_body, msg_id))
+            conn.commit()
+            updated_rows = cursor.rowcount
+            conn.close()
+            return updated_rows
+        else:
+            conn.close()
+            return -1
+    except Exception as e:
+        print(f"[whatsapp-manager] DB update error para msg_id {msg_id}: {e}")
+        return -2
+
+
+def _persist_transcription_to_db(db_path: str, msg_id: str, new_body: str):
+    """Executa a persistência da transcrição/descrição tratando eventuais race conditions via thread."""
+    # 1. Tentar atualizar imediatamente
+    rows = _update_db_message(db_path, msg_id, new_body)
+    if rows == 0:
+        # Se 0 linhas afetadas, a mensagem pode não ter sido inserida ainda.
+        # Spawna uma thread em background para tentar atualizar com retries.
+        import threading
+        def _bg_update():
+            import time
+            for delay in [1, 3, 5]:
+                time.sleep(delay)
+                r = _update_db_message(db_path, msg_id, new_body)
+                if r > 0:
+                    print(f"[whatsapp-manager] SQLite atualizado em background para msg_id={msg_id}")
+                    break
+        threading.Thread(target=_bg_update, daemon=True).start()
+
+
+
+
 def _resolve_phone_from_jid(jid: str) -> str:
     """Traduz JID do WhatsApp (seja LID ou formato padrão) para JID com telefone clássico usando cache de LIDs."""
     if not jid:
@@ -1397,6 +1611,35 @@ def register(ctx):
         platform_val = getattr(event.source.platform, "value", event.source.platform)
         if platform_val != "whatsapp":
             return None
+
+        # Processamento de Mídia (Áudio e Imagem) via Gemini
+        media_info = _get_media_info(event)
+        if media_info["has_media"] and media_info["media_urls"]:
+            media_type = media_info["media_type"]
+            if media_type in ["ptt", "audio", "image"]:
+                result_text = _process_media_message(event)
+                if result_text:
+                    if media_type in ["ptt", "audio"]:
+                        display_text = f'[Áudio: "{result_text}"]'
+                    else:
+                        display_text = f'[Imagem: {result_text}]'
+                    
+                    # Atualizar o evento em memória
+                    event.text = display_text
+                    if hasattr(event, "body"):
+                        event.body = display_text
+                    for attr in ["raw", "raw_event", "payload", "data"]:
+                        if hasattr(event, attr):
+                            val = getattr(event, attr)
+                            if isinstance(val, dict):
+                                val["body"] = display_text
+                                val["text"] = display_text
+                    
+                    # Atualizar o banco SQLite local do Hermes em background
+                    db_path = Path("/opt/data/.hermes/whatsapp_messages.db")
+                    if db_path.exists() and media_info["message_id"]:
+                        _persist_transcription_to_db(str(db_path), media_info["message_id"], display_text)
+
 
         # Identificar remetente (com resolução de LID para número de telefone clássico)
         sender_id = event.source.user_id or ""

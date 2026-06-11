@@ -10,6 +10,7 @@ from pathlib import Path
 # Add root directory to sys.path to import whatsapp_manager
 sys.path.append(str(Path(__file__).parent.parent))
 
+import whatsapp_manager
 from whatsapp_manager import register
 
 class MockContext:
@@ -798,6 +799,93 @@ class TestWhatsAppManagerPlugin(unittest.IsolatedAsyncioTestCase):
                 self.assertIsNone(res_client)
                 self.assertEqual(gateway_client._session_model_overrides["session_client"]["model"], "my-client-model")
                 self.assertEqual(gateway_client._session_model_overrides["session_client"]["provider"], "openai")
+
+    def test_get_media_info_direct_attrs(self):
+        """Verifica _get_media_info com atributos diretos no objeto."""
+        event = MagicMock()
+        event.has_media = True
+        event.media_type = "ptt"
+        event.media_urls = ["/path/to/voice.ogg"]
+        event.message_id = "msg123"
+        
+        info = whatsapp_manager._get_media_info(event)
+        self.assertTrue(info["has_media"])
+        self.assertEqual(info["media_type"], "ptt")
+        self.assertEqual(info["media_urls"], ["/path/to/voice.ogg"])
+        self.assertEqual(info["message_id"], "msg123")
+
+    def test_get_media_info_dict_payload(self):
+        """Verifica _get_media_info com dicionário interno (raw_event)."""
+        event = MagicMock(spec=[])
+        event.raw_event = {
+            "hasMedia": True,
+            "mediaType": "image",
+            "mediaUrls": "/path/to/photo.jpg",
+            "messageId": "msg456"
+        }
+        
+        info = whatsapp_manager._get_media_info(event)
+        self.assertTrue(info["has_media"])
+        self.assertEqual(info["media_type"], "image")
+        self.assertEqual(info["media_urls"], ["/path/to/photo.jpg"])
+        self.assertEqual(info["message_id"], "msg456")
+
+    def test_get_mime_type(self):
+        """Verifica se _get_mime_type retorna o tipo correto."""
+        self.assertEqual(whatsapp_manager._get_mime_type("audio.ogg"), "audio/ogg")
+        self.assertEqual(whatsapp_manager._get_mime_type("IMAGE.PNG"), "image/png")
+        self.assertEqual(whatsapp_manager._get_mime_type("file.unknown"), "application/octet-stream")
+
+    @patch("os.path.exists", return_value=True)
+    @patch("builtins.open", new_callable=unittest.mock.mock_open, read_data=b"mock-audio-data")
+    @patch("os.remove")
+    @patch("urllib.request.urlopen")
+    @patch.dict(os.environ, {"GOOGLE_API_KEY": "test-key"})
+    def test_process_media_message_audio(self, mock_urlopen, mock_remove, mock_open, mock_exists):
+        """Verifica processamento de áudio com chamada do Gemini mockada."""
+        event = MagicMock()
+        event.has_media = True
+        event.media_type = "ptt"
+        event.media_urls = ["/path/to/voice.ogg"]
+        
+        mock_response = MagicMock()
+        mock_response.read.return_value = json.dumps({
+            "candidates": [{
+                "content": {
+                    "parts": [{
+                        "text": "bom dia, tudo bem?"
+                    }]
+                }
+            }]
+        }).encode("utf-8")
+        mock_urlopen.return_value.__enter__.return_value = mock_response
+
+        text = whatsapp_manager._process_media_message(event)
+        self.assertEqual(text, "bom dia, tudo bem?")
+        mock_remove.assert_called_once_with("/path/to/voice.ogg")
+
+    @patch("sqlite3.connect")
+    def test_update_db_message(self, mock_connect):
+        """Verifica a atualização do banco SQLite com detecção dinâmica de colunas."""
+        mock_conn = MagicMock()
+        mock_cursor = MagicMock()
+        mock_connect.return_value = mock_conn
+        mock_conn.cursor.return_value = mock_cursor
+        
+        # Simula retorno de colunas do PRAGMA table_info
+        # formato pragma table_info: (cid, name, type, notnull, dflt_value, pk)
+        mock_cursor.fetchall.return_value = [
+            (0, "chat_id", "TEXT", 0, None, 0),
+            (1, "message_id", "TEXT", 0, None, 0),
+            (2, "body", "TEXT", 0, None, 0)
+        ]
+        
+        mock_cursor.rowcount = 1
+        
+        updated = whatsapp_manager._update_db_message("/dummy/path.db", "msg123", "new body text")
+        self.assertEqual(updated, 1)
+        mock_cursor.execute.assert_any_call("PRAGMA table_info(messages)")
+        mock_cursor.execute.assert_any_call("UPDATE messages SET body = ? WHERE message_id = ?", ("new body text", "msg123"))
 
 
 if __name__ == "__main__":
