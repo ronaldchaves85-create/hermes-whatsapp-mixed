@@ -83,6 +83,18 @@ Todos os arquivos de deploy de contêineres e configurações avançadas foram m
 
 ---
 
+## ✨ Funcionalidades Principais
+
+* **Classificação inteligente de contatos:** O bot classifica cada contato WhatsApp em perfis (Amigo, Cliente, Vendedor, etc.) usando Gemini 3.5 Flash, gerando `summary`, `intent`, `tone`, `nickname`, `guidelines` personalizados.
+* **Sincronização multi-DB:** Lê de `state.db.sessions` (DB autoritativo do gateway) + `whatsapp_messages.db` (sender_name/histórico) + `state.db.messages` (fallback de histórico) para garantir que todos os 28+ contatos WhatsApp sejam classificados.
+* **Resolução de nome via Baileys:** Para contatos sem `sender_name` no log, consulta `sock.contacts` do Baileys via novo endpoint `/contact/:jid` e cacheia por 24h.
+* **Auto-classificação em tempo real:** Contatos que mandam primeira mensagem são classificados "on-the-fly" durante a conversa.
+* **Comandos de controle no WhatsApp:** `stop_bot`/`start_bot` no self-chat, silenciamento automático de 10 min quando o dono lê ou responde manualmente.
+
+## 🐛 Sessões de Debug & Changelog
+
+* [CHANGELOG_DEBUG.md](CHANGELOG_DEBUG.md) — Histórico completo de bugs corrigidos, features adicionadas e incidentes de segurança.
+
 ## 🧪 Testes de Regressão
 
 Este repositório possui uma suite de testes de regressão automatizados para validar o comportamento da ponte do WhatsApp, garantindo que alterações futuras não quebrem regras de negócio críticas (como comandos de pausa e silenciamento de chats).
@@ -104,6 +116,12 @@ Este repositório possui uma suite de testes de regressão automatizados para va
    ```bash
    npm test
    ```
+
+### Teste de regressão do Gemini (classificação)
+Para validar que o `maxOutputTokens` está adequado ao modelo:
+```bash
+GOOGLE_API_KEY=xxx python3 tests/test_gemini_classification.py
+```
 
 ---
 *Desenvolvido e mantido pela Comunidade Empreendedor Serial (André Alencar).*
