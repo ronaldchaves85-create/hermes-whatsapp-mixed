@@ -175,7 +175,7 @@ def _classify_contact_via_llm(name: str, chat_history: str, stats_info: str) -> 
                 "generationConfig": {"responseMimeType": "application/json"}
             }
             req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers=headers, method="POST")
-            with urllib.request.urlopen(req, timeout=10) as resp:
+            with urllib.request.urlopen(req, timeout=45) as resp:
                 result = json.loads(resp.read().decode("utf-8"))
                 text_content = result["candidates"][0]["content"]["parts"][0]["text"]
                 return _sanitize_classification_result(json.loads(text_content.strip()))
