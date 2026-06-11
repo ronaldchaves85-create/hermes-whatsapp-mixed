@@ -65,6 +65,20 @@ download_file() {
     fi
 }
 
+# Função auxiliar para fazer download de forma segura (sem abortar com set -e)
+safe_download() {
+    local url="$1"
+    local output="$2"
+    local auth_header="$3"
+    local desc="${4:-$output}"
+    if download_file "$url" "$output" "$auth_header"; then
+        return 0
+    else
+        echo "  ⚠️ Falha ao baixar $desc (pode ser seguro ignorar se o arquivo já existir localmente)."
+        return 0
+    fi
+}
+
 # URL Base para os arquivos de código (bridge, plugins, etc.) do GitHub
 RAW_ROOT="https://raw.githubusercontent.com/$CODE_USER/hermes-whatsapp-mixed/main"
 RAW_URL="$RAW_ROOT/deploy"
@@ -125,11 +139,11 @@ if [ -n "$CONFIG_REPO" ] && [ -n "$CONFIG_GITHUB_TOKEN" ]; then
             echo "  📤 Inicializando arquivos padrão no novo repositório..."
             mkdir -p /tmp/hermes-init-templates
             
-            download_file "$RAW_ROOT/SOUL.md" "/tmp/hermes-init-templates/SOUL.md" "$CURL_CODE_AUTH_HEADER"
-            download_file "$RAW_ROOT/SOUL_WHATSAPP.md" "/tmp/hermes-init-templates/SOUL_WHATSAPP.md" "$CURL_CODE_AUTH_HEADER"
-            download_file "$RAW_ROOT/SOUL_EMAIL.md" "/tmp/hermes-init-templates/SOUL_EMAIL.md" "$CURL_CODE_AUTH_HEADER"
-            download_file "$RAW_ROOT/support_rules.md" "/tmp/hermes-init-templates/support_rules.md" "$CURL_CODE_AUTH_HEADER"
-            download_file "$RAW_URL/personal_contacts.json.example" "/tmp/hermes-init-templates/personal_contacts.json" "$CURL_CODE_AUTH_HEADER"
+            safe_download "$RAW_ROOT/SOUL.md" "/tmp/hermes-init-templates/SOUL.md" "$CURL_CODE_AUTH_HEADER" "template SOUL.md"
+            safe_download "$RAW_ROOT/SOUL_WHATSAPP.md" "/tmp/hermes-init-templates/SOUL_WHATSAPP.md" "$CURL_CODE_AUTH_HEADER" "template SOUL_WHATSAPP.md"
+            safe_download "$RAW_ROOT/SOUL_EMAIL.md" "/tmp/hermes-init-templates/SOUL_EMAIL.md" "$CURL_CODE_AUTH_HEADER" "template SOUL_EMAIL.md"
+            safe_download "$RAW_ROOT/support_rules.md" "/tmp/hermes-init-templates/support_rules.md" "$CURL_CODE_AUTH_HEADER" "template support_rules.md"
+            safe_download "$RAW_URL/personal_contacts.json.example" "/tmp/hermes-init-templates/personal_contacts.json" "$CURL_CODE_AUTH_HEADER" "template personal_contacts.json"
             
             commit_file_to_github "/tmp/hermes-init-templates/SOUL.md" "SOUL.md"
             commit_file_to_github "/tmp/hermes-init-templates/SOUL_WHATSAPP.md" "SOUL_WHATSAPP.md"
@@ -224,36 +238,36 @@ fi
 if [ ! -d "/opt/data/.hermes/plugins/whatsapp-manager" ]; then
     echo "⏳ Instalando o plugin whatsapp-manager..."
     mkdir -p "/opt/data/.hermes/plugins/whatsapp-manager"
-    download_file "$RAW_ROOT/plugin.yaml"     "/opt/data/.hermes/plugins/whatsapp-manager/plugin.yaml" "$CURL_CODE_AUTH_HEADER"
-    download_file "$RAW_ROOT/__init__.py"     "/opt/data/.hermes/plugins/whatsapp-manager/__init__.py" "$CURL_CODE_AUTH_HEADER"
-    download_file "$RAW_ROOT/bridge.js"       "/opt/data/.hermes/plugins/whatsapp-manager/bridge.js" "$CURL_CODE_AUTH_HEADER"
-    download_file "$RAW_ROOT/package.json"    "/opt/data/.hermes/plugins/whatsapp-manager/package.json" "$CURL_CODE_AUTH_HEADER"
-    download_file "$RAW_ROOT/google_api.py"   "/opt/data/.hermes/plugins/whatsapp-manager/google_api.py" "$CURL_CODE_AUTH_HEADER"
+    safe_download "$RAW_ROOT/plugin.yaml"     "/opt/data/.hermes/plugins/whatsapp-manager/plugin.yaml" "$CURL_CODE_AUTH_HEADER" "plugin.yaml"
+    safe_download "$RAW_ROOT/__init__.py"     "/opt/data/.hermes/plugins/whatsapp-manager/__init__.py" "$CURL_CODE_AUTH_HEADER" "__init__.py"
+    safe_download "$RAW_ROOT/bridge.js"       "/opt/data/.hermes/plugins/whatsapp-manager/bridge.js" "$CURL_CODE_AUTH_HEADER" "bridge.js"
+    safe_download "$RAW_ROOT/package.json"    "/opt/data/.hermes/plugins/whatsapp-manager/package.json" "$CURL_CODE_AUTH_HEADER" "package.json"
+    safe_download "$RAW_ROOT/google_api.py"   "/opt/data/.hermes/plugins/whatsapp-manager/google_api.py" "$CURL_CODE_AUTH_HEADER" "google_api.py"
     
     # Instalar skills bundled do plugin
     mkdir -p "/opt/data/.hermes/plugins/whatsapp-manager/skills/google-oauth"
-    download_file "$RAW_ROOT/skills/google-oauth/SKILL.md" "/opt/data/.hermes/plugins/whatsapp-manager/skills/google-oauth/SKILL.md" "$CURL_CODE_AUTH_HEADER"
+    safe_download "$RAW_ROOT/skills/google-oauth/SKILL.md" "/opt/data/.hermes/plugins/whatsapp-manager/skills/google-oauth/SKILL.md" "$CURL_CODE_AUTH_HEADER" "skills/google-oauth/SKILL.md"
     mkdir -p "/opt/data/.hermes/plugins/whatsapp-manager/skills/research-sources"
-    download_file "$RAW_ROOT/skills/research-sources/SKILL.md" "/opt/data/.hermes/plugins/whatsapp-manager/skills/research-sources/SKILL.md" "$CURL_CODE_AUTH_HEADER"
+    safe_download "$RAW_ROOT/skills/research-sources/SKILL.md" "/opt/data/.hermes/plugins/whatsapp-manager/skills/research-sources/SKILL.md" "$CURL_CODE_AUTH_HEADER" "skills/research-sources/SKILL.md"
     mkdir -p "/opt/data/.hermes/plugins/whatsapp-manager/skills/whatsapp-logs-diagnostics"
-    download_file "$RAW_ROOT/skills/whatsapp-logs-diagnostics/SKILL.md" "/opt/data/.hermes/plugins/whatsapp-manager/skills/whatsapp-logs-diagnostics/SKILL.md" "$CURL_CODE_AUTH_HEADER"
+    safe_download "$RAW_ROOT/skills/whatsapp-logs-diagnostics/SKILL.md" "/opt/data/.hermes/plugins/whatsapp-manager/skills/whatsapp-logs-diagnostics/SKILL.md" "$CURL_CODE_AUTH_HEADER" "skills/whatsapp-logs-diagnostics/SKILL.md"
     echo "  ✓ Plugin whatsapp-manager instalado com sucesso (incluindo skills e google_api)."
 else
     echo "  - Plugin whatsapp-manager já instalado. Atualizando __init__.py, skills e módulos..."
-    download_file "$RAW_ROOT/__init__.py"   "/opt/data/.hermes/plugins/whatsapp-manager/__init__.py" "$CURL_CODE_AUTH_HEADER"
-    download_file "$RAW_ROOT/google_api.py" "/opt/data/.hermes/plugins/whatsapp-manager/google_api.py" "$CURL_CODE_AUTH_HEADER"
+    safe_download "$RAW_ROOT/__init__.py"   "/opt/data/.hermes/plugins/whatsapp-manager/__init__.py" "$CURL_CODE_AUTH_HEADER" "__init__.py"
+    safe_download "$RAW_ROOT/google_api.py" "/opt/data/.hermes/plugins/whatsapp-manager/google_api.py" "$CURL_CODE_AUTH_HEADER" "google_api.py"
     mkdir -p "/opt/data/.hermes/plugins/whatsapp-manager/skills/google-oauth"
-    download_file "$RAW_ROOT/skills/google-oauth/SKILL.md" "/opt/data/.hermes/plugins/whatsapp-manager/skills/google-oauth/SKILL.md" "$CURL_CODE_AUTH_HEADER"
+    safe_download "$RAW_ROOT/skills/google-oauth/SKILL.md" "/opt/data/.hermes/plugins/whatsapp-manager/skills/google-oauth/SKILL.md" "$CURL_CODE_AUTH_HEADER" "skills/google-oauth/SKILL.md"
     mkdir -p "/opt/data/.hermes/plugins/whatsapp-manager/skills/research-sources"
-    download_file "$RAW_ROOT/skills/research-sources/SKILL.md" "/opt/data/.hermes/plugins/whatsapp-manager/skills/research-sources/SKILL.md" "$CURL_CODE_AUTH_HEADER"
+    safe_download "$RAW_ROOT/skills/research-sources/SKILL.md" "/opt/data/.hermes/plugins/whatsapp-manager/skills/research-sources/SKILL.md" "$CURL_CODE_AUTH_HEADER" "skills/research-sources/SKILL.md"
     mkdir -p "/opt/data/.hermes/plugins/whatsapp-manager/skills/whatsapp-logs-diagnostics"
-    download_file "$RAW_ROOT/skills/whatsapp-logs-diagnostics/SKILL.md" "/opt/data/.hermes/plugins/whatsapp-manager/skills/whatsapp-logs-diagnostics/SKILL.md" "$CURL_CODE_AUTH_HEADER"
+    safe_download "$RAW_ROOT/skills/whatsapp-logs-diagnostics/SKILL.md" "/opt/data/.hermes/plugins/whatsapp-manager/skills/whatsapp-logs-diagnostics/SKILL.md" "$CURL_CODE_AUTH_HEADER" "skills/whatsapp-logs-diagnostics/SKILL.md"
     echo "  ✓ __init__.py, google_api.py e skills atualizados."
 fi
 
 # Baixa o modelo de config.yaml se ele não existir localmente
 if [ ! -f "$BASE_DIR/config.yaml" ]; then
-    download_file "$RAW_URL/config.yaml.example" "$BASE_DIR/config.yaml" "$CURL_CODE_AUTH_HEADER"
+    safe_download "$RAW_URL/config.yaml.example" "$BASE_DIR/config.yaml" "$CURL_CODE_AUTH_HEADER" "config.yaml"
     echo "  ✓ config.yaml inicial configurado."
 else
     echo "  - config.yaml já existe localmente, pulando."
@@ -261,7 +275,9 @@ fi
 
 # Baixa o modelo de chaves de API (.env) se ele não existir localmente
 if [ ! -f "$BASE_DIR/.env" ]; then
-    download_file "$RAW_URL/env.example" "$BASE_DIR/.env" "$CURL_CODE_AUTH_HEADER" || download_file "$RAW_URL/.env.example" "$BASE_DIR/.env" "$CURL_CODE_AUTH_HEADER"
+    if ! download_file "$RAW_URL/env.example" "$BASE_DIR/.env" "$CURL_CODE_AUTH_HEADER"; then
+        safe_download "$RAW_URL/.env.example" "$BASE_DIR/.env" "$CURL_CODE_AUTH_HEADER" ".env"
+    fi
     echo "  ✓ Arquivo de chaves .env inicial criado."
 else
     echo "  - Arquivo .env já existe localmente, pulando."
@@ -271,8 +287,8 @@ fi
 echo "⏳ 2. Baixando e aplicando o Patch do WhatsApp..."
 # Sincroniza o arquivo bridge.js modificado diretamente do repositório
 mkdir -p "/opt/data/.hermes/platforms/whatsapp/bridge"
-download_file "$RAW_ROOT/docs/bridge-artifacts/bridge.js" "/opt/data/.hermes/platforms/whatsapp/bridge/bridge.js" "$CURL_CODE_AUTH_HEADER"
-download_file "$RAW_ROOT/docs/bridge-artifacts/package.json" "/opt/data/.hermes/platforms/whatsapp/bridge/package.json" "$CURL_CODE_AUTH_HEADER"
+safe_download "$RAW_ROOT/docs/bridge-artifacts/bridge.js" "/opt/data/.hermes/platforms/whatsapp/bridge/bridge.js" "$CURL_CODE_AUTH_HEADER" "bridge.js"
+safe_download "$RAW_ROOT/docs/bridge-artifacts/package.json" "/opt/data/.hermes/platforms/whatsapp/bridge/package.json" "$CURL_CODE_AUTH_HEADER" "package.json"
 echo "  ✓ Arquivos bridge.js e package.json sincronizados."
 
 # Corrige o desalinhamento de caminhos da sessão do WhatsApp (symlink antiga -> nova)
@@ -289,23 +305,25 @@ fi
 
 # Baixa os scripts do agente de suporte de e-mail direto do repositório
 mkdir -p "/opt/data/.hermes/scripts"
-download_file "$RAW_URL/scripts/support_agent.py" "/opt/data/.hermes/scripts/support_agent.py" "$CURL_CODE_AUTH_HEADER"
+safe_download "$RAW_URL/scripts/support_agent.py" "/opt/data/.hermes/scripts/support_agent.py" "$CURL_CODE_AUTH_HEADER" "support_agent.py"
 chmod +x "/opt/data/.hermes/scripts/support_agent.py"
 echo "  ✓ support_agent.py sincronizado."
 
 # Baixa o módulo google_api.py (autenticação OAuth2 Gmail)
 mkdir -p "/opt/data/.hermes/skills/productivity/google-workspace/scripts"
-download_file "$RAW_URL/scripts/google_api.py" "/opt/data/.hermes/skills/productivity/google-workspace/scripts/google_api.py" "$CURL_CODE_AUTH_HEADER"
+safe_download "$RAW_URL/scripts/google_api.py" "/opt/data/.hermes/skills/productivity/google-workspace/scripts/google_api.py" "$CURL_CODE_AUTH_HEADER" "google_api.py"
 echo "  ✓ google_api.py sincronizado."
 
 # Baixa o script de autorização OAuth2 (necessário na primeira vez)
-download_file "$RAW_URL/scripts/authorize_google.py" "/opt/data/.hermes/scripts/authorize_google.py" "$CURL_CODE_AUTH_HEADER"
+safe_download "$RAW_URL/scripts/authorize_google.py" "/opt/data/.hermes/scripts/authorize_google.py" "$CURL_CODE_AUTH_HEADER" "authorize_google.py"
 chmod +x "/opt/data/.hermes/scripts/authorize_google.py"
 echo "  ✓ authorize_google.py sincronizado."
 
 # Baixa e executa o patch_whatsapp.py para verificar a integridade
-download_file "$RAW_URL/patch_whatsapp.py" "/tmp/patch_whatsapp.py" "$CURL_CODE_AUTH_HEADER"
-python3 /tmp/patch_whatsapp.py
+safe_download "$RAW_URL/patch_whatsapp.py" "/tmp/patch_whatsapp.py" "$CURL_CODE_AUTH_HEADER" "patch_whatsapp.py"
+if [ -f "/tmp/patch_whatsapp.py" ]; then
+    python3 /tmp/patch_whatsapp.py || echo "  ⚠️ Falha ao executar patch_whatsapp.py"
+fi
 
 
 echo "⏳ 3. Instalando dependências da ponte e de geração de imagem do QR Code..."
