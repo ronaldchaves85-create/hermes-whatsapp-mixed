@@ -331,7 +331,7 @@ class TestWhatsAppManagerPlugin(unittest.IsolatedAsyncioTestCase):
         # Mock rows returned by SELECT
         mock_cursor.fetchall.side_effect = [
             [("5511777777777@s.whatsapp.net", "Bruna")], # Rows for the contacts list
-            [("oi amor te amo",)] # last 15 messages body
+            [(0, "Bruna", "oi amor te amo")] # last 15 messages body (from_me=0, sender_name=Bruna, body)
         ]
         mock_cursor.fetchone.return_value = (10, 1686440000, 1686450000)
         

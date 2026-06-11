@@ -265,12 +265,18 @@ def _sync_contacts_from_db_internal() -> str:
                     # Buscar as últimas 15 mensagens da conversa
                     try:
                         cursor.execute("""
-                            SELECT body FROM messages
+                            SELECT from_me, sender_name, body FROM messages
                             WHERE chat_id = ? AND body IS NOT NULL AND body != ''
                             ORDER BY timestamp DESC LIMIT 15
                         """, (chat_id,))
-                        msgs = [r[0] for r in cursor.fetchall()]
-                        chat_history = " ".join(msgs)
+                        rows_msgs = cursor.fetchall()
+                        rows_msgs.reverse()
+                        
+                        history_lines = []
+                        for f_me, s_name, msg_body in rows_msgs:
+                            sender_lbl = "André" if f_me else (s_name or name or "Contato")
+                            history_lines.append(f"[{sender_lbl}]: {msg_body}")
+                        chat_history = "\n".join(history_lines)
                     except Exception as db_err:
                         print(f"[whatsapp-manager] Erro ao ler histórico para {chat_id}: {db_err}")
                         chat_history = ""
