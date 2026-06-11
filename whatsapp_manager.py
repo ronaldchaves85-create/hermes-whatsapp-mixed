@@ -383,7 +383,14 @@ def register(ctx):
         msg_text = (event.text or "").strip()
 
         # Comando para sincronizar e importar contatos do SQLite para personal_contacts.json e GitHub
-        if is_owner and msg_text.lower() in ["sync_contacts", "importar_contatos", "sync_contatos"]:
+        normalized_msg = msg_text.strip().lower().replace("_", " ").replace("-", " ")
+        sync_commands = [
+            "sync contacts", "sync_contacts",
+            "importar contatos", "importar_contatos",
+            "sync contatos", "sync_contatos",
+            "sincronizar contatos", "sincronizar_contatos"
+        ]
+        if is_owner and normalized_msg in sync_commands:
             print("[whatsapp-manager] Comando de sincronização detectado.")
             import subprocess
             chat_id = str(event.source.chat_id) if event.source.chat_id else ""
