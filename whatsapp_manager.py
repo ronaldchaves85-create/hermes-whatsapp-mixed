@@ -19,6 +19,17 @@ MESSAGE_SERVER_URL = os.getenv("MESSAGE_SERVER_URL", "http://127.0.0.1:18732")
 BRIDGE_URL = os.getenv("WHATSAPP_BRIDGE_URL", "http://127.0.0.1:3000")
 
 
+def _normalize_brazilian_phone(phone: str) -> str:
+    """Normaliza números de telefone brasileiros para comparação segura (tratando o dígito 9 extra)."""
+    clean = "".join(c for c in phone if c.isdigit())
+    if clean.startswith("55") and len(clean) >= 11:
+        ddd = clean[2:4]
+        rest = clean[4:]
+        if len(rest) == 9 and rest.startswith("9"):
+            clean = f"55{ddd}{rest[1:]}"
+    return clean
+
+
 def _check_bot_paused() -> bool:
     """Verifica se o bot está pausado via endpoint do bridge."""
     try:
@@ -511,7 +522,7 @@ def register(ctx):
             return None  # Não definido → plugin não faz nada
 
         clean_owner = "".join(c for c in owner_number.split("@")[0].split(":")[0] if c.isdigit())
-        is_owner = (clean_sender == clean_owner)
+        is_owner = (_normalize_brazilian_phone(clean_sender) == _normalize_brazilian_phone(clean_owner))
         print(f"[whatsapp-manager] DEBUG: clean_owner='{clean_owner}', is_owner={is_owner}")
 
         msg_text = (event.text or "").strip()
@@ -623,7 +634,7 @@ def register(ctx):
         clean_sender = "".join(c for c in sender_id.split("@")[0].split(":")[0] if c.isdigit()) if sender_id else ""
         clean_owner = "".join(c for c in owner_number.split("@")[0].split(":")[0] if c.isdigit())
 
-        if clean_sender == clean_owner:
+        if _normalize_brazilian_phone(clean_sender) == _normalize_brazilian_phone(clean_owner):
             # Assistente Pessoal do André
             return {
                 "context": (
