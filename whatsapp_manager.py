@@ -197,7 +197,7 @@ def _classify_contact_via_llm(name: str, chat_history: str, stats_info: str) -> 
         "- \"nickname\" (apelido): Any nickname used by André to refer to this contact (e.g. \"Bru\", \"Carlos\", etc.). NEVER extract terms the contact uses to refer to André (like \"pai\", \"mãe\", \"tio\", etc.). null if none.\n"
         "- \"pet_name\" (nome carinhoso): Terms of endearment used by André to refer to this contact (e.g. \"amor\", \"vida\", \"querida\", etc.). NEVER extract terms the contact uses to refer to André (like \"pai\", \"mãe\", \"tio\", etc.). null if none.\n"
         "- \"frequent_greeting\" (saudação frequente): The typical greeting phrase used when starting a conversation (e.g. \"Eae mano\", \"Oi amor\", \"Olá\", etc.). null if none.\n"
-        "- \"summary\" (resumo): A brief summary of what they usually talk about (in Portuguese).\n"
+        "- \"summary\" (resumo): Um resumo CURTO (máx 150 caracteres) sobre o que costumam conversar (em português).\n"
         "- \"intent\" (intenção): The main intent or topic of their latest messages (in Portuguese).\n"
         "- \"frequency\" (frequência): The frequency of their conversations (e.g. \"diária\", \"semanal\", \"mensal\", \"esporádica\") based on the statistics and history.\n"
         "- \"product\" (produto): If the relationship is classified as \"Vendedor\", extract the name/type of product or service they are trying to sell. null otherwise.\n\n"
@@ -212,7 +212,7 @@ def _classify_contact_via_llm(name: str, chat_history: str, stats_info: str) -> 
         "  \"intent\": string,\n"
         "  \"frequency\": string,\n"
         "  \"product\": string | null,\n"
-        "  \"guidelines\": \"...\"\n"
+        "  \"guidelines\": \"...máx 200 caracteres...\"\n"
         "}"
     )
 
@@ -223,7 +223,7 @@ def _classify_contact_via_llm(name: str, chat_history: str, stats_info: str) -> 
             headers = {"Content-Type": "application/json"}
             payload = {
                 "contents": [{"parts": [{"text": prompt}]}],
-                "generationConfig": {"responseMimeType": "application/json"}
+                "generationConfig": {"responseMimeType": "application/json", "maxOutputTokens": 512}
             }
             req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers=headers, method="POST")
             with urllib.request.urlopen(req, timeout=45) as resp:
