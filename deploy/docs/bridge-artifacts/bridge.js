@@ -464,6 +464,10 @@ let onMessagesUpsert = async ({ messages, type }) => {
           console.error('[bridge] Failed to download video:', err.message);
         }
       } else {
+        if (isGroup) {
+          console.log(`[bridge] Intercepted client video message from group ${chatId}. Skipping auto-reply and LLM.`);
+          continue;
+        }
         console.log(`[bridge] Intercepted client video message from ${chatId}. Sending auto-reply and skipping LLM.`);
         try {
           const sent = await sendWithTimeout(chatId, {

@@ -393,4 +393,58 @@ test('WhatsApp Bridge Regression Tests', async (t) => {
     assert.ok(!isSystemError('Preciso resolver um problema de integração com a API'), 'Should allow normal developer API discussion in Portuguese');
     assert.ok(!isSystemError('⚠️ Obrigado por avisar!'), 'Should allow regular emoji messages without technical keywords');
   });
+
+  await t.test('14. Video message from client in group should NOT trigger auto-reply', async () => {
+    const groupJid = 'group123@g.us';
+    const clientJid = 'client123@s.whatsapp.net';
+    
+    mockSock.sentMessages = [];
+    
+    await onMessagesUpsert({
+      messages: [{
+        key: {
+          id: 'msg-14',
+          fromMe: false,
+          remoteJid: groupJid,
+          participant: clientJid
+        },
+        message: {
+          videoMessage: {
+            caption: 'Look at this video',
+            mimetype: 'video/mp4'
+          }
+        }
+      }],
+      type: 'notify'
+    });
+
+    assert.strictEqual(mockSock.sentMessages.length, 0, 'Should NOT send auto-reply to group chats');
+  });
+
+  await t.test('15. Video message from client in private chat should trigger auto-reply', async () => {
+    const clientJid = 'client123@s.whatsapp.net';
+    
+    mockSock.sentMessages = [];
+    
+    await onMessagesUpsert({
+      messages: [{
+        key: {
+          id: 'msg-15',
+          fromMe: false,
+          remoteJid: clientJid
+        },
+        message: {
+          videoMessage: {
+            caption: 'Look at this video',
+            mimetype: 'video/mp4'
+          }
+        }
+      }],
+      type: 'notify'
+    });
+
+    assert.strictEqual(mockSock.sentMessages.length, 1, 'Should send auto-reply to private chat');
+    assert.strictEqual(mockSock.sentMessages[0].chatId, clientJid, 'Recipient should be the client');
+    assert.ok(mockSock.sentMessages[0].payload.text.includes('Recebi seu vídeo'), 'Should send correct auto-reply text');
+  });
 });
