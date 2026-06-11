@@ -4,6 +4,8 @@ import os
 import json
 import urllib.request
 import urllib.error
+import base64
+import time
 from pathlib import Path
 
 
@@ -153,6 +155,104 @@ def register(ctx):
             if not target_pkg.exists() or source_pkg.read_bytes() != target_pkg.read_bytes():
                 shutil.copy2(source_pkg, target_pkg)
                 print(f"[whatsapp-manager] package.json atualizado em {target_pkg}")
+
+        # Auto-criação do repositório privado se necessário (Executado no boot de forma 100% transparente)
+        config_repo = os.getenv("CONFIG_REPO", "").strip()
+        config_token = os.getenv("CONFIG_GITHUB_TOKEN", "").strip()
+        setup_user = os.getenv("HERMES_SETUP_GITHUB_USER", "").strip()
+
+        if config_repo and config_token:
+            # Local imports removed to avoid scope issues
+
+            if "/" in config_repo:
+                repo_parts = config_repo.split("/")
+                repo_user = repo_parts[0]
+                repo_name = repo_parts[1]
+            else:
+                repo_user = setup_user or "empreendedorserial"
+                repo_name = config_repo
+
+            repo_url = f"https://api.github.com/repos/{repo_user}/{repo_name}"
+            req = urllib.request.Request(repo_url)
+            req.add_header("Authorization", f"token {config_token}")
+            req.add_header("Accept", "application/vnd.github+json")
+            req.add_header("User-Agent", "Hermes-Agent-Plugin")
+
+            try:
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    if resp.status == 200:
+                        print(f"[whatsapp-manager] ✓ Repositório privado '{repo_user}/{repo_name}' já existe no GitHub.")
+            except urllib.error.HTTPError as e:
+                if e.code == 404:
+                    print(f"[whatsapp-manager] ⚠️ Repositório '{repo_user}/{repo_name}' não existe. Tentando criar automaticamente...")
+                    create_url = "https://api.github.com/user/repos"
+                    create_data = json.dumps({
+                        "name": repo_name,
+                        "private": True,
+                        "description": "Hermes Configuration Repository",
+                        "auto_init": True
+                    }).encode("utf-8")
+
+                    create_req = urllib.request.Request(create_url, data=create_data, method="POST")
+                    create_req.add_header("Authorization", f"token {config_token}")
+                    create_req.add_header("Accept", "application/vnd.github+json")
+                    create_req.add_header("User-Agent", "Hermes-Agent-Plugin")
+                    create_req.add_header("Content-Type", "application/json")
+
+                    try:
+                        with urllib.request.urlopen(create_req, timeout=10) as create_resp:
+                            if create_resp.status in [200, 201]:
+                                print(f"[whatsapp-manager] ✓ Repositório privado '{repo_user}/{repo_name}' criado com sucesso no GitHub!")
+                                time.sleep(3) # Aguarda o GitHub provisionar o branch main
+
+                                # Função auxiliar para commitar via API
+                                def commit_file_to_repo(local_path, github_path, default_url):
+                                    content = b""
+                                    if os.path.exists(local_path):
+                                        try:
+                                            with open(local_path, "rb") as f:
+                                                content = f.read()
+                                        except Exception:
+                                            pass
+                                    if not content and default_url:
+                                        try:
+                                            with urllib.request.urlopen(default_url, timeout=10) as r:
+                                                content = r.read()
+                                        except Exception as dl_err:
+                                            print(f"[whatsapp-manager] Erro ao baixar template {github_path}: {dl_err}")
+
+                                    if content:
+                                        content_b64 = base64.b64encode(content).decode("utf-8")
+                                        put_url = f"https://api.github.com/repos/{repo_user}/{repo_name}/contents/{github_path}"
+                                        put_data = json.dumps({
+                                            "message": f"Add initial {github_path}",
+                                            "content": content_b64,
+                                            "branch": "main"
+                                        }).encode("utf-8")
+
+                                        put_req = urllib.request.Request(put_url, data=put_data, method="PUT")
+                                        put_req.add_header("Authorization", f"token {config_token}")
+                                        put_req.add_header("Accept", "application/vnd.github+json")
+                                        put_req.add_header("User-Agent", "Hermes-Agent-Plugin")
+                                        put_req.add_header("Content-Type", "application/json")
+
+                                        try:
+                                            with urllib.request.urlopen(put_req, timeout=10) as put_resp:
+                                                if put_resp.status in [200, 201]:
+                                                    print(f"[whatsapp-manager] ✓ Arquivo '{github_path}' inicializado no repositório.")
+                                        except Exception as put_err:
+                                            print(f"[whatsapp-manager] Erro ao commitar {github_path}: {put_err}")
+
+                                raw_base = "https://raw.githubusercontent.com/empreendedorserial/hermes-whatsapp-mixed/main/deploy"
+                                commit_file_to_repo("/opt/data/SOUL.md", "SOUL.md", f"{raw_base}/SOUL.md")
+                                commit_file_to_repo("/opt/data/SOUL_WHATSAPP.md", "SOUL_WHATSAPP.md", f"{raw_base}/SOUL_WHATSAPP.md")
+                                commit_file_to_repo("/opt/data/SOUL_EMAIL.md", "SOUL_EMAIL.md", f"{raw_base}/SOUL_EMAIL.md")
+                                commit_file_to_repo("/opt/data/support_rules.md", "support_rules.md", f"{raw_base}/support_rules.md")
+                                commit_file_to_repo("/opt/data/personal_contacts.json", "personal_contacts.json", f"{raw_base}/personal_contacts.json.example")
+                    except Exception as create_err:
+                        print(f"[whatsapp-manager] ⚠️ Erro ao criar repositório: {create_err}")
+            except Exception as check_err:
+                print(f"[whatsapp-manager] ⚠️ Erro ao verificar repositório no GitHub: {check_err}")
 
         # 3. Bootstrap automático de personas e regras (se ausentes no volume)
         github_user = (os.getenv("HERMES_SETUP_GITHUB_USER") or os.getenv("DEV_GITHUB_USER") or "empreendedorserial").strip()
