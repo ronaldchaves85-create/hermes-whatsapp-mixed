@@ -42,6 +42,59 @@ function addRecentLog(level, message) {
     recentLogs.shift();
   }
 }
+
+// Buckets de erros para o /whatsapp/debug
+const errorCounters = {
+  llm_400: 0,           // API key invalid / expired
+  llm_403: 0,           // Forbidden (quota/billing/revoked)
+  llm_429: 0,           // Rate limit
+  llm_5xx: 0,           // Upstream errors
+  llm_timeout: 0,       // Timeout na chamada
+  llm_other: 0,         // Outros erros LLM
+  bridge_send_failed: 0,
+  bridge_send_timeout: 0,
+  auth_revoked: 0,      // WhatsApp desconectou por revogacao
+  lastErrors: [],       // Ultimos 20 erros categorizados
+};
+const MAX_LAST_ERRORS = 20;
+
+function classifyAndCountError(message) {
+  if (!message || typeof message !== 'string') return;
+  const m = message.toLowerCase();
+  let category = null;
+  if (m.includes('http 400') || m.includes('invalid_argument') || m.includes('api key expired') || m.includes('api key not valid')) {
+    errorCounters.llm_400++; category = 'llm_400';
+  } else if (m.includes('http 403') || m.includes('forbidden') || m.includes('permission_denied')) {
+    errorCounters.llm_403++; category = 'llm_403';
+  } else if (m.includes('http 429') || m.includes('rate limit') || m.includes('too many requests')) {
+    errorCounters.llm_429++; category = 'llm_429';
+  } else if (m.includes('http 5') || m.includes('internal server error') || m.includes('bad gateway') || m.includes('service unavailable')) {
+    errorCounters.llm_5xx++; category = 'llm_5xx';
+  } else if (m.includes('timed out') || m.includes('timeout') || m.includes('etimedout')) {
+    errorCounters.llm_timeout++; category = 'llm_timeout';
+  }
+  if (category) {
+    errorCounters.lastErrors.push({
+      ts: new Date().toISOString(),
+      category,
+      message: message.slice(0, 300),
+    });
+    if (errorCounters.lastErrors.length > MAX_LAST_ERRORS) {
+      errorCounters.lastErrors.shift();
+    }
+  }
+}
+
+// Contadores de atividade
+const activityCounters = {
+  messagesReceived: 0,
+  messagesSent: 0,
+  messagesSendFailed: 0,
+  messagesEnqueued: 0,
+  classificationSuccess: 0,
+  classificationFailed: 0,
+  startTime: new Date().toISOString(),
+};
 const originalLog = console.log;
 const originalError = console.error;
 const originalWarn = console.warn;
@@ -51,11 +104,15 @@ console.log = (...args) => {
 };
 console.error = (...args) => {
   originalError.apply(console, args);
-  addRecentLog('error', args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '));
+  const msg = args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ');
+  addRecentLog('error', msg);
+  classifyAndCountError(msg);
 };
 console.warn = (...args) => {
   originalWarn.apply(console, args);
-  addRecentLog('warn', args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '));
+  const msg = args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ');
+  addRecentLog('warn', msg);
+  classifyAndCountError(msg);
 };
 
 // Parse CLI args
@@ -595,6 +652,12 @@ let onMessagesUpsert = async ({ messages, type }) => {
     if (messageQueue.length > MAX_QUEUE_SIZE) {
       messageQueue.shift();
     }
+    activityCounters.messagesEnqueued++;
+    if (event && event.fromMe) {
+      activityCounters.messagesSent++;
+    } else {
+      activityCounters.messagesReceived++;
+    }
   }
 };
 
@@ -644,6 +707,7 @@ async function startSocket() {
       connectionState = 'disconnected';
 
       if (reason === DisconnectReason.loggedOut) {
+        errorCounters.auth_revoked++;
         console.log('❌ Logged out. Delete session and restart to re-authenticate.');
         try {
           if (existsSync(SESSION_DIR)) {
@@ -811,12 +875,20 @@ app.get('/whatsapp/debug', (req, res) => {
     sessionFilesCount = readdirSync(SESSION_DIR).length;
   } catch {}
 
+  // Caches em memoria (para inspecao)
+  const silencedCount = Object.keys(silencedChats).length;
+  const cachedContacts = contactNameCache.size;
+
+  // Throttling de erros no output para nao estourar tamanho da resposta
+  const filteredLogs = recentLogs.slice(-30);
+
   res.json({
     status: connectionState,
     qrAvailable: !!currentQr,
     currentQrAt,
     botPaused,
     uptime: process.uptime(),
+    uptimeHuman: formatUptime(process.uptime()),
     memoryUsage: process.memoryUsage(),
     session: {
       directory: SESSION_DIR,
@@ -829,10 +901,67 @@ app.get('/whatsapp/debug', (req, res) => {
       WHATSAPP_OWNER_NUMBER,
       WHATSAPP_CONNECTION_NAME,
       PORT,
+      WHATSAPP_SILENCE_DURATION_MIN,
+      WHATSAPP_DEBUG: !!WHATSAPP_DEBUG,
     },
-    recentLogs,
+    counters: {
+      ...activityCounters,
+      silencedChatsActive: silencedCount,
+      silencedChats: silencedChats,
+      queueSize: messageQueue.length,
+      recentlySentIdsSize: recentlySentIds.size,
+      cachedContactNames: cachedContacts,
+      lidToPhoneMappings: Object.keys(lidToPhone).length,
+    },
+    errors: errorCounters,
+    // Lista de problemas ativos detectados
+    alerts: buildAlerts(errorCounters, activityCounters, connectionState, botPaused),
+    recentLogs: filteredLogs,
   });
 });
+
+function formatUptime(seconds) {
+  const d = Math.floor(seconds / 86400);
+  const h = Math.floor((seconds % 86400) / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = Math.floor(seconds % 60);
+  if (d > 0) return `${d}d ${h}h ${m}m ${s}s`;
+  if (h > 0) return `${h}h ${m}m ${s}s`;
+  if (m > 0) return `${m}m ${s}s`;
+  return `${s}s`;
+}
+
+function buildAlerts(errors, activity, connState, paused) {
+  const alerts = [];
+  if (connState !== 'connected') {
+    alerts.push({ severity: 'critical', message: `Bridge desconectada do WhatsApp (status: ${connState})` });
+  }
+  if (errors.llm_400 > 0) {
+    alerts.push({ severity: 'critical', message: `Gemini retornou 400 ${errors.llm_400}x - chave API provavelmente expirada ou invalida` });
+  }
+  if (errors.llm_403 > 0) {
+    alerts.push({ severity: 'critical', message: `Gemini retornou 403 ${errors.llm_403}x - chave revogada, billing bloqueado, ou IP bloqueado` });
+  }
+  if (errors.llm_429 > 5) {
+    alerts.push({ severity: 'warning', message: `Rate limit do Gemini atingido ${errors.llm_429}x - considere throttling ou upgrade de plano` });
+  }
+  if (errors.llm_5xx > 3) {
+    alerts.push({ severity: 'warning', message: `Gemini retornou 5xx ${errors.llm_5xx}x - problemas no upstream do Google` });
+  }
+  if (errors.llm_timeout > 3) {
+    alerts.push({ severity: 'warning', message: `${errors.llm_timeout} timeouts na chamada ao Gemini - rede instavel ou modelo lento` });
+  }
+  if (errors.bridge_send_failed > 5) {
+    alerts.push({ severity: 'warning', message: `${errors.bridge_send_failed} envios para WhatsApp falharam - verificar conectividade` });
+  }
+  if (paused) {
+    alerts.push({ severity: 'info', message: 'Bot esta globalmente pausado (stop_bot foi acionado)' });
+  }
+  if (activity.messagesSendFailed > 0 && activity.messagesSendFailed > activity.messagesSent * 0.1) {
+    alerts.push({ severity: 'warning', message: `Taxa de falha de envio alta: ${activity.messagesSendFailed}/${activity.messagesSent}` });
+  }
+  return alerts;
+}
 
 function isSystemError(message) {
   if (!message || typeof message !== 'string') return false;
@@ -942,6 +1071,12 @@ app.post('/send', async (req, res) => {
       messageIds,
     });
   } catch (err) {
+    if (err && err.message && err.message.includes('timed out')) {
+      errorCounters.bridge_send_timeout++;
+    } else {
+      errorCounters.bridge_send_failed++;
+    }
+    activityCounters.messagesSendFailed++;
     res.status(500).json({ error: err.message });
   }
 });
