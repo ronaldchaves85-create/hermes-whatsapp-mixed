@@ -486,18 +486,24 @@ Esses testes validam automaticamente:
 
 Para garantir que o robô seja 100% autossuficiente e livre de manutenção para clientes leigos (mesmo que o contêiner Docker fique em execução ininterrupta por 1 ano), implementamos as seguintes rotinas automatizadas no plugin:
 
-### 1. Sincronização Periódica de Regras e Personas (GitHub ➔ Servidor)
-* **Como funciona:** A cada **1 hora**, o contêiner baixa automaticamente do seu repositório de configurações do GitHub as últimas versões de `SOUL.md`, `SOUL_WHATSAPP.md`, `SOUL_EMAIL.md`, `support_rules.md` e `personal_contacts.json`.
-* **Merge Inteligente:** No caso do `personal_contacts.json`, o plugin faz uma mesclagem inteligente: prioriza edições e nomes que você modificou diretamente no GitHub, enquanto mantém contatos recém-descobertos localmente.
-* **Benefício:** Você edita suas regras ou tons de voz visualmente no GitHub e elas entram em vigor no robô sozinhas, sem precisar abrir o console do Portainer ou digitar comandos de setup.
+### 1. Sincronização Periódica e Inteligente (GitHub ➔ Servidor)
+* **Puxada de Configurações (A cada 1 hora):** O contêiner baixa do seu repositório privado do GitHub as últimas versões de `SOUL.md`, `SOUL_WHATSAPP.md`, `SOUL_EMAIL.md`, `support_rules.md` e `personal_contacts.json`.
+* **Sincronização de Contatos do Banco (A cada 24 horas):** Para otimizar o uso de chaves da API de IA com grandes listas de contatos, a varredura e classificação automática em lote a partir do banco de dados local SQLite (`whatsapp_messages.db`) executa a cada 24 horas (no boot e em background).
+* **Merge Inteligente:** No caso do `personal_contacts.json`, o plugin mescla os dados locais com as modificações que você fez no GitHub, garantindo que as edições manuais persistam de forma estável.
 
 ### 2. Auto-Update de Código com Reinício Automático
 * **Como funciona:** A cada **24 horas** (e a cada inicialização), o plugin checa o repositório de código fonte do desenvolvedor em busca de correções de bug ou novos recursos.
 * **Reinício Seguro:** Se houver novas atualizações de arquivos críticos (como `whatsapp_manager.py` ou `bridge.js`), o plugin baixa as novidades e encerra o processo de forma limpa. O Docker Compose, configurado com política de restart, reinicia o contêiner automaticamente em segundos para aplicar o novo código.
 
-### 3. Classificação de Novos Contatos em Tempo Real (On-Demand)
-* **Como funciona:** Se um novo contato enviar uma mensagem, ele é classificado **imediatamente na primeira interação** (usando a análise de histórico e estatísticas via SQLite).
-* **Benefício comercial:** Evita que amigos ou parceiros recebam a primeira resposta no tom formal padrão de suporte comercial (cliente/contato). O bot assume a persona e gírias corretas na mesma hora e dispara um push em segundo plano para persistir a classificação no seu GitHub de forma permanente.
+### 3. Classificação Dinâmica e Blindagem de Contatos
+O robô estende o arquivo `personal_contacts.json` para mapear de forma inteligente e manual os contatos individuais:
+* **Perfis de Classificação Expandidos:** O contato é automaticamente categorizado pela IA (ou manualmente por você) em uma destas categorias: `Vendedor`, `Cliente`, `Amigo`, `AmigoProximo`, `Parente` ou `Filho`.
+* **Bloqueio Manual (`manual_relationship`):** Para travar uma categoria de relacionamento específica (ex: definir um contato como `Filho` ou `Parente`) e impedir que a IA reclassifique o contato no futuro, basta definir esse valor no campo `manual_relationship` (ou na propriedade `relationship`). O sincronizador migra e blinda automaticamente classificações específicas para que não sejam sobrescritas pela IA.
+* **Comportamento Direcionado por Notas (`notes`):** Permite adicionar observações personalizadas sobre o contato (ex: *"Sempre agradeça e informe que não tenho interesse no momento"*). Estas diretrizes são injetadas como **Guideline de Alta Prioridade** no contexto do bot, fazendo com que a IA se comporte exatamente conforme as instruções inseridas.
+* **Produto Comercializado (`product`):** Para contatos categorizados como `Vendedor`, o bot extrai da conversa ou permite definir manualmente o produto/serviço que está sendo oferecido, ajudando na tomada de decisões.
+* **Classificação em Tempo Real (On-Demand) e Segurança de Cota:**
+  * Se um novo contato mandar mensagem, ele é classificado **imediatamente na primeira interação** (se tiver $\ge 3$ mensagens no histórico).
+  * Para evitar estourar limites de chamadas da API de IA durante sincronizações volumosas, os contatos que excederem o limite padrão são salvos como `"Pendente de classificação."` e adicionados à lista, sendo então classificados automaticamente em tempo real assim que interagirem com o bot.
 
 ---
 
