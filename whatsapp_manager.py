@@ -529,6 +529,12 @@ def register(ctx):
 
         # Comando para sincronizar e importar contatos do SQLite para personal_contacts.json e GitHub
         normalized_msg = msg_text.strip().lower().replace("_", " ").replace("-", " ")
+        try:
+            with open("/opt/data/whatsapp_manager_debug.log", "a", encoding="utf-8") as debug_f:
+                import time
+                debug_f.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] sender='{sender_id}' (clean='{clean_sender}', norm='{_normalize_brazilian_phone(clean_sender)}') owner='{owner_number}' (clean='{clean_owner}', norm='{_normalize_brazilian_phone(clean_owner)}') is_owner={is_owner} msg='{msg_text}' normalized='{normalized_msg}'\n")
+        except Exception as log_e:
+            print(f"[whatsapp-manager] Erro ao gravar debug log: {log_e}")
         sync_commands = [
             "sync contacts", "sync_contacts",
             "importar contatos", "importar_contatos",
