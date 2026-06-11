@@ -789,8 +789,16 @@ def _self_update_plugin_code() -> bool:
 
     raw_root = f"https://raw.githubusercontent.com/{github_user}/hermes-whatsapp-mixed/main"
     plugin_dir = Path("/opt/data/.hermes/plugins/whatsapp-manager")
+
+    # NUNCA usar Path(__file__).parent como fallback — isso gravaria dentro do
+    # repositório git do container e quebraria o git pull do Hermes.
+    # Se o plugin_dir não existir, criar ele. Se não conseguir, abortar.
     if not plugin_dir.exists():
-        plugin_dir = Path(__file__).parent
+        try:
+            plugin_dir.mkdir(parents=True, exist_ok=True)
+        except Exception as mkdir_err:
+            print(f"[whatsapp-manager] Code Update: Não foi possível criar plugin_dir: {mkdir_err}. Abortando update.")
+            return False
 
     files_to_update = {
         "plugin.yaml": f"{raw_root}/plugin.yaml",
