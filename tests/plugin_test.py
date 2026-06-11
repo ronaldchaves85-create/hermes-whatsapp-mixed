@@ -41,7 +41,9 @@ class TestWhatsAppManagerPlugin(unittest.IsolatedAsyncioTestCase):
              patch("pathlib.Path.write_text"), \
              patch("shutil.copy2"), \
              patch("urllib.request.urlopen"), \
-             patch("whatsapp_manager._ensure_google_libs"):
+             patch("whatsapp_manager._ensure_google_libs"), \
+             patch("whatsapp_manager._pull_and_merge_configurations"), \
+             patch("whatsapp_manager._self_update_plugin_code", return_value=False):
             register(self.ctx)
 
     def tearDown(self):
@@ -174,7 +176,7 @@ class TestWhatsAppManagerPlugin(unittest.IsolatedAsyncioTestCase):
             "sender_id": "5511777777777:2@s.whatsapp.net" # A personal contact (Bruna)
         }
 
-        personal_json = '{"5511777777777@s.whatsapp.net": {"name": "Bruna", "relationship": "namorada", "tone": "romantico", "guidelines": "Seja fofo"}}'
+        personal_json = '{"5511777777777@s.whatsapp.net": {"name": "Bruna", "relationship": "namorada", "tone": "romantico", "guidelines": "Seja fofo", "summary": "Conversa carinhosa.", "intent": "Amor", "frequency": "diária"}}'
         mock_pc_open = unittest.mock.mock_open(read_data=personal_json)
         mock_rules_open = unittest.mock.mock_open(read_data="Soul/Rules content")
 
@@ -393,6 +395,69 @@ class TestWhatsAppManagerPlugin(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(carlos_data["tone"], "descontraído")
         self.assertEqual(carlos_data["guidelines"], "Fale como amigo")
         self.assertEqual(carlos_data["summary"], "Conversa antiga")
+
+    @patch("sqlite3.connect")
+    @patch("whatsapp_manager._classify_contact_via_llm")
+    @patch("pathlib.Path.exists")
+    @patch("os.path.exists")
+    @patch("builtins.open")
+    def test_pre_llm_call_live_classification(self, mock_open, mock_os_exists, mock_path_exists, mock_classify, mock_sqlite_connect):
+        pre_llm = self.ctx.hooks.get("pre_llm_call")
+        
+        # Um contato que não está no personal_contacts.json (classifica on-the-fly)
+        context = {
+            "platform": "whatsapp",
+            "sender_id": "5511666666666@s.whatsapp.net"
+        }
+        
+        # Mocks para arquivos existirem
+        mock_os_exists.return_value = True
+        mock_path_exists.return_value = True
+        
+        # personal_contacts.json vazio inicialmente
+        mock_pc_open = unittest.mock.mock_open(read_data="{}")
+        mock_rules_open = unittest.mock.mock_open(read_data="Soul/Rules content")
+        
+        def mock_open_file(path, *args, **kwargs):
+            if "personal_contacts.json" in str(path):
+                return mock_pc_open(path, *args, **kwargs)
+            return mock_rules_open(path, *args, **kwargs)
+            
+        mock_open.side_effect = mock_open_file
+        
+        # Mock do SQLite para retornar histórico e estatísticas
+        mock_conn = MagicMock()
+        mock_cursor = MagicMock()
+        mock_sqlite_connect.return_value = mock_conn
+        mock_conn.cursor.return_value = mock_cursor
+        mock_cursor.fetchone.return_value = (5, 1686440000, 1686450000, "Live Test Contact")
+        mock_cursor.fetchall.return_value = [
+            (0, "Live Test Contact", "olá tudo bem"),
+            (1, "André", "tudo bem e com vc")
+        ]
+        
+        # Mock do LLM
+        mock_classify.return_value = {
+            "relationship": "amigo/namorada",
+            "tone": "informal e amigável",
+            "nickname": "Live",
+            "pet_name": None,
+            "frequent_greeting": "Eae",
+            "summary": "Conversa de teste ao vivo.",
+            "intent": "Interagir",
+            "frequency": "diária",
+            "guidelines": "Seja descontraído."
+        }
+        
+        with patch("whatsapp_manager._fetch_chat_history", return_value=""):
+            res = pre_llm("pre_llm_call", context)
+            
+        # O LLM de classificação foi chamado on-the-fly
+        mock_classify.assert_called_once()
+        self.assertIsNotNone(res)
+        self.assertIn("RESPONDENDO COMO ANDRÉ ALENCAR", res["context"])
+        self.assertIn("Nome do contato: Live Test Contact", res["context"])
+        self.assertIn("Relação com o André: amigo/namorada", res["context"])
 
 if __name__ == "__main__":
     unittest.main()

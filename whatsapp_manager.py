@@ -501,6 +501,176 @@ def _ensure_google_libs():
         print(f"[whatsapp-manager] ⚠️ Erro ao instalar libs Google: {e}")
 
 
+def _pull_and_merge_configurations():
+    """Baixa as configurações do repositório privado do GitHub do cliente e faz merge com o local."""
+    config_repo = os.getenv("CONFIG_REPO", "").strip()
+    config_token = os.getenv("CONFIG_GITHUB_TOKEN", "").strip()
+    setup_user = os.getenv("HERMES_SETUP_GITHUB_USER", "").strip()
+    dev_user = os.getenv("DEV_GITHUB_USER", "").strip()
+
+    if not config_repo:
+        config_repo = "hermes_agent_context_contatcs"
+
+    if "/" in config_repo:
+        repo_parts = config_repo.split("/")
+        repo_user = repo_parts[0]
+        repo_name = repo_parts[1]
+    else:
+        repo_user = setup_user or dev_user or "empreendedorserial"
+        repo_name = config_repo
+
+    config_base_url = f"https://raw.githubusercontent.com/{repo_user}/{repo_name}/main"
+
+    # 1. Sincronizar SOUL.md, SOUL_WHATSAPP.md, SOUL_EMAIL.md e support_rules.md
+    bootstrap_files = {
+        "/opt/data/SOUL.md": f"{config_base_url}/SOUL.md",
+        "/opt/data/SOUL_WHATSAPP.md": f"{config_base_url}/SOUL_WHATSAPP.md",
+        "/opt/data/SOUL_EMAIL.md": f"{config_base_url}/SOUL_EMAIL.md",
+        "/opt/data/support_rules.md": f"{config_base_url}/support_rules.md",
+    }
+
+    for path_str, url in bootstrap_files.items():
+        path_obj = Path(path_str)
+        try:
+            req = urllib.request.Request(url)
+            if config_token:
+                req.add_header("Authorization", f"token {config_token}")
+            req.add_header("User-Agent", "Hermes-Agent-Plugin")
+            with urllib.request.urlopen(req, timeout=10) as response:
+                content = response.read()
+                if content:
+                    path_obj.parent.mkdir(parents=True, exist_ok=True)
+                    path_obj.write_bytes(content)
+                    print(f"[whatsapp-manager] ✓ {path_str} atualizado do GitHub.")
+        except Exception as e:
+            print(f"[whatsapp-manager] ⚠️ Falha ao baixar {path_str} de {url}: {e}")
+
+    # Copiar personas para perfis locais correspondentes
+    try:
+        import shutil
+        soul_whatsapp_path = Path("/opt/data/SOUL_WHATSAPP.md")
+        profile_wa_soul = Path("/opt/data/.hermes/profiles/whatsapp/SOUL.md")
+        if soul_whatsapp_path.exists():
+            profile_wa_soul.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(soul_whatsapp_path, profile_wa_soul)
+
+        soul_email_path = Path("/opt/data/SOUL_EMAIL.md")
+        profile_em_soul = Path("/opt/data/.hermes/profiles/email/SOUL.md")
+        if soul_email_path.exists():
+            profile_em_soul.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy2(soul_email_path, profile_em_soul)
+    except Exception as copy_err:
+        print(f"[whatsapp-manager] ⚠️ Falha ao copiar personas para perfis locais: {copy_err}")
+
+    # 2. Sincronizar personal_contacts.json (merge)
+    personal_contacts_path = Path("/opt/data/personal_contacts.json")
+    local_contacts = {}
+    if personal_contacts_path.exists():
+        try:
+            with open(personal_contacts_path, "r", encoding="utf-8") as f:
+                local_contacts = json.load(f)
+        except Exception as e:
+            print(f"[whatsapp-manager] Erro ao carregar local personal_contacts.json: {e}")
+
+    remote_url = f"{config_base_url}/personal_contacts.json"
+    remote_contacts = None
+    try:
+        req = urllib.request.Request(remote_url)
+        if config_token:
+            req.add_header("Authorization", f"token {config_token}")
+        req.add_header("User-Agent", "Hermes-Agent-Plugin")
+        with urllib.request.urlopen(req, timeout=10) as response:
+            remote_contacts = json.loads(response.read().decode("utf-8"))
+            print(f"[whatsapp-manager] ✓ personal_contacts.json remoto carregado com sucesso.")
+    except Exception as e:
+        print(f"[whatsapp-manager] ⚠️ Não foi possível baixar personal_contacts.json do GitHub: {e}")
+
+    if remote_contacts is not None:
+        # Mesclar local e remoto
+        merged = {}
+        # Priorizar remoto
+        merged.update(remote_contacts)
+        # Manter locais novos
+        for k, v in local_contacts.items():
+            if k not in merged:
+                merged[k] = v
+        
+        try:
+            with open(personal_contacts_path, "w", encoding="utf-8") as f:
+                json.dump(merged, f, indent=2, ensure_ascii=False)
+            print(f"[whatsapp-manager] ✓ Contatos mesclados localmente.")
+        except Exception as e:
+            print(f"[whatsapp-manager] Erro ao salvar personal_contacts.json mesclado: {e}")
+
+
+def _self_update_plugin_code() -> bool:
+    """Atualiza o código do plugin a partir do repositório Git. Retorna True se houve mudanças no próprio plugin."""
+    github_user = (os.getenv("HERMES_SETUP_GITHUB_USER") or os.getenv("DEV_GITHUB_USER") or "empreendedorserial").strip()
+    code_token = os.getenv("DEV_GITHUB_TOKEN", "").strip()
+
+    raw_root = f"https://raw.githubusercontent.com/{github_user}/hermes-whatsapp-mixed/main"
+    plugin_dir = Path("/opt/data/.hermes/plugins/whatsapp-manager")
+    if not plugin_dir.exists():
+        plugin_dir = Path(__file__).parent
+
+    files_to_update = {
+        "plugin.yaml": f"{raw_root}/plugin.yaml",
+        "__init__.py": f"{raw_root}/__init__.py",
+        "whatsapp_manager.py": f"{raw_root}/whatsapp_manager.py",
+        "bridge.js": f"{raw_root}/bridge.js",
+        "package.json": f"{raw_root}/package.json",
+        "google_api.py": f"{raw_root}/google_api.py",
+    }
+
+    skills_to_update = {
+        "skills/google-oauth/SKILL.md": f"{raw_root}/skills/google-oauth/SKILL.md",
+        "skills/research-sources/SKILL.md": f"{raw_root}/skills/research-sources/SKILL.md",
+        "skills/whatsapp-logs-diagnostics/SKILL.md": f"{raw_root}/skills/whatsapp-logs-diagnostics/SKILL.md",
+    }
+
+    updated_any = False
+    
+    # Atualizar arquivos principais
+    for filename, url in files_to_update.items():
+        local_path = plugin_dir / filename
+        try:
+            req = urllib.request.Request(url)
+            if code_token:
+                req.add_header("Authorization", f"token {code_token}")
+            req.add_header("User-Agent", "Hermes-Agent-Plugin")
+            with urllib.request.urlopen(req, timeout=15) as response:
+                content = response.read()
+                if content:
+                    if not local_path.exists() or local_path.read_bytes() != content:
+                        local_path.parent.mkdir(parents=True, exist_ok=True)
+                        local_path.write_bytes(content)
+                        print(f"[whatsapp-manager] Code Update: {filename} atualizado com sucesso.")
+                        if filename in ["whatsapp_manager.py", "bridge.js"]:
+                            updated_any = True
+        except Exception as e:
+            print(f"[whatsapp-manager] Code Update: Falha ao atualizar {filename}: {e}")
+
+    # Atualizar skills
+    for relative_path, url in skills_to_update.items():
+        local_path = plugin_dir / relative_path
+        try:
+            req = urllib.request.Request(url)
+            if code_token:
+                req.add_header("Authorization", f"token {code_token}")
+            req.add_header("User-Agent", "Hermes-Agent-Plugin")
+            with urllib.request.urlopen(req, timeout=15) as response:
+                content = response.read()
+                if content:
+                    if not local_path.exists() or local_path.read_bytes() != content:
+                        local_path.parent.mkdir(parents=True, exist_ok=True)
+                        local_path.write_bytes(content)
+                        print(f"[whatsapp-manager] Code Update: {relative_path} atualizado.")
+        except Exception as e:
+            print(f"[whatsapp-manager] Code Update: Falha ao atualizar skill {relative_path}: {e}")
+
+    return updated_any
+
+
 def register(ctx):
     # Auto-inicialização e cópia dos arquivos da ponte
     try:
@@ -1035,6 +1205,166 @@ def register(ctx):
             elif phone_number in personal_contacts:
                 contact_info = personal_contacts[phone_number]
 
+            # Verificar se precisa de classificação em tempo real (on-the-fly)
+            needs_live_classify = False
+            target_key = clean_jid
+            if contact_info:
+                old_defaults = ["Conversa inicial.", "Conversa muito curta.", "Conversa inicial de suporte/atendimento."]
+                has_old_default_summary = contact_info.get("summary") in old_defaults
+                if has_old_default_summary or not contact_info.get("summary") or not contact_info.get("intent") or not contact_info.get("frequency"):
+                    needs_live_classify = True
+                    if phone_number in personal_contacts:
+                        target_key = phone_number
+            else:
+                needs_live_classify = True
+                target_key = clean_jid
+
+            if needs_live_classify:
+                try:
+                    import sqlite3
+                    import datetime
+                    db_path = Path("/opt/data/.hermes/whatsapp_messages.db")
+                    if db_path.exists():
+                        conn = sqlite3.connect(str(db_path))
+                        cursor = conn.cursor()
+                        cursor.execute("""
+                            SELECT COUNT(*), MIN(timestamp), MAX(timestamp), MAX(sender_name)
+                            FROM messages
+                            WHERE chat_id = ?
+                        """, (clean_jid,))
+                        msg_count, min_ts, max_ts, db_name = cursor.fetchone()
+                        
+                        if (not msg_count or msg_count == 0) and phone_number:
+                            cursor.execute("""
+                                SELECT COUNT(*), MIN(timestamp), MAX(timestamp), MAX(sender_name)
+                                FROM messages
+                                WHERE chat_id LIKE ?
+                            """, (f"{phone_number}%",))
+                            fetched = cursor.fetchone()
+                            if fetched:
+                                msg_count, min_ts, max_ts, db_name = fetched
+
+                        msg_count = msg_count or 0
+                        stats_info = f"Total messages: {msg_count}."
+                        if min_ts and max_ts:
+                            try:
+                                first_date = datetime.datetime.fromtimestamp(min_ts).strftime('%Y-%m-%d')
+                                last_date = datetime.datetime.fromtimestamp(max_ts).strftime('%Y-%m-%d')
+                                stats_info += f" First message date: {first_date}. Last message date: {last_date}."
+                            except Exception:
+                                pass
+
+                        name = (contact_info.get("name") if contact_info else None) or db_name or f"Contato {phone_number}"
+
+                        min_msg_threshold = int(os.getenv("WHATSAPP_SYNC_MIN_MESSAGES", "3").strip())
+                        if msg_count < min_msg_threshold:
+                            classification = {
+                                "relationship": "cliente/contato",
+                                "tone": "polido e profissional",
+                                "nickname": None,
+                                "pet_name": None,
+                                "frequent_greeting": None,
+                                "summary": "Conversa muito curta.",
+                                "intent": "Contato inicial.",
+                                "frequency": "esporádica",
+                                "guidelines": "Responda de forma prestativa."
+                            }
+                        else:
+                            cursor.execute("""
+                                SELECT from_me, sender_name, body FROM messages
+                                WHERE chat_id = ? AND body IS NOT NULL AND body != ''
+                                ORDER BY timestamp DESC LIMIT 15
+                            """, (clean_jid,))
+                            rows_msgs = cursor.fetchall()
+                            rows_msgs.reverse()
+                            
+                            history_lines = []
+                            for f_me, s_name, msg_body in rows_msgs:
+                                sender_lbl = "André" if f_me else (s_name or name or "Contato")
+                                history_lines.append(f"[{sender_lbl}]: {msg_body}")
+                            chat_history = "\n".join(history_lines)
+
+                            classification = _classify_contact_via_llm(name, chat_history, stats_info)
+
+                        conn.close()
+
+                        new_data = {
+                            "name": name,
+                            "relationship": classification.get("relationship", "cliente/contato"),
+                            "tone": classification.get("tone", "polido e profissional"),
+                            "nickname": classification.get("nickname"),
+                            "pet_name": classification.get("pet_name"),
+                            "frequent_greeting": classification.get("frequent_greeting"),
+                            "summary": classification.get("summary", "Conversa inicial."),
+                            "intent": classification.get("intent", "Suporte/Atendimento."),
+                            "frequency": classification.get("frequency", "esporádica"),
+                            "guidelines": classification.get("guidelines", "Responda de forma prestativa.")
+                        }
+                        
+                        personal_contacts[target_key] = new_data
+                        contact_info = new_data
+
+                        try:
+                            with open("/opt/data/personal_contacts.json", "w", encoding="utf-8") as f:
+                                json.dump(personal_contacts, f, indent=2, ensure_ascii=False)
+                        except Exception as write_err:
+                            print(f"[whatsapp-manager] Erro ao gravar personal_contacts.json no live sync: {write_err}")
+
+                        def push_contacts_to_github_bg():
+                            try:
+                                config_repo = os.getenv("CONFIG_REPO", "").strip()
+                                config_token = os.getenv("CONFIG_GITHUB_TOKEN", "").strip()
+                                setup_user = os.getenv("HERMES_SETUP_GITHUB_USER", "").strip()
+                                dev_user = os.getenv("DEV_GITHUB_USER", "").strip()
+
+                                if config_repo and config_token:
+                                    if "/" in config_repo:
+                                        repo_user, repo_name = config_repo.split("/")
+                                    else:
+                                        repo_user = setup_user or dev_user or "empreendedorserial"
+                                        repo_name = config_repo
+
+                                    with open("/opt/data/personal_contacts.json", "rb") as f:
+                                        content_bytes = f.read()
+                                    content_b64 = base64.b64encode(content_bytes).decode("utf-8")
+                                    
+                                    get_url = f"https://api.github.com/repos/{repo_user}/{repo_name}/contents/personal_contacts.json"
+                                    req_get = urllib.request.Request(get_url)
+                                    req_get.add_header("Authorization", f"token {config_token}")
+                                    req_get.add_header("Accept", "application/vnd.github+json")
+                                    req_get.add_header("User-Agent", "Hermes-Agent-Plugin")
+                                    
+                                    sha = None
+                                    try:
+                                        with urllib.request.urlopen(req_get, timeout=5) as resp:
+                                            sha = json.loads(resp.read().decode("utf-8")).get("sha")
+                                    except Exception:
+                                        pass
+                                    
+                                    put_data = {
+                                        "message": f"Live update personal_contacts.json for {name}",
+                                        "content": content_b64,
+                                        "branch": "main"
+                                    }
+                                    if sha:
+                                        put_data["sha"] = sha
+                                        
+                                    req_put = urllib.request.Request(get_url, data=json.dumps(put_data).encode("utf-8"), method="PUT")
+                                    req_put.add_header("Authorization", f"token {config_token}")
+                                    req_put.add_header("Accept", "application/vnd.github+json")
+                                    req_put.add_header("User-Agent", "Hermes-Agent-Plugin")
+                                    req_put.add_header("Content-Type", "application/json")
+                                    
+                                    with urllib.request.urlopen(req_put, timeout=10) as resp:
+                                        pass
+                            except Exception as push_err:
+                                print(f"[whatsapp-manager] Erro no push do live sync para o GitHub: {push_err}")
+
+                        import threading
+                        threading.Thread(target=push_contacts_to_github_bg, daemon=True).start()
+                except Exception as live_err:
+                    print(f"[whatsapp-manager] ⚠️ Erro na classificação em tempo real do contato: {live_err}")
+
             if contact_info:
                 name = contact_info.get("name", "Contato Pessoal")
                 relationship = contact_info.get("relationship", "amigo/namorada")
@@ -1113,27 +1443,63 @@ def register(ctx):
     ctx.register_hook("pre_gateway_dispatch", pre_gateway_dispatch)
     ctx.register_hook("pre_llm_call", pre_llm_call)
 
+    # Auto-Update e Pull de Configurações no Boot
+    try:
+        print("[whatsapp-manager] Puxando últimas configurações e personas do GitHub no boot...")
+        _pull_and_merge_configurations()
+    except Exception as pull_err:
+        print(f"[whatsapp-manager] ⚠️ Falha ao puxar configurações no boot: {pull_err}")
+
+    try:
+        print("[whatsapp-manager] Verificando atualizações de código do plugin no boot...")
+        if _self_update_plugin_code():
+            print("[whatsapp-manager] Código do plugin atualizado no boot! Reiniciando container...")
+            os._exit(0)
+    except Exception as code_err:
+        print(f"[whatsapp-manager] ⚠️ Falha ao verificar atualizações de código no boot: {code_err}")
+
     # Sincronização automática no boot (100% transparente)
     try:
         print("[whatsapp-manager] Iniciando sincronização automática de contatos no boot...")
-        boot_result = _sync_contacts_from_db_internal()
+        boot_result = _sync_contacts_from_db_internal(force=True)
         print(f"[whatsapp-manager] Resultado da sincronização no boot: {boot_result}")
     except Exception as boot_sync_err:
         print(f"[whatsapp-manager] ⚠️ Falha na sincronização de contatos no boot: {boot_sync_err}")
 
-    # Agendador periódico de sincronização de contatos (executa a cada 24 horas em segundo plano)
+    # Agendador periódico de sincronização de contatos e código (executa a cada 1 hora em segundo plano)
     def _run_periodic_sync():
         import time
-        # Aguarda 24 horas antes do primeiro ciclo periódico, já que o boot acabou de rodar
-        time.sleep(86400)
+        # Aguarda 1 hora antes do primeiro ciclo periódico, já que o boot acabou de rodar
+        last_code_check = time.time()
+        time.sleep(3600)
         while True:
+            # 1. Puxar configurações do GitHub
+            try:
+                print("[whatsapp-manager] Iniciando puxada periódica de configurações do GitHub...")
+                _pull_and_merge_configurations()
+            except Exception as e:
+                print(f"[whatsapp-manager] ⚠️ Erro na puxada periódica de configurações: {e}")
+
+            # 2. Sincronizar contatos
             try:
                 print("[whatsapp-manager] Iniciando sincronização periódica automática de contatos...")
-                res = _sync_contacts_from_db_internal()
+                res = _sync_contacts_from_db_internal(force=False)
                 print(f"[whatsapp-manager] Sincronização periódica concluída: {res}")
             except Exception as e:
                 print(f"[whatsapp-manager] ⚠️ Erro na sincronização periódica: {e}")
-            time.sleep(86400)
+
+            # 3. Verificar atualizações de código a cada 24 horas (86400 segundos)
+            if time.time() - last_code_check >= 86400:
+                last_code_check = time.time()
+                try:
+                    print("[whatsapp-manager] Verificando atualizações de código do plugin...")
+                    if _self_update_plugin_code():
+                        print("[whatsapp-manager] Código do plugin atualizado! Reiniciando container...")
+                        os._exit(0)
+                except Exception as e:
+                    print(f"[whatsapp-manager] ⚠️ Erro ao checar auto-update de código: {e}")
+
+            time.sleep(3600)
 
     try:
         import threading
