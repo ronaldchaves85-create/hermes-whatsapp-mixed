@@ -223,7 +223,7 @@ def _classify_contact_via_llm(name: str, chat_history: str, stats_info: str) -> 
             headers = {"Content-Type": "application/json"}
             payload = {
                 "contents": [{"parts": [{"text": prompt}]}],
-                "generationConfig": {"responseMimeType": "application/json", "maxOutputTokens": 1024}
+                "generationConfig": {"responseMimeType": "application/json", "maxOutputTokens": 4096}
             }
             req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers=headers, method="POST")
             with urllib.request.urlopen(req, timeout=45) as resp:
