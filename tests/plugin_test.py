@@ -340,7 +340,12 @@ class TestWhatsAppManagerPlugin(unittest.IsolatedAsyncioTestCase):
         mock_conn.cursor.return_value = mock_cursor
         
         # Mock rows returned by SELECT
+        # Order: state.db.sessions (3 cols) -> bridge messages aggregate (5 cols) -> bridge history (3 cols)
         mock_cursor.fetchall.side_effect = [
+            [
+                ("5511777777777@s.whatsapp.net", 1686450000, 1),
+                ("5511888888888@s.whatsapp.net", 1686450000, 1)
+            ],
             [
                 ("5511777777777@s.whatsapp.net", "Bruna", 10, 1686440000, 1686450000), # Stale contact
                 ("5511888888888@s.whatsapp.net", "Carlos", 5, 1686440000, 1686450000) # Non-stale contact (skipped)
@@ -415,6 +420,10 @@ class TestWhatsAppManagerPlugin(unittest.IsolatedAsyncioTestCase):
         
         # 2 new contacts both with > 3 messages
         mock_cursor.fetchall.side_effect = [
+            [
+                ("5511777777777@s.whatsapp.net", 1686450000, 1),
+                ("5511888888888@s.whatsapp.net", 1686450000, 1)
+            ],
             [
                 ("5511777777777@s.whatsapp.net", "Bruna", 10, 1686440000, 1686450000),
                 ("5511888888888@s.whatsapp.net", "Carlos", 10, 1686440000, 1686450000)

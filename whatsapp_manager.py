@@ -303,6 +303,7 @@ def _sync_contacts_from_db_internal(force: bool = True) -> str:
         
     base_dir = Path("/opt/data/.hermes")
     db_path = base_dir / "whatsapp_messages.db"
+    state_db_path = base_dir / "state.db"
     pc_path = Path("/opt/data/personal_contacts.json")
 
     # 1. Carregar arquivo JSON local existente
@@ -318,158 +319,255 @@ def _sync_contacts_from_db_internal(force: bool = True) -> str:
             print(f"[whatsapp-manager] Erro ao ler {pc_path}: {e}")
 
     # 2. Ler contatos únicos do SQLite com agregação de estatísticas para performance
-    if not db_path.exists():
-        return "Erro: Banco de dados SQLite whatsapp_messages.db não encontrado."
+    if not db_path.exists() and not state_db_path.exists():
+        return "Erro: nenhum banco de dados SQLite do Hermes encontrado em /opt/data/.hermes/."
 
     db_contacts = {}
     classification_count = 0
-    max_classifications = int(os.getenv("WHATSAPP_SYNC_MAX_CLASSIFICATIONS", "40").strip())
+    max_classifications = int(os.getenv("WHATSAPP_SYNC_MAX_CLASSIFICATIONS", "100").strip())
     min_msg_threshold = int(os.getenv("WHATSAPP_SYNC_MIN_MESSAGES", "3").strip())
     skipped_few_msgs = 0
     skipped_due_to_limit = 0
     hit_limit = False
+    source_stats = {"state.db": 0, "whatsapp_messages.db": 0}
+
+    # 2a. Fonte primaria: state.db.sessions WHERE source='whatsapp' (lista oficial do gateway Hermes)
+    state_sessions = {}
+    if state_db_path.exists():
+        try:
+            state_conn = sqlite3.connect(str(state_db_path))
+            state_cursor = state_conn.cursor()
+            state_cursor.execute("""
+                SELECT user_id, MAX(started_at) as last_ts, COUNT(*) as session_count
+                FROM sessions
+                WHERE source = 'whatsapp' AND user_id IS NOT NULL
+                GROUP BY user_id
+                ORDER BY last_ts DESC
+            """)
+            for user_id, last_ts, session_count in state_cursor.fetchall():
+                state_sessions[user_id] = {"last_ts": last_ts, "session_count": session_count}
+            source_stats["state.db"] = len(state_sessions)
+            print(f"[whatsapp-manager] sync: {len(state_sessions)} contatos WhatsApp em state.db.sessions")
+        except Exception as e:
+            print(f"[whatsapp-manager] sync: erro lendo state.db.sessions: {e}")
+
+    # 2b. Fonte complementar: whatsapp_messages.db (mapa chat_id -> sender_name + historico)
+    bridge_contacts = {}
+    if db_path.exists():
+        try:
+            bridge_conn = sqlite3.connect(str(db_path))
+            bridge_cursor = bridge_conn.cursor()
+            bridge_cursor.execute("""
+                SELECT chat_id, MAX(sender_name) as name, COUNT(*) as msg_count, MIN(timestamp) as min_ts, MAX(timestamp) as max_ts
+                FROM messages
+                WHERE chat_id NOT LIKE '%@g.us%' AND chat_id IS NOT NULL
+                GROUP BY chat_id
+            """)
+            for chat_id, name, msg_count, min_ts, max_ts in bridge_cursor.fetchall():
+                bridge_contacts[chat_id] = {
+                    "name": name,
+                    "msg_count": msg_count,
+                    "min_ts": min_ts,
+                    "max_ts": max_ts,
+                }
+            source_stats["whatsapp_messages.db"] = len(bridge_contacts)
+            print(f"[whatsapp-manager] sync: {len(bridge_contacts)} contatos em whatsapp_messages.db")
+        except Exception as e:
+            print(f"[whatsapp-manager] sync: erro lendo whatsapp_messages.db: {e}")
+
+    # 2c. Consolida lista unica: state.db (autoritativo) + bridge (fallback para quem nao tem sessao)
+    all_chat_ids = []
+    seen = set()
+    for user_id in state_sessions.keys():
+        seen.add(user_id)
+        all_chat_ids.append(user_id)
+    for chat_id in bridge_contacts.keys():
+        if chat_id not in seen:
+            seen.add(chat_id)
+            all_chat_ids.append(chat_id)
+    print(f"[whatsapp-manager] sync: {len(all_chat_ids)} contatos unicos para processar")
 
     try:
-        conn = sqlite3.connect(str(db_path))
-        cursor = conn.cursor()
-        cursor.execute("""
-            SELECT chat_id, MAX(sender_name) as name, COUNT(*) as msg_count, MIN(timestamp) as min_ts, MAX(timestamp) as max_ts
-            FROM messages
-            WHERE chat_id NOT LIKE '%@g.us%' AND chat_id IS NOT NULL
-            GROUP BY chat_id
-            ORDER BY max_ts DESC
-        """)
-        rows = cursor.fetchall()
-        for chat_id, name, msg_count, min_ts, max_ts in rows:
-            if chat_id:
-                resolved_chat = _resolve_phone_from_jid(chat_id)
-                phone = resolved_chat.split("@")[0]
+        conn = sqlite3.connect(str(db_path)) if db_path.exists() else None
+        state_conn = sqlite3.connect(str(state_db_path)) if state_db_path.exists() else None
+        for chat_id in all_chat_ids:
+            if not chat_id:
+                continue
+            resolved_chat = _resolve_phone_from_jid(chat_id)
+            phone = resolved_chat.split("@")[0]
+            
+            # Verificar se já existe por JID, JID resolvido ou por número
+            exists = False
+            existing_key = None
+            for key in list(personal_contacts.keys()):
+                if key in [chat_id, resolved_chat, phone]:
+                    exists = True
+                    existing_key = key
+                    break
+            
+            # Decidir se precisa de atualização (novo contato ou contato existente sem os novos campos)
+            needs_update = not exists
+            is_stale = False
+            if exists and existing_key:
+                existing_data = personal_contacts[existing_key]
+                old_defaults = ["Conversa inicial.", "Conversa muito curta.", "Conversa inicial de suporte/atendimento.", "Conversa inicial."]
+                has_old_default_summary = existing_data.get("summary") in old_defaults
                 
-                # Verificar se já existe por JID, JID resolvido ou por número
-                exists = False
-                existing_key = None
-                for key in list(personal_contacts.keys()):
-                    if key in [chat_id, resolved_chat, phone]:
-                        exists = True
-                        existing_key = key
-                        break
+                if force or has_old_default_summary or not existing_data.get("summary") or not existing_data.get("intent") or not existing_data.get("frequency"):
+                    needs_update = True
+                    is_stale = True
+            
+            if not needs_update:
+                continue
+            
+            # Coletar estatisticas e nome das duas fontes
+            name = None
+            msg_count = 0
+            min_ts = None
+            max_ts = None
+            
+            # Bridge: nome + contagem + timestamps reais
+            if chat_id in bridge_contacts:
+                name = bridge_contacts[chat_id].get("name")
+                msg_count = max(msg_count, bridge_contacts[chat_id].get("msg_count", 0))
+                min_ts = bridge_contacts[chat_id].get("min_ts")
+                max_ts = bridge_contacts[chat_id].get("max_ts")
+            
+            # State: contagem de sessoes + ultimo acesso
+            if chat_id in state_sessions:
+                msg_count = max(msg_count, state_sessions[chat_id].get("session_count", 0))
+                state_last = state_sessions[chat_id].get("last_ts")
+                if state_last:
+                    if max_ts is None or state_last > max_ts:
+                        max_ts = state_last
+                    if min_ts is None or state_last < min_ts:
+                        min_ts = state_last
+            
+            if msg_count < min_msg_threshold:
+                # Criar fallback direto sem gastar chamada de IA para conversas com pouquíssimas mensagens
+                skipped_few_msgs += 1
+                target_key = existing_key if existing_key else resolved_chat
+                existing_data = personal_contacts.get(target_key, {})
                 
-                # Decidir se precisa de atualização (novo contato ou contato existente sem os novos campos)
-                needs_update = not exists
-                is_stale = False
-                if exists and existing_key:
-                    existing_data = personal_contacts[existing_key]
-                    old_defaults = ["Conversa inicial.", "Conversa muito curta.", "Conversa inicial de suporte/atendimento.", "Conversa inicial."]
-                    has_old_default_summary = existing_data.get("summary") in old_defaults
-                    
-                    if force or has_old_default_summary or not existing_data.get("summary") or not existing_data.get("intent") or not existing_data.get("frequency"):
-                        needs_update = True
-                        is_stale = True
+                # Preservação/migração de manual_relationship
+                man_rel = existing_data.get("manual_relationship")
+                if not man_rel and existing_data.get("relationship") in ["Vendedor", "Amigo", "AmigoProximo", "Parente", "Filho"]:
+                    man_rel = existing_data.get("relationship")
                 
-                if needs_update:
-                    if msg_count < min_msg_threshold:
-                        # Criar fallback direto sem gastar chamada de IA para conversas com pouquíssimas mensagens
-                        skipped_few_msgs += 1
-                        target_key = existing_key if existing_key else resolved_chat
-                        existing_data = personal_contacts.get(target_key, {})
-                        
-                        # Preservação/migração de manual_relationship
-                        man_rel = existing_data.get("manual_relationship")
-                        if not man_rel and existing_data.get("relationship") in ["Vendedor", "Amigo", "AmigoProximo", "Parente", "Filho"]:
-                            man_rel = existing_data.get("relationship")
-                        
-                        # Se for stale (antigo e incompleto), não reaproveitamos as propriedades padrão antigas
-                        rel_val = man_rel or ("Cliente" if is_stale else (existing_data.get("relationship") or "Cliente"))
-                        tone_val = "polido e profissional" if is_stale else (existing_data.get("tone") or "polido e profissional")
-                        guide_val = "Responda de forma prestativa." if is_stale else (existing_data.get("guidelines") or "Responda de forma prestativa.")
-                        
-                        personal_contacts[target_key] = {
-                            "name": existing_data.get("name") or name or f"Contato {phone}",
-                            "relationship": rel_val,
-                            "manual_relationship": man_rel,
-                            "notes": existing_data.get("notes"),
-                            "product": existing_data.get("product"),
-                            "tone": tone_val,
-                            "nickname": existing_data.get("nickname"),
-                            "pet_name": existing_data.get("pet_name"),
-                            "frequent_greeting": existing_data.get("frequent_greeting"),
-                            "summary": existing_data.get("summary") or "Conversa muito curta.",
-                            "intent": existing_data.get("intent") or "Contato inicial.",
-                            "frequency": existing_data.get("frequency") or "esporádica",
-                            "guidelines": guide_val
-                        }
-                        continue
+                # Se for stale (antigo e incompleto), não reaproveitamos as propriedades padrão antigas
+                rel_val = man_rel or ("Cliente" if is_stale else (existing_data.get("relationship") or "Cliente"))
+                tone_val = "polido e profissional" if is_stale else (existing_data.get("tone") or "polido e profissional")
+                guide_val = "Responda de forma prestativa." if is_stale else (existing_data.get("guidelines") or "Responda de forma prestativa.")
+                
+                personal_contacts[target_key] = {
+                    "name": existing_data.get("name") or name or f"Contato {phone}",
+                    "relationship": rel_val,
+                    "manual_relationship": man_rel,
+                    "notes": existing_data.get("notes"),
+                    "product": existing_data.get("product"),
+                    "tone": tone_val,
+                    "nickname": existing_data.get("nickname"),
+                    "pet_name": existing_data.get("pet_name"),
+                    "frequent_greeting": existing_data.get("frequent_greeting"),
+                    "summary": existing_data.get("summary") or "Conversa muito curta.",
+                    "intent": existing_data.get("intent") or "Contato inicial.",
+                    "frequency": existing_data.get("frequency") or "esporádica",
+                    "guidelines": guide_val
+                }
+                continue
 
-                    if classification_count >= max_classifications:
-                        hit_limit = True
-                        skipped_due_to_limit += 1
-                        target_key = existing_key if existing_key else resolved_chat
-                        existing_data = personal_contacts.get(target_key, {})
-                        
-                        # Preservação/migração de manual_relationship
-                        man_rel = existing_data.get("manual_relationship")
-                        if not man_rel and existing_data.get("relationship") in ["Vendedor", "Amigo", "AmigoProximo", "Parente", "Filho"]:
-                            man_rel = existing_data.get("relationship")
-                        
-                        rel_val = man_rel or ("Cliente" if is_stale else (existing_data.get("relationship") or "Cliente"))
-                        tone_val = "polido e profissional" if is_stale else (existing_data.get("tone") or "polido e profissional")
-                        guide_val = "Responda de forma prestativa." if is_stale else (existing_data.get("guidelines") or "Responda de forma prestativa.")
-                        
-                        personal_contacts[target_key] = {
-                            "name": existing_data.get("name") or name or f"Contato {phone}",
-                            "relationship": rel_val,
-                            "manual_relationship": man_rel,
-                            "notes": existing_data.get("notes"),
-                            "product": existing_data.get("product"),
-                            "tone": tone_val,
-                            "nickname": existing_data.get("nickname"),
-                            "pet_name": existing_data.get("pet_name"),
-                            "frequent_greeting": existing_data.get("frequent_greeting"),
-                            "summary": existing_data.get("summary") or "Pendente de classificação.",
-                            "intent": existing_data.get("intent") or "Contato recente.",
-                            "frequency": existing_data.get("frequency") or "esporádica",
-                            "guidelines": guide_val
-                        }
-                        continue
+            if classification_count >= max_classifications:
+                hit_limit = True
+                skipped_due_to_limit += 1
+                target_key = existing_key if existing_key else resolved_chat
+                existing_data = personal_contacts.get(target_key, {})
+                
+                # Preservação/migração de manual_relationship
+                man_rel = existing_data.get("manual_relationship")
+                if not man_rel and existing_data.get("relationship") in ["Vendedor", "Amigo", "AmigoProximo", "Parente", "Filho"]:
+                    man_rel = existing_data.get("relationship")
+                
+                rel_val = man_rel or ("Cliente" if is_stale else (existing_data.get("relationship") or "Cliente"))
+                tone_val = "polido e profissional" if is_stale else (existing_data.get("tone") or "polido e profissional")
+                guide_val = "Responda de forma prestativa." if is_stale else (existing_data.get("guidelines") or "Responda de forma prestativa.")
+                
+                personal_contacts[target_key] = {
+                    "name": existing_data.get("name") or name or f"Contato {phone}",
+                    "relationship": rel_val,
+                    "manual_relationship": man_rel,
+                    "notes": existing_data.get("notes"),
+                    "product": existing_data.get("product"),
+                    "tone": tone_val,
+                    "nickname": existing_data.get("nickname"),
+                    "pet_name": existing_data.get("pet_name"),
+                    "frequent_greeting": existing_data.get("frequent_greeting"),
+                    "summary": existing_data.get("summary") or "Pendente de classificação.",
+                    "intent": existing_data.get("intent") or "Contato recente.",
+                    "frequency": existing_data.get("frequency") or "esporádica",
+                    "guidelines": guide_val
+                }
+                continue
 
-                    # Estatísticas formatadas
-                    stats_info = f"Total messages: {msg_count}."
-                    if min_ts and max_ts:
-                        try:
-                            first_date = datetime.datetime.fromtimestamp(min_ts).strftime('%Y-%m-%d')
-                            last_date = datetime.datetime.fromtimestamp(max_ts).strftime('%Y-%m-%d')
-                            stats_info += f" First message date: {first_date}. Last message date: {last_date}."
-                        except Exception:
-                            pass
+            # Estatísticas formatadas
+            stats_info = f"Total messages: {msg_count}."
+            if min_ts and max_ts:
+                try:
+                    first_date = datetime.datetime.fromtimestamp(min_ts).strftime('%Y-%m-%d')
+                    last_date = datetime.datetime.fromtimestamp(max_ts).strftime('%Y-%m-%d')
+                    stats_info += f" First message date: {first_date}. Last message date: {last_date}."
+                except Exception:
+                    pass
+            
+            # Buscar as últimas 15 mensagens da conversa
+            chat_history = ""
+            try:
+                if conn is not None and chat_id in bridge_contacts:
+                    cur = conn.cursor()
+                    cur.execute("""
+                        SELECT from_me, sender_name, body FROM messages
+                        WHERE chat_id = ? AND body IS NOT NULL AND body != ''
+                        ORDER BY timestamp DESC LIMIT 15
+                    """, (chat_id,))
+                    rows_msgs = cur.fetchall()
+                    rows_msgs.reverse()
                     
-                    # Buscar as últimas 15 mensagens da conversa
-                    try:
-                        cursor.execute("""
-                            SELECT from_me, sender_name, body FROM messages
-                            WHERE chat_id = ? AND body IS NOT NULL AND body != ''
-                            ORDER BY timestamp DESC LIMIT 15
-                        """, (chat_id,))
-                        rows_msgs = cursor.fetchall()
-                        rows_msgs.reverse()
-                        
-                        history_lines = []
-                        for f_me, s_name, msg_body in rows_msgs:
-                            sender_lbl = "André" if f_me else (s_name or name or "Contato")
-                            history_lines.append(f"[{sender_lbl}]: {msg_body}")
-                        chat_history = "\n".join(history_lines)
-                    except Exception as db_err:
-                        print(f"[whatsapp-manager] Erro ao ler histórico para {chat_id}: {db_err}")
-                        chat_history = ""
-                    
-                    db_contacts[chat_id] = {
-                        "name": name,
-                        "history": chat_history,
-                        "stats": stats_info,
-                        "existing_key": existing_key,
-                        "is_stale": is_stale
-                    }
-                    classification_count += 1
-        conn.close()
+                    history_lines = []
+                    for f_me, s_name, msg_body in rows_msgs:
+                        sender_lbl = "André" if f_me else (s_name or name or "Contato")
+                        history_lines.append(f"[{sender_lbl}]: {msg_body}")
+                    chat_history = "\n".join(history_lines)
+                elif state_conn is not None:
+                    # Fallback: state.db.messages (conteudo das sessoes)
+                    cur = state_conn.cursor()
+                    cur.execute("""
+                        SELECT m.role, m.content FROM messages m
+                        JOIN sessions s ON m.session_id = s.id
+                        WHERE s.user_id = ? AND s.source = 'whatsapp' AND m.content IS NOT NULL
+                        ORDER BY m.timestamp DESC LIMIT 15
+                    """, (chat_id,))
+                    rows_msgs = cur.fetchall()
+                    rows_msgs.reverse()
+                    history_lines = []
+                    for role, content in rows_msgs:
+                        sender_lbl = "André" if role == "assistant" else (name or "Contato")
+                        history_lines.append(f"[{sender_lbl}]: {content[:300]}")
+                    chat_history = "\n".join(history_lines)
+            except Exception as db_err:
+                print(f"[whatsapp-manager] Erro ao ler histórico para {chat_id}: {db_err}")
+                chat_history = ""
+            
+            db_contacts[chat_id] = {
+                "name": name,
+                "history": chat_history,
+                "stats": stats_info,
+                "existing_key": existing_key,
+                "is_stale": is_stale
+            }
+            classification_count += 1
+        if conn is not None:
+            conn.close()
+        if state_conn is not None:
+            state_conn.close()
     except Exception as e:
         return f"Erro ao ler banco de dados SQLite: {e}"
 
@@ -1435,17 +1533,26 @@ def register(ctx):
                     import sqlite3
                     import datetime
                     min_msg_threshold = int(os.getenv("WHATSAPP_SYNC_MIN_MESSAGES", "3").strip())
-                    db_path = Path("/opt/data/.hermes/whatsapp_messages.db")
-                    if db_path.exists():
-                        conn = sqlite3.connect(str(db_path))
+                    bridge_db_path = Path("/opt/data/.hermes/whatsapp_messages.db")
+                    state_db_path = Path("/opt/data/.hermes/state.db")
+                    msg_count = 0
+                    min_ts = None
+                    max_ts = None
+                    db_name = None
+                    chat_history_lines = []
+
+                    # Fonte 1: bridge log (whatsapp_messages.db)
+                    if bridge_db_path.exists():
+                        conn = sqlite3.connect(str(bridge_db_path))
                         cursor = conn.cursor()
                         cursor.execute("""
                             SELECT COUNT(*), MIN(timestamp), MAX(timestamp), MAX(sender_name)
                             FROM messages
                             WHERE chat_id = ?
                         """, (db_query_jid,))
-                        msg_count, min_ts, max_ts, db_name = cursor.fetchone()
-                        
+                        row = cursor.fetchone()
+                        if row and row[0]:
+                            msg_count, min_ts, max_ts, db_name = row
                         if (not msg_count or msg_count == 0) and phone_number:
                             cursor.execute("""
                                 SELECT COUNT(*), MIN(timestamp), MAX(timestamp), MAX(sender_name)
@@ -1453,8 +1560,54 @@ def register(ctx):
                                 WHERE chat_id LIKE ?
                             """, (f"{phone_number}%",))
                             fetched = cursor.fetchone()
-                            if fetched:
+                            if fetched and fetched[0]:
                                 msg_count, min_ts, max_ts, db_name = fetched
+                        # Pega historico da bridge
+                        if not msg_count or msg_count == 0:
+                            cursor.execute("""
+                                SELECT from_me, sender_name, body FROM messages
+                                WHERE chat_id = ? AND body IS NOT NULL AND body != ''
+                                ORDER BY timestamp DESC LIMIT 15
+                            """, (db_query_jid,))
+                            rows_msgs = cursor.fetchall()
+                            rows_msgs.reverse()
+                            for f_me, s_name, msg_body in rows_msgs:
+                                sender_lbl = "André" if f_me else (s_name or "Contato")
+                                chat_history_lines.append(f"[{sender_lbl}]: {msg_body}")
+                        conn.close()
+
+                    # Fonte 2: state.db.sessions (autoritativo, gateway Hermes)
+                    if (not msg_count or msg_count == 0) and state_db_path.exists():
+                        try:
+                            state_conn = sqlite3.connect(str(state_db_path))
+                            sc = state_conn.cursor()
+                            sc.execute("""
+                                SELECT COUNT(*), MAX(started_at) FROM sessions
+                                WHERE source = 'whatsapp' AND user_id = ?
+                            """, (db_query_jid,))
+                            row = sc.fetchone()
+                            if row and row[0]:
+                                msg_count = row[0]
+                                max_ts = row[1] or max_ts
+                            # Historico de mensagens das sessoes
+                            sc.execute("""
+                                SELECT m.role, m.content FROM messages m
+                                JOIN sessions s ON m.session_id = s.id
+                                WHERE s.user_id = ? AND s.source = 'whatsapp' AND m.content IS NOT NULL
+                                ORDER BY m.timestamp DESC LIMIT 15
+                            """, (db_query_jid,))
+                            rows_msgs = sc.fetchall()
+                            rows_msgs.reverse()
+                            for role, content in rows_msgs:
+                                sender_lbl = "André" if role == "assistant" else (db_name or "Contato")
+                                chat_history_lines.append(f"[{sender_lbl}]: {(content or '')[:300]}")
+                            state_conn.close()
+                        except Exception as state_err:
+                            print(f"[whatsapp-manager] live sync: erro lendo state.db: {state_err}")
+
+                    fetched = (msg_count, min_ts, max_ts, db_name) if msg_count else None
+                    if fetched:
+                        msg_count, min_ts, max_ts, db_name = fetched
 
                         msg_count = msg_count or 0
                         stats_info = f"Total messages: {msg_count}."
