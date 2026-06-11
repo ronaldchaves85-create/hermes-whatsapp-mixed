@@ -499,7 +499,7 @@ def register(ctx):
         print(f"[whatsapp-manager] ⚠️ Erro ao registrar skills: {skills_err}")
 
     # Hook 1: pre_gateway_dispatch (Filtro e controle de comandos)
-    async def pre_gateway_dispatch(*args, **kwargs):
+    def pre_gateway_dispatch(*args, **kwargs):
         context = kwargs.get("context")
         if not context:
             for arg in args:
@@ -691,7 +691,7 @@ def register(ctx):
             }
         else:
             # Suporte para Clientes
-            is_first_turn = context.get("is_first_turn", False)
+            is_first_turn = context.get("is_first_turn", False) if context else False
             if is_first_turn:
                 try:
                     delay_s = int(os.getenv("WHATSAPP_FIRST_RESPONSE_DELAY_S", "30").strip())

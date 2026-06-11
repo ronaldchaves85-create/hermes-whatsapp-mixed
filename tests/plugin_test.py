@@ -46,7 +46,7 @@ class TestWhatsAppManagerPlugin(unittest.IsolatedAsyncioTestCase):
     def tearDown(self):
         self.env_patcher.stop()
 
-    async def test_owner_message_identification(self):
+    def test_owner_message_identification(self):
         pre_dispatch = self.ctx.hooks.get("pre_gateway_dispatch")
         self.assertIsNotNone(pre_dispatch)
 
@@ -66,11 +66,11 @@ class TestWhatsAppManagerPlugin(unittest.IsolatedAsyncioTestCase):
             "gateway": gateway
         }
 
-        res = await pre_dispatch("pre_gateway_dispatch", context)
+        res = pre_dispatch("pre_gateway_dispatch", context)
         self.assertIsNone(res) # Owner message is not skipped
         self.assertEqual(gateway._session_model_overrides["session_1"]["model"], "gemini-3.5-flash-owner")
 
-    async def test_client_message_when_bot_paused(self):
+    def test_client_message_when_bot_paused(self):
         pre_dispatch = self.ctx.hooks.get("pre_gateway_dispatch")
         
         event = MagicMock()
@@ -90,7 +90,7 @@ class TestWhatsAppManagerPlugin(unittest.IsolatedAsyncioTestCase):
 
         # Mock _check_bot_paused to return True
         with patch("whatsapp_manager._check_bot_paused", return_value=True):
-            res = await pre_dispatch("pre_gateway_dispatch", context)
+            res = pre_dispatch("pre_gateway_dispatch", context)
             self.assertEqual(res, {"action": "skip", "reason": "bot-pausado"})
 
     def test_pre_llm_call_owner_context(self):
@@ -122,7 +122,7 @@ class TestWhatsAppManagerPlugin(unittest.IsolatedAsyncioTestCase):
             self.assertIn("SUPORTE WHATSAPP", res["context"])
             self.assertIn("Soul client rules", res["context"])
 
-    async def test_pre_gateway_dispatch_does_not_rewrite_or_fetch(self):
+    def test_pre_gateway_dispatch_does_not_rewrite_or_fetch(self):
         pre_dispatch = self.ctx.hooks.get("pre_gateway_dispatch")
 
         event = MagicMock()
@@ -143,7 +143,7 @@ class TestWhatsAppManagerPlugin(unittest.IsolatedAsyncioTestCase):
         with patch("whatsapp_manager._check_bot_paused", return_value=False), \
              patch("whatsapp_manager._check_chat_silenced", return_value=False), \
              patch("whatsapp_manager._fetch_chat_history") as mock_fetch:
-            res = await pre_dispatch("pre_gateway_dispatch", context)
+            res = pre_dispatch("pre_gateway_dispatch", context)
             self.assertIsNone(res) # Should not skip or rewrite (returns None)
             mock_fetch.assert_not_called() # Should not fetch history at dispatch stage
 
@@ -203,7 +203,7 @@ class TestWhatsAppManagerPlugin(unittest.IsolatedAsyncioTestCase):
         res = pre_llm("pre_llm_call", context)
         self.assertIsNone(res)
 
-    async def test_pre_gateway_dispatch_non_whatsapp_ignored(self):
+    def test_pre_gateway_dispatch_non_whatsapp_ignored(self):
         pre_dispatch = self.ctx.hooks.get("pre_gateway_dispatch")
         
         event = MagicMock()
@@ -212,10 +212,10 @@ class TestWhatsAppManagerPlugin(unittest.IsolatedAsyncioTestCase):
             "event": event,
             "gateway": MagicMock()
         }
-        res = await pre_dispatch("pre_gateway_dispatch", context)
+        res = pre_dispatch("pre_gateway_dispatch", context)
         self.assertIsNone(res)
 
-    async def test_missing_model_env_vars_fallback(self):
+    def test_missing_model_env_vars_fallback(self):
         pre_dispatch = self.ctx.hooks.get("pre_gateway_dispatch")
         
         event = MagicMock()
@@ -237,11 +237,11 @@ class TestWhatsAppManagerPlugin(unittest.IsolatedAsyncioTestCase):
         with patch.dict(os.environ, {}, clear=True):
             # We must restore WHATSAPP_OWNER_NUMBER for the owner check to pass
             os.environ["WHATSAPP_OWNER_NUMBER"] = "5511999999999"
-            res = await pre_dispatch("pre_gateway_dispatch", context)
+            res = pre_dispatch("pre_gateway_dispatch", context)
             self.assertIsNone(res)
             self.assertEqual(gateway._session_model_overrides["session_x"]["model"], "gemini-3.5-flash")
 
-    async def test_missing_session_key_handled_gracefully(self):
+    def test_missing_session_key_handled_gracefully(self):
         pre_dispatch = self.ctx.hooks.get("pre_gateway_dispatch")
         
         event = MagicMock()
@@ -259,7 +259,7 @@ class TestWhatsAppManagerPlugin(unittest.IsolatedAsyncioTestCase):
             "gateway": gateway
         }
 
-        res = await pre_dispatch("pre_gateway_dispatch", context)
+        res = pre_dispatch("pre_gateway_dispatch", context)
         # Should not raise exception
         self.assertIsNone(res)
 
