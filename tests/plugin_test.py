@@ -1036,6 +1036,30 @@ class TestWhatsAppManagerPlugin(unittest.IsolatedAsyncioTestCase):
             # Retorna True se houve mudanças no próprio plugin (whatsapp_manager.py ou bridge.js)
             self.assertTrue(res)
 
+    @patch("urllib.request.urlopen")
+    @patch.dict(os.environ, {"GOOGLE_API_KEY": "test-google-key", "WHATSAPP_CONTACT_CLASSIFIER_MODEL": "gemini-1.5-pro-test"})
+    def test_classify_contact_custom_model(self, mock_urlopen):
+        """Verifica que o classificador de contatos utiliza o modelo configurado no ambiente."""
+        mock_response = MagicMock()
+        mock_response.read.return_value = json.dumps({
+            "candidates": [{
+                "content": {
+                    "parts": [{
+                        "text": '{"relationship": "Amigo", "tone": "informal", "nickname": null, "pet_name": null, "frequent_greeting": null, "summary": "resumo", "intent": "intencao", "frequency": "diaria", "product": null, "guidelines": "seja gentil"}'
+                    }]
+                }
+            }]
+        }).encode("utf-8")
+        mock_urlopen.return_value.__enter__.return_value = mock_response
+
+        res = whatsapp_manager._classify_contact_via_llm("Carlos", "history", "stats")
+        self.assertEqual(res["relationship"], "Amigo")
+        
+        # Verificar se a URL chamada continha o modelo configurado
+        called_args = mock_urlopen.call_args[0]
+        called_req = called_args[0]
+        self.assertIn("gemini-1.5-pro-test", called_req.full_url)
+
 
 if __name__ == "__main__":
     unittest.main()

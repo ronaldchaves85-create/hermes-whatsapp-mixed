@@ -507,10 +507,13 @@ def _classify_contact_via_llm(name: str, chat_history: str, stats_info: str) -> 
         "}"
     )
 
+    classify_model = os.getenv("WHATSAPP_CONTACT_CLASSIFIER_MODEL", "").strip()
+
     # 1. Tentar Gemini API
     if google_key:
         try:
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key={google_key}"
+            model_to_use = classify_model if classify_model else "gemini-3.5-flash"
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_to_use}:generateContent?key={google_key}"
             headers = {"Content-Type": "application/json"}
             payload = {
                 "contents": [{"parts": [{"text": prompt}]}],
@@ -527,13 +530,14 @@ def _classify_contact_via_llm(name: str, chat_history: str, stats_info: str) -> 
     # 2. Tentar OpenAI API
     if openai_key:
         try:
+            model_to_use = classify_model if classify_model else "gpt-4o-mini"
             url = "https://api.openai.com/v1/chat/completions"
             headers = {
                 "Content-Type": "application/json",
                 "Authorization": f"Bearer {openai_key}"
             }
             payload = {
-                "model": "gpt-4o-mini",
+                "model": model_to_use,
                 "messages": [{"role": "user", "content": prompt}],
                 "response_format": {"type": "json_object"}
             }
@@ -547,13 +551,14 @@ def _classify_contact_via_llm(name: str, chat_history: str, stats_info: str) -> 
 
     if openrouter_key:
         try:
+            model_to_use = classify_model if classify_model else "google/gemini-2.5-flash"
             url = "https://openrouter.ai/api/v1/chat/completions"
             headers = {
                 "Content-Type": "application/json",
                 "Authorization": f"Bearer {openrouter_key}"
             }
             payload = {
-                "model": "google/gemini-2.5-flash",
+                "model": model_to_use,
                 "messages": [{"role": "user", "content": prompt}],
                 "response_format": {"type": "json_object"}
             }
