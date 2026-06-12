@@ -310,6 +310,12 @@ else
         sed -i.bak 's/max_turns: 60/max_turns: 8/g' "$BASE_DIR/config.yaml" 2>/dev/null || sed -i 's/max_turns: 60/max_turns: 8/g' "$BASE_DIR/config.yaml"
         rm -f "$BASE_DIR/config.yaml.bak"
     fi
+    # Garantir que migre gemini-3.5-flash para gemini-3.1-flash-lite para reduzir custos
+    if grep -q "gemini-3.5-flash" "$BASE_DIR/config.yaml"; then
+        echo "🔄 Atualizando modelo padrão de gemini-3.5-flash para gemini-3.1-flash-lite no seu config.yaml..."
+        sed -i.bak 's/gemini-3.5-flash/gemini-3.1-flash-lite/g' "$BASE_DIR/config.yaml" 2>/dev/null || sed -i 's/gemini-3.5-flash/gemini-3.1-flash-lite/g' "$BASE_DIR/config.yaml"
+        rm -f "$BASE_DIR/config.yaml.bak"
+    fi
 fi
 
 # Permite configurar max_turns via variável de ambiente da stack (Portainer/Easypanel)

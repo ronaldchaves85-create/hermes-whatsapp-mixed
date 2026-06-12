@@ -243,7 +243,7 @@ class TestWhatsAppManagerPlugin(unittest.IsolatedAsyncioTestCase):
             os.environ["WHATSAPP_OWNER_NUMBER"] = "5511999999999"
             res = pre_dispatch("pre_gateway_dispatch", context)
             self.assertIsNone(res)
-            self.assertEqual(gateway._session_model_overrides["session_x"]["model"], "gemini-3.5-flash")
+            self.assertEqual(gateway._session_model_overrides["session_x"]["model"], "gemini-3.1-flash-lite")
 
     def test_missing_session_key_handled_gracefully(self):
         pre_dispatch = self.ctx.hooks.get("pre_gateway_dispatch")

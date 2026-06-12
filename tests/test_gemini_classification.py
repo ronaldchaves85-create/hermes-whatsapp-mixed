@@ -17,7 +17,7 @@ import time
 import urllib.request
 import urllib.error
 
-MODEL = "gemini-3.5-flash"
+MODEL = "gemini-3.1-flash-lite"
 
 # Prompt reduzido mas fiel ao usado em _classify_contact_via_llm
 PROMPT = (

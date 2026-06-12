@@ -27,8 +27,8 @@ def test_gemini_connection():
 
     print(f"Checking API key: {api_key[:8]}...{api_key[-5:] if len(api_key) > 5 else ''}")
     
-    # We use gemini-3.5-flash as the standard stable endpoint
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash:generateContent?key={api_key}"
+    # We use gemini-3.1-flash-lite as the standard stable endpoint
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key={api_key}"
     headers = {"Content-Type": "application/json"}
     payload = {
         "contents": [{"parts": [{"text": "Hello, this is a test. Reply with the word 'OK' if you receive this."}]}]

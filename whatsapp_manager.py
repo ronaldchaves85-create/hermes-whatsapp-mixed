@@ -117,7 +117,7 @@ def _process_media_message(event) -> str | None:
     Retorna a transcrição ou descrição, ou None se falhar/não for mídia.
     """
     google_key = os.getenv("GOOGLE_API_KEY", "").strip()
-    media_model = os.getenv("WHATSAPP_CLIENT_MEDIA_MODEL", "gemini-3.5-flash").strip()
+    media_model = os.getenv("WHATSAPP_CLIENT_MEDIA_MODEL", "gemini-3.1-flash-lite").strip()
     if not google_key:
         print("[whatsapp-manager] Google API Key não configurada para processamento de mídia.")
         return None
@@ -512,7 +512,7 @@ def _classify_contact_via_llm(name: str, chat_history: str, stats_info: str) -> 
     # 1. Tentar Gemini API
     if google_key:
         try:
-            model_to_use = classify_model if (classify_model and "gemini" in classify_model.lower()) else "gemini-3.5-flash"
+            model_to_use = classify_model if (classify_model and "gemini" in classify_model.lower()) else "gemini-3.1-flash-lite"
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_to_use}:generateContent?key={google_key}"
             headers = {"Content-Type": "application/json"}
             payload = {
@@ -561,7 +561,7 @@ def _classify_contact_via_llm(name: str, chat_history: str, stats_info: str) -> 
                 else:
                     model_to_use = classify_model
             else:
-                model_to_use = "google/gemini-2.5-flash"
+                model_to_use = "google/gemini-3.1-flash-lite"
             url = "https://openrouter.ai/api/v1/chat/completions"
             headers = {
                 "Content-Type": "application/json",
@@ -1810,9 +1810,9 @@ def register(ctx):
         try:
             session_key = gateway._session_key_for_source(event.source)
             if session_key:
-                owner_model = os.getenv("WHATSAPP_OWNER_MODEL", "gemini-3.5-flash").strip()
+                owner_model = os.getenv("WHATSAPP_OWNER_MODEL", "gemini-3.1-flash-lite").strip()
                 owner_provider = os.getenv("WHATSAPP_OWNER_PROVIDER", "gemini").strip()
-                client_model = os.getenv("WHATSAPP_CLIENT_MODEL", "gemini-3.5-flash").strip()
+                client_model = os.getenv("WHATSAPP_CLIENT_MODEL", "gemini-3.1-flash-lite").strip()
                 client_provider = os.getenv("WHATSAPP_CLIENT_PROVIDER", "gemini").strip()
                 
                 if is_owner:

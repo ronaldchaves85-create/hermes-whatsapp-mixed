@@ -3,8 +3,8 @@
 
 model:
   # O modelo padrão que o Hermes vai usar para raciocinar e responder
-  # Usando o Gemini 3.5 Flash (Super rápido, eficiente e de excelente custo-benefício!)
-  default: gemini-3.5-flash
+  # Usando o Gemini 3.1 Flash-Lite (Super rápido, eficiente e de excelente custo-benefício!)
+  default: gemini-3.1-flash-lite
   provider: gemini
   context_length: 8000
 
@@ -63,7 +63,7 @@ auxiliary:
   # IA auxiliar de baixo custo para tarefas de compressão de contexto e buscas
   compression:
     provider: gemini
-    model: gemini-3.5-flash
+    model: gemini-3.1-flash-lite
   session_search:
     provider: gemini
-    model: gemini-3.5-flash
+    model: gemini-3.1-flash-lite
