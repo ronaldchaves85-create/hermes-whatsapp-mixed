@@ -1213,7 +1213,10 @@ function isSystemError(message) {
       lowercaseMsg.includes('bad gateway') ||
       lowercaseMsg.includes('internal server error') ||
       lowercaseMsg.includes('service unavailable') ||
-      lowercaseMsg.includes('request failed')) {
+      lowercaseMsg.includes('request failed') ||
+      lowercaseMsg.includes('compression model') ||
+      lowercaseMsg.includes('compression threshold') ||
+      lowercaseMsg.includes('auto-lowered')) {
     return true;
   }
 

@@ -505,6 +505,7 @@ test('WhatsApp Bridge Regression Tests', async (t) => {
     assert.ok(isSystemError('API rate limited or token expired'), 'Should catch rate limited / token expired');
     assert.ok(isSystemError('Failed to generate output because connection failed'), 'Should catch failed to generate / connection failed');
     assert.ok(isSystemError('{"status":"error","message":"crashed"}'), 'Should catch JSON error status');
+    assert.ok(isSystemError("⚠️ Compression model MiniMax-M2.7 (api.minimax.io) context is 204,800 tokens, but the main model gemini-3.5-flash (gemini)'s compression threshold was 524,288 tokens. Auto-lowered this session's threshold to 204,800 tokens so compression can run."), 'Should block compression context warning leaks');
 
     // Normal questions or sentences
     assert.ok(!isSystemError('Como resolver o problema de conexão?'), 'Should allow Portuguese question about connection');
