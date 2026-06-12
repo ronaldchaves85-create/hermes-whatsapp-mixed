@@ -749,11 +749,9 @@ def _sync_contacts_from_db_internal(force: bool = True) -> str:
                     if max_ts and max_ts > existing_data.get("last_interaction", 0):
                         has_new_messages = True
                 else:
-                    # Se não tem last_interaction no arquivo, mas já está totalmente classificado,
-                    # inicializamos com o timestamp atual sem re-classificar via LLM
-                    if existing_data.get("summary") and not has_old_default_summary and existing_data.get("intent") and existing_data.get("frequency"):
-                        existing_data["last_interaction"] = max_ts or 0
-                        metadata_updated = True
+                    # Se não tem last_interaction, trata como stale para forçar re-classificação
+                    # e capturar o perfil atualizado do contato
+                    has_new_messages = True
                 
                 if force or has_old_default_summary or has_new_messages or not existing_data.get("summary") or not existing_data.get("intent") or not existing_data.get("frequency"):
                     needs_update = True
@@ -2001,6 +1999,7 @@ def register(ctx):
             # Verificar se precisa de classificação em tempo real (on-the-fly)
             needs_live_classify = False
             target_key = clean_jid
+            live_classify_threshold_seconds = int(os.getenv("WHATSAPP_LIVE_CLASSIFY_COOLDOWN", "3600").strip())
             if contact_info:
                 old_defaults = ["Conversa inicial.", "Conversa muito curta.", "Conversa inicial de suporte/atendimento.", "Pendente de classificação."]
                 has_old_default_summary = contact_info.get("summary") in old_defaults
@@ -2008,6 +2007,15 @@ def register(ctx):
                     needs_live_classify = True
                     if phone_number in personal_contacts:
                         target_key = phone_number
+                else:
+                    # Re-classificar se a última interação foi há mais de 1h (padrão)
+                    # para capturar mudanças de contexto recentes na conversa
+                    last_interaction_ts = contact_info.get("last_interaction", 0)
+                    if last_interaction_ts and (time.time() - last_interaction_ts) > live_classify_threshold_seconds:
+                        needs_live_classify = True
+                        print(f"[whatsapp-manager] Re-classificando {phone_number}: última interação há {int((time.time() - last_interaction_ts) / 60)} min.")
+                        if phone_number in personal_contacts:
+                            target_key = phone_number
             else:
                 needs_live_classify = True
                 target_key = clean_jid
@@ -2154,7 +2162,8 @@ def register(ctx):
                             "summary": classification.get("summary", "Conversa inicial."),
                             "intent": classification.get("intent", "Suporte/Atendimento."),
                             "frequency": classification.get("frequency", "esporádica"),
-                            "guidelines": classification.get("guidelines", "Responda de forma prestativa.")
+                            "guidelines": classification.get("guidelines", "Responda de forma prestativa."),
+                            "last_interaction": time.time()  # Registrar momento da (re-)classificação
                         }
                         
                         personal_contacts[target_key] = new_data
