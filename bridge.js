@@ -98,19 +98,34 @@ const activityCounters = {
 const originalLog = console.log;
 const originalError = console.error;
 const originalWarn = console.warn;
+
+const safeFormatArg = (a) => {
+  if (a instanceof Error) {
+    return a.stack || a.message;
+  }
+  if (typeof a === 'object' && a !== null) {
+    try {
+      return JSON.stringify(a);
+    } catch (err) {
+      return `[Object: ${err.message}]`;
+    }
+  }
+  return String(a);
+};
+
 console.log = (...args) => {
   originalLog.apply(console, args);
-  addRecentLog('info', args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' '));
+  addRecentLog('info', args.map(safeFormatArg).join(' '));
 };
 console.error = (...args) => {
   originalError.apply(console, args);
-  const msg = args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ');
+  const msg = args.map(safeFormatArg).join(' ');
   addRecentLog('error', msg);
   classifyAndCountError(msg);
 };
 console.warn = (...args) => {
   originalWarn.apply(console, args);
-  const msg = args.map(a => typeof a === 'object' ? JSON.stringify(a) : String(a)).join(' ');
+  const msg = args.map(safeFormatArg).join(' ');
   addRecentLog('warn', msg);
   classifyAndCountError(msg);
 };
@@ -1370,7 +1385,8 @@ export {
   getRecentlySentIds,
   getMessageQueue,
   setSock,
-  isSystemError
+  isSystemError,
+  getRecentLogs
 };
 
 function getBotPaused() { return botPaused; }
@@ -1380,3 +1396,4 @@ function clearSilencedChats() { for (const k in silencedChats) delete silencedCh
 function getRecentlySentIds() { return recentlySentIds; }
 function getMessageQueue() { return messageQueue; }
 function setSock(s) { sock = s; }
+function getRecentLogs() { return recentLogs; }

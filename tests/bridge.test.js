@@ -14,7 +14,8 @@ const {
   getRecentlySentIds,
   getMessageQueue,
   setSock,
-  isSystemError
+  isSystemError,
+  getRecentLogs
 } = await import('../bridge.js');
 
 // Setup Mock Socket
@@ -444,5 +445,29 @@ test('WhatsApp Bridge Regression Tests', async (t) => {
     });
 
     assert.strictEqual(mockSock.sentMessages.length, 0, 'Should NOT send auto-reply to private chat');
+  });
+
+  await t.test('16. Console log overrides should handle circular references and format Errors safely', async () => {
+    const logs = getRecentLogs();
+    
+    // Test circular structure
+    const circularObj = { name: 'circular' };
+    circularObj.self = circularObj;
+    
+    // This should NOT crash the process
+    console.log('Test circular:', circularObj);
+    
+    // Verify circular log entry is recorded
+    const lastLog = logs[logs.length - 1];
+    assert.ok(lastLog.includes('Test circular:'), 'Should log circular object message');
+    assert.ok(lastLog.includes('[Object:'), 'Should handle circular structure gracefully');
+
+    // Test Error object serialization
+    const testError = new Error('Database connection failed');
+    console.error('Test error:', testError);
+    
+    const lastErrorLog = logs[logs.length - 1];
+    assert.ok(lastErrorLog.includes('Test error:'), 'Should log error message prefix');
+    assert.ok(lastErrorLog.includes('Database connection failed'), 'Should serialize actual Error message/stack');
   });
 });
