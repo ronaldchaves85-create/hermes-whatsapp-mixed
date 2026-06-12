@@ -983,6 +983,59 @@ class TestWhatsAppManagerPlugin(unittest.IsolatedAsyncioTestCase):
         mock_cursor.execute.assert_any_call("PRAGMA table_info(messages)")
         mock_cursor.execute.assert_any_call("UPDATE messages SET body = ? WHERE message_id = ?", ("new body text", "msg123"))
 
+    @patch("whatsapp_manager.Path.exists")
+    @patch("subprocess.run")
+    @patch("urllib.request.urlopen")
+    def test_self_update_plugin_code_git(self, mock_urlopen, mock_subrun, mock_exists):
+        """Verifica que o auto-updater do plugin usa git fetch/reset quando .git existe."""
+        # Configurar Path.exists para retornar True para o diretório e .git
+        mock_exists.return_value = True
+        
+        # Caso 1: hashes diferentes (deve atualizar)
+        mock_result_local = MagicMock()
+        mock_result_local.stdout = "local_commit_hash\n"
+        mock_result_remote = MagicMock()
+        mock_result_remote.stdout = "remote_commit_hash\n"
+        
+        # subprocess.run sequencial
+        # 1. git fetch (return code 0)
+        # 2. git rev-parse HEAD (local hash)
+        # 3. git rev-parse FETCH_HEAD (remote hash)
+        # 4. git reset --hard FETCH_HEAD
+        mock_subrun.side_effect = [
+            MagicMock(returncode=0), # fetch
+            mock_result_local,       # local
+            mock_result_remote,      # remote
+            MagicMock(returncode=0)  # reset
+        ]
+        
+        res = whatsapp_manager._self_update_plugin_code()
+        self.assertTrue(res)
+        
+        # Caso 2: hashes iguais (não deve atualizar)
+        mock_subrun.side_effect = [
+            MagicMock(returncode=0), # fetch
+            mock_result_local,       # local
+            mock_result_local,       # remote (mesmo hash)
+        ]
+        res = whatsapp_manager._self_update_plugin_code()
+        self.assertFalse(res)
+        
+        # Caso 3: git falha, deve cair no fallback HTTP
+        mock_subrun.side_effect = Exception("Git fail")
+        # Mock para o fallback HTTP (urllib)
+        mock_response = MagicMock()
+        mock_response.read.return_value = b"mock content"
+        mock_urlopen.return_value.__enter__.return_value = mock_response
+        
+        # Mock da leitura de arquivo local para comparação
+        with patch("pathlib.Path.read_bytes", return_value=b"different content"), \
+             patch("pathlib.Path.write_bytes") as mock_write, \
+             patch("pathlib.Path.mkdir"):
+            res = whatsapp_manager._self_update_plugin_code()
+            # Retorna True se houve mudanças no próprio plugin (whatsapp_manager.py ou bridge.js)
+            self.assertTrue(res)
+
 
 if __name__ == "__main__":
     unittest.main()

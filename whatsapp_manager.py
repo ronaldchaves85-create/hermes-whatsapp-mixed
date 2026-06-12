@@ -1287,6 +1287,32 @@ def _self_update_plugin_code() -> bool:
             print(f"[whatsapp-manager] Code Update: Não foi possível criar plugin_dir: {mkdir_err}. Abortando update.")
             return False
 
+    if (plugin_dir / ".git").exists():
+        try:
+            import subprocess
+            git_url = f"https://github.com/{github_user}/hermes-whatsapp-mixed.git"
+            
+            # Fetch origin main using the token header if available
+            fetch_cmd = ["git"]
+            if code_token:
+                fetch_cmd.extend(["-c", f"http.extraHeader=Authorization: token {code_token}"])
+            fetch_cmd.extend(["fetch", git_url, "main"])
+            
+            subprocess.run(fetch_cmd, cwd=str(plugin_dir), check=True, capture_output=True)
+            
+            local_hash = subprocess.run(["git", "rev-parse", "HEAD"], cwd=str(plugin_dir), check=True, capture_output=True, text=True).stdout.strip()
+            remote_hash = subprocess.run(["git", "rev-parse", "FETCH_HEAD"], cwd=str(plugin_dir), check=True, capture_output=True, text=True).stdout.strip()
+            
+            if local_hash != remote_hash:
+                # Reset local modifications to avoid merge conflicts
+                subprocess.run(["git", "reset", "--hard", "FETCH_HEAD"], cwd=str(plugin_dir), check=True, capture_output=True)
+                print(f"[whatsapp-manager] Code Update (Git): Código atualizado via Git para o commit {remote_hash[:7]}.")
+                return True
+            else:
+                print("[whatsapp-manager] Code Update (Git): Sem novas atualizações no Git.")
+                return False
+        except Exception as git_err:
+            print(f"[whatsapp-manager] Code Update (Git): Falha ao atualizar via Git: {git_err}. Tentando fallback por downloads individuais...")
     files_to_update = {
         "plugin.yaml": f"{raw_root}/plugin.yaml",
         "__init__.py": f"{raw_root}/__init__.py",

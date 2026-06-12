@@ -254,17 +254,48 @@ if [ ! -d "/opt/data/.hermes/plugins/whatsapp-manager" ]; then
     safe_download "$RAW_ROOT/skills/whatsapp-logs-diagnostics/SKILL.md" "/opt/data/.hermes/plugins/whatsapp-manager/skills/whatsapp-logs-diagnostics/SKILL.md" "$CURL_CODE_AUTH_HEADER" "skills/whatsapp-logs-diagnostics/SKILL.md"
     echo "  ✓ Plugin whatsapp-manager instalado com sucesso (incluindo skills e google_api)."
 else
-    echo "  - Plugin whatsapp-manager já instalado. Atualizando __init__.py, whatsapp_manager.py, skills e módulos..."
-    safe_download "$RAW_ROOT/__init__.py"   "/opt/data/.hermes/plugins/whatsapp-manager/__init__.py" "$CURL_CODE_AUTH_HEADER" "__init__.py"
-    safe_download "$RAW_ROOT/whatsapp_manager.py" "/opt/data/.hermes/plugins/whatsapp-manager/whatsapp_manager.py" "$CURL_CODE_AUTH_HEADER" "whatsapp_manager.py"
-    safe_download "$RAW_ROOT/google_api.py" "/opt/data/.hermes/plugins/whatsapp-manager/google_api.py" "$CURL_CODE_AUTH_HEADER" "google_api.py"
-    mkdir -p "/opt/data/.hermes/plugins/whatsapp-manager/skills/google-oauth"
-    safe_download "$RAW_ROOT/skills/google-oauth/SKILL.md" "/opt/data/.hermes/plugins/whatsapp-manager/skills/google-oauth/SKILL.md" "$CURL_CODE_AUTH_HEADER" "skills/google-oauth/SKILL.md"
-    mkdir -p "/opt/data/.hermes/plugins/whatsapp-manager/skills/research-sources"
-    safe_download "$RAW_ROOT/skills/research-sources/SKILL.md" "/opt/data/.hermes/plugins/whatsapp-manager/skills/research-sources/SKILL.md" "$CURL_CODE_AUTH_HEADER" "skills/research-sources/SKILL.md"
-    mkdir -p "/opt/data/.hermes/plugins/whatsapp-manager/skills/whatsapp-logs-diagnostics"
-    safe_download "$RAW_ROOT/skills/whatsapp-logs-diagnostics/SKILL.md" "/opt/data/.hermes/plugins/whatsapp-manager/skills/whatsapp-logs-diagnostics/SKILL.md" "$CURL_CODE_AUTH_HEADER" "skills/whatsapp-logs-diagnostics/SKILL.md"
-    echo "  ✓ __init__.py, whatsapp_manager.py, google_api.py e skills atualizados."
+    if [ -d "/opt/data/.hermes/plugins/whatsapp-manager/.git" ]; then
+        echo "🔄 /opt/data/.hermes/plugins/whatsapp-manager é um repositório Git. Atualizando via Git..."
+        (
+            cd "/opt/data/.hermes/plugins/whatsapp-manager" || exit 1
+            # Limpa modificações locais nos arquivos do plugin para evitar conflitos de merge
+            git reset --hard HEAD
+            # Realiza a atualização via pull
+            if [ -n "$CODE_TOKEN" ]; then
+                git -c http.extraHeader="Authorization: token $CODE_TOKEN" pull origin main || git pull origin main
+            else
+                git pull origin main
+            fi
+        )
+        if [ $? -eq 0 ]; then
+            echo "  ✓ Plugin atualizado via Git pull com sucesso."
+        else
+            echo "  ⚠️ Falha ao atualizar via Git pull. Tentando fallback para atualização de arquivos individuais..."
+            # Fallback para download individual caso falhe por qualquer motivo
+            safe_download "$RAW_ROOT/__init__.py"   "/opt/data/.hermes/plugins/whatsapp-manager/__init__.py" "$CURL_CODE_AUTH_HEADER" "__init__.py"
+            safe_download "$RAW_ROOT/whatsapp_manager.py" "/opt/data/.hermes/plugins/whatsapp-manager/whatsapp_manager.py" "$CURL_CODE_AUTH_HEADER" "whatsapp_manager.py"
+            safe_download "$RAW_ROOT/google_api.py" "/opt/data/.hermes/plugins/whatsapp-manager/google_api.py" "$CURL_CODE_AUTH_HEADER" "google_api.py"
+            mkdir -p "/opt/data/.hermes/plugins/whatsapp-manager/skills/google-oauth"
+            safe_download "$RAW_ROOT/skills/google-oauth/SKILL.md" "/opt/data/.hermes/plugins/whatsapp-manager/skills/google-oauth/SKILL.md" "$CURL_CODE_AUTH_HEADER" "skills/google-oauth/SKILL.md"
+            mkdir -p "/opt/data/.hermes/plugins/whatsapp-manager/skills/research-sources"
+            safe_download "$RAW_ROOT/skills/research-sources/SKILL.md" "/opt/data/.hermes/plugins/whatsapp-manager/skills/research-sources/SKILL.md" "$CURL_CODE_AUTH_HEADER" "skills/research-sources/SKILL.md"
+            mkdir -p "/opt/data/.hermes/plugins/whatsapp-manager/skills/whatsapp-logs-diagnostics"
+            safe_download "$RAW_ROOT/skills/whatsapp-logs-diagnostics/SKILL.md" "/opt/data/.hermes/plugins/whatsapp-manager/skills/whatsapp-logs-diagnostics/SKILL.md" "$CURL_CODE_AUTH_HEADER" "skills/whatsapp-logs-diagnostics/SKILL.md"
+            echo "  ✓ __init__.py, whatsapp_manager.py, google_api.py e skills atualizados via download."
+        fi
+    else
+        echo "  - Plugin whatsapp-manager já instalado (não-Git). Atualizando __init__.py, whatsapp_manager.py, skills e módulos..."
+        safe_download "$RAW_ROOT/__init__.py"   "/opt/data/.hermes/plugins/whatsapp-manager/__init__.py" "$CURL_CODE_AUTH_HEADER" "__init__.py"
+        safe_download "$RAW_ROOT/whatsapp_manager.py" "/opt/data/.hermes/plugins/whatsapp-manager/whatsapp_manager.py" "$CURL_CODE_AUTH_HEADER" "whatsapp_manager.py"
+        safe_download "$RAW_ROOT/google_api.py" "/opt/data/.hermes/plugins/whatsapp-manager/google_api.py" "$CURL_CODE_AUTH_HEADER" "google_api.py"
+        mkdir -p "/opt/data/.hermes/plugins/whatsapp-manager/skills/google-oauth"
+        safe_download "$RAW_ROOT/skills/google-oauth/SKILL.md" "/opt/data/.hermes/plugins/whatsapp-manager/skills/google-oauth/SKILL.md" "$CURL_CODE_AUTH_HEADER" "skills/google-oauth/SKILL.md"
+        mkdir -p "/opt/data/.hermes/plugins/whatsapp-manager/skills/research-sources"
+        safe_download "$RAW_ROOT/skills/research-sources/SKILL.md" "/opt/data/.hermes/plugins/whatsapp-manager/skills/research-sources/SKILL.md" "$CURL_CODE_AUTH_HEADER" "skills/research-sources/SKILL.md"
+        mkdir -p "/opt/data/.hermes/plugins/whatsapp-manager/skills/whatsapp-logs-diagnostics"
+        safe_download "$RAW_ROOT/skills/whatsapp-logs-diagnostics/SKILL.md" "/opt/data/.hermes/plugins/whatsapp-manager/skills/whatsapp-logs-diagnostics/SKILL.md" "$CURL_CODE_AUTH_HEADER" "skills/whatsapp-logs-diagnostics/SKILL.md"
+        echo "  ✓ __init__.py, whatsapp_manager.py, google_api.py e skills atualizados."
+    fi
 fi
 
 # Baixa o modelo de config.yaml se ele não existir localmente
