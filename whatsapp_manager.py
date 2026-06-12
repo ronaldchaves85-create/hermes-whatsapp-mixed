@@ -512,7 +512,7 @@ def _classify_contact_via_llm(name: str, chat_history: str, stats_info: str) -> 
     # 1. Tentar Gemini API
     if google_key:
         try:
-            model_to_use = classify_model if classify_model else "gemini-3.5-flash"
+            model_to_use = classify_model if (classify_model and "gemini" in classify_model.lower()) else "gemini-3.5-flash"
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_to_use}:generateContent?key={google_key}"
             headers = {"Content-Type": "application/json"}
             payload = {
@@ -530,7 +530,7 @@ def _classify_contact_via_llm(name: str, chat_history: str, stats_info: str) -> 
     # 2. Tentar OpenAI API
     if openai_key:
         try:
-            model_to_use = classify_model if classify_model else "gpt-4o-mini"
+            model_to_use = classify_model if (classify_model and any(prefix in classify_model.lower() for prefix in ["gpt", "o1-", "o3-"])) else "gpt-4o-mini"
             url = "https://api.openai.com/v1/chat/completions"
             headers = {
                 "Content-Type": "application/json",
@@ -551,7 +551,17 @@ def _classify_contact_via_llm(name: str, chat_history: str, stats_info: str) -> 
 
     if openrouter_key:
         try:
-            model_to_use = classify_model if classify_model else "google/gemini-2.5-flash"
+            if classify_model:
+                if "/" in classify_model:
+                    model_to_use = classify_model
+                elif "gemini" in classify_model.lower():
+                    model_to_use = f"google/{classify_model}"
+                elif "gpt" in classify_model.lower():
+                    model_to_use = f"openai/{classify_model}"
+                else:
+                    model_to_use = classify_model
+            else:
+                model_to_use = "google/gemini-2.5-flash"
             url = "https://openrouter.ai/api/v1/chat/completions"
             headers = {
                 "Content-Type": "application/json",
