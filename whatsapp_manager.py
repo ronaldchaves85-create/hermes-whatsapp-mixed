@@ -1904,7 +1904,6 @@ def register(ctx):
                 try:
                     delay_s = int(os.getenv("WHATSAPP_FIRST_RESPONSE_DELAY_S", "30").strip())
                     if delay_s > 0:
-                        import time
                         print(f"[whatsapp-manager] Aplicando delay de {delay_s}s para a primeira resposta ao cliente...")
                         time.sleep(delay_s)
                 except Exception as e:
