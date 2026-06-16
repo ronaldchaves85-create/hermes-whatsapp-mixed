@@ -140,11 +140,33 @@ def llm_chat_completion(model: str, system: str, user: str, temperature: float =
     conn = http.client.HTTPSConnection(conn_host)
     conn.request("POST", full_path, json_lib.dumps(payload), headers)
     resp = conn.getresponse()
-    data = json_lib.loads(resp.read().decode())
+    raw_body = resp.read().decode("utf-8", errors="replace").strip()
 
     if resp.status != 200:
-        logging.error(f"Erro na API: {resp.status} - {data}")
-        raise RuntimeError(f"Erro na API do modelo: {data}")
+        logging.error(f"Erro na API: {resp.status} - {raw_body}")
+        raise RuntimeError(f"Erro na API do modelo ({resp.status}): {raw_body}")
+
+    data = None
+    try:
+        data = json_lib.loads(raw_body)
+    except json_lib.JSONDecodeError:
+        # Alguns proxies/model gateways prefixam a resposta com texto extra
+        # ou embrulham o JSON em lixo de transporte. Tentamos extrair o
+        # primeiro objeto/array JSON válido do corpo bruto antes de falhar.
+        candidate = None
+        for start_char, end_char in (("{", "}"), ("[", "]")):
+            start = raw_body.find(start_char)
+            end = raw_body.rfind(end_char)
+            if start != -1 and end != -1 and end > start:
+                candidate = raw_body[start:end + 1]
+                try:
+                    data = json_lib.loads(candidate)
+                    break
+                except json_lib.JSONDecodeError:
+                    candidate = None
+        if data is None:
+            logging.error(f"Resposta não-JSON do modelo: {raw_body!r}")
+            raise RuntimeError(f"Resposta inválida do modelo: {raw_body[:400]}")
 
     # Parsear resposta conforme formato (SUPORTE A TIPOS MÚLTIPLOS)
     if PROVIDER == "minimax":
@@ -171,7 +193,8 @@ else:
     rules_content = "Não há diretrizes específicas. Responda de forma extremamente profissional e polida."
     logging.warning("Diretrizes de suporte (support_rules.md) não encontradas. Usando comportamento genérico.")
 
-# Carregar persona de e-mail (do perfil email se existir, ou do arquivo geral SOUL_EMAIL.md)
+# Carregar persona de e-mail. Preferimos o perfil de e-mail quando existir,
+# mas mantemos SOUL_EMAIL.md como fonte de verdade compartilhada.
 profile_email_soul = os.path.join(PERSISTENT_DATA_DIR, ".hermes/profiles/email/SOUL.md")
 soul_email_path = os.path.join(PERSISTENT_DATA_DIR, "SOUL_EMAIL.md")
 
@@ -182,9 +205,10 @@ if os.path.exists(profile_email_soul):
 elif os.path.exists(soul_email_path):
     with open(soul_email_path, "r", encoding="utf-8") as f:
         email_soul = f.read()
-    logging.info("Carregada persona de e-mail geral (SOUL_EMAIL.md).")
+    logging.info("Carregada persona de e-mail oficial (SOUL_EMAIL.md).")
 else:
     email_soul = "Você é o assistente automático de suporte por e-mail oficial do André Alencar (suporte@aalencar.com.br)."
+    logging.warning("SOUL_EMAIL.md não encontrado; usando persona mínima padrão.")
 
 def is_out_of_hours(dt: datetime) -> bool:
     """Verifica se o horário de chegada do e-mail é fora do horário comercial de Brasília."""
@@ -408,10 +432,14 @@ def run_agent():
             ).execute()
             
             headers = _headers_dict(original)
-            sender = headers.get("From", "")
-            subject = headers.get("Subject", "")
-            message_id_header = headers.get("Message-ID", "")
+            # _headers_dict já normaliza as chaves para lowercase.
+            sender = headers.get("from", "") or headers.get("reply-to", "") or headers.get("return-path", "") or ""
+            subject = headers.get("subject", "") or "(sem assunto)"
+            message_id_header = headers.get("message-id", "") or headers.get("message_id", "") or ""
+            if not sender:
+                logging.warning(f"Headers sem remetente para msg={msg_id}: keys={list(headers.keys())[:20]}")
             
+
             # 1. Evitar loops de auto-resposta (não responder a nós mesmos)
             if "suporte@aalencar.com.br" in sender.lower() or "noreply" in sender.lower():
                 logging.info(f"Ignorando e-mail de {sender} para evitar loop.")
@@ -500,13 +528,13 @@ def run_agent():
             # 4. Chamar IA para formular a resposta com base nas diretrizes
             # Injetamos instrução adicional caso o e-mail tenha chegado fora do horário comercial
             additional_instructions = ""
-            if out_of_hours:
+            if out_of_hours and not is_sponsorship_request:
                 additional_instructions = """
 ⚠️ ATENÇÃO: Este e-mail foi recebido FORA do horário comercial brasileiro de atendimento ou em finais de semana/feriados.
 Você DEVE seguir estritamente as diretrizes da seção "🕒 Atendimento Fora do Horário Comercial (Noite, Fins de Semana e Feriados)" do arquivo de regras:
-1. Explique com muita simpatia e educação que o suporte comercial está fechado no momento.
+1. Explique com muita simpatia e educação que o suporte está fechado no momento.
 2. Mencione que o horário normal de atendimento é de Segunda a Sexta, das 8h às 18h.
-3. Sugira os canais alternativos fornecidos (GitHub Issues para bugs/código ou comentários no YouTube).
+3. Sugira os canais alternativos fornecidos (comunidade.aalencar.com.br e o bot do Instagram).
 4. Assegure que retornaremos com prioridade total logo no início do próximo dia útil.
 """
 
@@ -531,12 +559,20 @@ Instruções adicionais:
                 user_prompt = f"REMETENTE: {sender}\nASSUNTO: {subject}\n\nMENSAGEM RECEBIDA:\n{body}"
             
             logging.info(f"Solicitando resposta da IA ({PROVIDER}/{MODEL_NAME})...")
-            reply_text = llm_chat_completion(
-                model=MODEL_NAME,
-                system=system_prompt,
-                user=user_prompt,
-                temperature=0.3
-            )
+            try:
+                reply_text = llm_chat_completion(
+                    model=MODEL_NAME,
+                    system=system_prompt,
+                    user=user_prompt,
+                    temperature=0.3
+                )
+            except Exception as llm_error:
+                logging.error(
+                    f"Falha ao gerar resposta da IA para msg={msg_id} thread={thread_id} sender={sender!r} subject={subject!r}: {llm_error}",
+                    exc_info=True,
+                )
+                # Mantém o e-mail como não lido para reprocessar depois, mas evita derrubar a rodada inteira.
+                continue
             
             # 5. Preparar e enviar a resposta
             if is_shopify_contact and customer_email:
@@ -544,7 +580,17 @@ Instruções adicionais:
                 target_name_log = f"{customer_name} <{customer_email}>"
             else:
                 _, to_email = parseaddr(sender)
-                target_name_log = sender
+                if not to_email and headers.get("Reply-To"):
+                    _, to_email = parseaddr(headers.get("Reply-To", ""))
+                if not to_email and headers.get("From"):
+                    _, to_email = parseaddr(headers.get("From", ""))
+                target_name_log = sender or headers.get("Reply-To", "") or headers.get("From", "") or "Desconhecido"
+
+            if not to_email:
+                logging.warning(
+                    f"Pulando e-mail {msg_id} / thread {thread_id}: não foi possível resolver o destinatário de resposta. sender={sender!r}, reply_to={headers.get('Reply-To', '')!r}, from={headers.get('From', '')!r}"
+                )
+                continue
 
             logging.info(f"Enviando resposta em thread {thread_id} para {target_name_log}...")
             
