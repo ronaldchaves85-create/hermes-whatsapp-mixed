@@ -3637,7 +3637,7 @@
       "label": "_get_media_info()",
       "file_type": "code",
       "source_file": "whatsapp_manager.py",
-      "source_location": "L35",
+      "source_location": "L39",
       "_origin": "ast",
       "id": "whatsapp_manager_get_media_info",
       "community": 60,
@@ -3647,7 +3647,7 @@
       "label": "_get_mime_type()",
       "file_type": "code",
       "source_file": "whatsapp_manager.py",
-      "source_location": "L97",
+      "source_location": "L101",
       "_origin": "ast",
       "id": "whatsapp_manager_get_mime_type",
       "community": 60,
@@ -3657,7 +3657,7 @@
       "label": "_process_media_message()",
       "file_type": "code",
       "source_file": "whatsapp_manager.py",
-      "source_location": "L114",
+      "source_location": "L118",
       "_origin": "ast",
       "id": "whatsapp_manager_process_media_message",
       "community": 60,
@@ -3667,27 +3667,27 @@
       "label": "_update_db_message()",
       "file_type": "code",
       "source_file": "whatsapp_manager.py",
-      "source_location": "L195",
+      "source_location": "L199",
       "_origin": "ast",
       "id": "whatsapp_manager_update_db_message",
-      "community": 3,
+      "community": 66,
       "norm_label": "_update_db_message()"
     },
     {
       "label": "_persist_transcription_to_db()",
       "file_type": "code",
       "source_file": "whatsapp_manager.py",
-      "source_location": "L228",
+      "source_location": "L232",
       "_origin": "ast",
       "id": "whatsapp_manager_persist_transcription_to_db",
-      "community": 3,
+      "community": 66,
       "norm_label": "_persist_transcription_to_db()"
     },
     {
       "label": "_resolve_phone_from_jid()",
       "file_type": "code",
       "source_file": "whatsapp_manager.py",
-      "source_location": "L249",
+      "source_location": "L253",
       "_origin": "ast",
       "id": "whatsapp_manager_resolve_phone_from_jid",
       "community": 59,
@@ -3697,17 +3697,17 @@
       "label": "_normalize_brazilian_phone()",
       "file_type": "code",
       "source_file": "whatsapp_manager.py",
-      "source_location": "L282",
+      "source_location": "L286",
       "_origin": "ast",
       "id": "whatsapp_manager_normalize_brazilian_phone",
-      "community": 3,
+      "community": 71,
       "norm_label": "_normalize_brazilian_phone()"
     },
     {
       "label": "_check_bot_paused()",
       "file_type": "code",
       "source_file": "whatsapp_manager.py",
-      "source_location": "L293",
+      "source_location": "L297",
       "_origin": "ast",
       "id": "whatsapp_manager_check_bot_paused",
       "community": 59,
@@ -3717,17 +3717,17 @@
       "label": "_check_chat_silenced()",
       "file_type": "code",
       "source_file": "whatsapp_manager.py",
-      "source_location": "L310",
+      "source_location": "L315",
       "_origin": "ast",
       "id": "whatsapp_manager_check_chat_silenced",
-      "community": 3,
+      "community": 68,
       "norm_label": "_check_chat_silenced()"
     },
     {
       "label": "_fetch_chat_history()",
       "file_type": "code",
       "source_file": "whatsapp_manager.py",
-      "source_location": "L324",
+      "source_location": "L330",
       "_origin": "ast",
       "id": "whatsapp_manager_fetch_chat_history",
       "community": 3,
@@ -3737,7 +3737,7 @@
       "label": "_resolve_contact_name_from_bridge()",
       "file_type": "code",
       "source_file": "whatsapp_manager.py",
-      "source_location": "L336",
+      "source_location": "L343",
       "_origin": "ast",
       "id": "whatsapp_manager_resolve_contact_name_from_bridge",
       "community": 57,
@@ -3747,7 +3747,7 @@
       "label": "_best_contact_name()",
       "file_type": "code",
       "source_file": "whatsapp_manager.py",
-      "source_location": "L359",
+      "source_location": "L366",
       "_origin": "ast",
       "id": "whatsapp_manager_best_contact_name",
       "community": 57,
@@ -3757,17 +3757,17 @@
       "label": "_extract_json_from_text()",
       "file_type": "code",
       "source_file": "whatsapp_manager.py",
-      "source_location": "L389",
+      "source_location": "L396",
       "_origin": "ast",
       "id": "whatsapp_manager_extract_json_from_text",
-      "community": 53,
+      "community": 69,
       "norm_label": "_extract_json_from_text()"
     },
     {
       "label": "_sanitize_classification_result()",
       "file_type": "code",
       "source_file": "whatsapp_manager.py",
-      "source_location": "L440",
+      "source_location": "L447",
       "_origin": "ast",
       "id": "whatsapp_manager_sanitize_classification_result",
       "community": 53,
@@ -3777,7 +3777,7 @@
       "label": "_classify_contact_via_llm()",
       "file_type": "code",
       "source_file": "whatsapp_manager.py",
-      "source_location": "L452",
+      "source_location": "L459",
       "_origin": "ast",
       "id": "whatsapp_manager_classify_contact_via_llm",
       "community": 53,
@@ -3787,7 +3787,7 @@
       "label": "_sync_contacts_from_db_internal()",
       "file_type": "code",
       "source_file": "whatsapp_manager.py",
-      "source_location": "L598",
+      "source_location": "L605",
       "_origin": "ast",
       "id": "whatsapp_manager_sync_contacts_from_db_internal",
       "community": 57,
@@ -3797,7 +3797,7 @@
       "label": "_push_personal_contacts_to_github()",
       "file_type": "code",
       "source_file": "whatsapp_manager.py",
-      "source_location": "L1054",
+      "source_location": "L1061",
       "_origin": "ast",
       "id": "whatsapp_manager_push_personal_contacts_to_github",
       "community": 3,
@@ -3807,7 +3807,7 @@
       "label": "_ensure_google_libs()",
       "file_type": "code",
       "source_file": "whatsapp_manager.py",
-      "source_location": "L1124",
+      "source_location": "L1131",
       "_origin": "ast",
       "id": "whatsapp_manager_ensure_google_libs",
       "community": 58,
@@ -3817,7 +3817,7 @@
       "label": "_pull_and_merge_configurations()",
       "file_type": "code",
       "source_file": "whatsapp_manager.py",
-      "source_location": "L1170",
+      "source_location": "L1177",
       "_origin": "ast",
       "id": "whatsapp_manager_pull_and_merge_configurations",
       "community": 59,
@@ -3827,17 +3827,77 @@
       "label": "_self_update_plugin_code()",
       "file_type": "code",
       "source_file": "whatsapp_manager.py",
-      "source_location": "L1285",
+      "source_location": "L1292",
       "_origin": "ast",
       "id": "whatsapp_manager_self_update_plugin_code",
       "community": 58,
       "norm_label": "_self_update_plugin_code()"
     },
     {
+      "label": "_resolve_chat_id()",
+      "file_type": "code",
+      "source_file": "whatsapp_manager.py",
+      "source_location": "L1403",
+      "_origin": "ast",
+      "id": "whatsapp_manager_resolve_chat_id",
+      "community": 3,
+      "norm_label": "_resolve_chat_id()"
+    },
+    {
+      "label": "_build_owner_context()",
+      "file_type": "code",
+      "source_file": "whatsapp_manager.py",
+      "source_location": "L1418",
+      "_origin": "ast",
+      "id": "whatsapp_manager_build_owner_context",
+      "community": 3,
+      "norm_label": "_build_owner_context()"
+    },
+    {
+      "label": "_load_support_files()",
+      "file_type": "code",
+      "source_file": "whatsapp_manager.py",
+      "source_location": "L1439",
+      "_origin": "ast",
+      "id": "whatsapp_manager_load_support_files",
+      "community": 3,
+      "norm_label": "_load_support_files()"
+    },
+    {
+      "label": "_load_personal_contacts()",
+      "file_type": "code",
+      "source_file": "whatsapp_manager.py",
+      "source_location": "L1471",
+      "_origin": "ast",
+      "id": "whatsapp_manager_load_personal_contacts",
+      "community": 70,
+      "norm_label": "_load_personal_contacts()"
+    },
+    {
+      "label": "_build_personal_prompt()",
+      "file_type": "code",
+      "source_file": "whatsapp_manager.py",
+      "source_location": "L1490",
+      "_origin": "ast",
+      "id": "whatsapp_manager_build_personal_prompt",
+      "community": 3,
+      "norm_label": "_build_personal_prompt()"
+    },
+    {
+      "label": "_build_support_prompt()",
+      "file_type": "code",
+      "source_file": "whatsapp_manager.py",
+      "source_location": "L1554",
+      "_origin": "ast",
+      "id": "whatsapp_manager_build_support_prompt",
+      "community": 67,
+      "norm_label": "_build_support_prompt()"
+    },
+    {
       "label": "register()",
       "file_type": "code",
       "source_file": "whatsapp_manager.py",
-      "source_location": "L1392",
+      "source_location": "L1583",
       "_origin": "ast",
       "id": "whatsapp_manager_register",
       "community": 58,
@@ -3857,9 +3917,9 @@
       "label": "Extrai informa\u00e7\u00f5es de m\u00eddia de um objeto de evento de forma extremamente robusta",
       "file_type": "rationale",
       "source_file": "whatsapp_manager.py",
-      "source_location": "L36",
+      "source_location": "L40",
       "_origin": "ast",
-      "id": "whatsapp_manager_rationale_36",
+      "id": "whatsapp_manager_rationale_40",
       "community": 60,
       "norm_label": "extrai informacoes de midia de um objeto de evento de forma extremamente robusta"
     },
@@ -3867,9 +3927,9 @@
       "label": "Retorna o tipo MIME adequado com base na extens\u00e3o do arquivo.",
       "file_type": "rationale",
       "source_file": "whatsapp_manager.py",
-      "source_location": "L98",
+      "source_location": "L102",
       "_origin": "ast",
-      "id": "whatsapp_manager_rationale_98",
+      "id": "whatsapp_manager_rationale_102",
       "community": 60,
       "norm_label": "retorna o tipo mime adequado com base na extensao do arquivo."
     },
@@ -3877,9 +3937,9 @@
       "label": "Processa mensagem de m\u00eddia (\u00e1udio ou imagem) usando a API do Gemini.          Re",
       "file_type": "rationale",
       "source_file": "whatsapp_manager.py",
-      "source_location": "L115",
+      "source_location": "L119",
       "_origin": "ast",
-      "id": "whatsapp_manager_rationale_115",
+      "id": "whatsapp_manager_rationale_119",
       "community": 60,
       "norm_label": "processa mensagem de midia (audio ou imagem) usando a api do gemini.          re"
     },
@@ -3887,29 +3947,29 @@
       "label": "Atualiza o corpo da mensagem no SQLite detectando dinamicamente a coluna de ID.",
       "file_type": "rationale",
       "source_file": "whatsapp_manager.py",
-      "source_location": "L196",
+      "source_location": "L200",
       "_origin": "ast",
-      "id": "whatsapp_manager_rationale_196",
-      "community": 3,
+      "id": "whatsapp_manager_rationale_200",
+      "community": 66,
       "norm_label": "atualiza o corpo da mensagem no sqlite detectando dinamicamente a coluna de id."
     },
     {
       "label": "Executa a persist\u00eancia da transcri\u00e7\u00e3o/descri\u00e7\u00e3o tratando eventuais race conditio",
       "file_type": "rationale",
       "source_file": "whatsapp_manager.py",
-      "source_location": "L229",
+      "source_location": "L233",
       "_origin": "ast",
-      "id": "whatsapp_manager_rationale_229",
-      "community": 3,
+      "id": "whatsapp_manager_rationale_233",
+      "community": 66,
       "norm_label": "executa a persistencia da transcricao/descricao tratando eventuais race conditio"
     },
     {
       "label": "Traduz JID do WhatsApp (seja LID ou formato padr\u00e3o) para JID com telefone cl\u00e1ssi",
       "file_type": "rationale",
       "source_file": "whatsapp_manager.py",
-      "source_location": "L250",
+      "source_location": "L254",
       "_origin": "ast",
-      "id": "whatsapp_manager_rationale_250",
+      "id": "whatsapp_manager_rationale_254",
       "community": 59,
       "norm_label": "traduz jid do whatsapp (seja lid ou formato padrao) para jid com telefone classi"
     },
@@ -3917,19 +3977,19 @@
       "label": "Normaliza n\u00fameros de telefone brasileiros para compara\u00e7\u00e3o segura (tratando o d\u00edg",
       "file_type": "rationale",
       "source_file": "whatsapp_manager.py",
-      "source_location": "L283",
+      "source_location": "L287",
       "_origin": "ast",
-      "id": "whatsapp_manager_rationale_283",
-      "community": 3,
+      "id": "whatsapp_manager_rationale_287",
+      "community": 71,
       "norm_label": "normaliza numeros de telefone brasileiros para comparacao segura (tratando o dig"
     },
     {
       "label": "Verifica se o bot est\u00e1 pausado via endpoint do bridge e atualiza o mapa de LIDs.",
       "file_type": "rationale",
       "source_file": "whatsapp_manager.py",
-      "source_location": "L294",
+      "source_location": "L298",
       "_origin": "ast",
-      "id": "whatsapp_manager_rationale_294",
+      "id": "whatsapp_manager_rationale_298",
       "community": 59,
       "norm_label": "verifica se o bot esta pausado via endpoint do bridge e atualiza o mapa de lids."
     },
@@ -3937,19 +3997,19 @@
       "label": "Verifica se uma conversa espec\u00edfica est\u00e1 silenciada temporariamente.",
       "file_type": "rationale",
       "source_file": "whatsapp_manager.py",
-      "source_location": "L311",
+      "source_location": "L316",
       "_origin": "ast",
-      "id": "whatsapp_manager_rationale_311",
-      "community": 3,
+      "id": "whatsapp_manager_rationale_316",
+      "community": 68,
       "norm_label": "verifica se uma conversa especifica esta silenciada temporariamente."
     },
     {
       "label": "Busca hist\u00f3rico de mensagens do servidor HTTP.",
       "file_type": "rationale",
       "source_file": "whatsapp_manager.py",
-      "source_location": "L325",
+      "source_location": "L331",
       "_origin": "ast",
-      "id": "whatsapp_manager_rationale_325",
+      "id": "whatsapp_manager_rationale_331",
       "community": 3,
       "norm_label": "busca historico de mensagens do servidor http."
     },
@@ -3957,9 +4017,9 @@
       "label": "Consulta o Baileys via bridge para obter o pushName/contact name de um JID.",
       "file_type": "rationale",
       "source_file": "whatsapp_manager.py",
-      "source_location": "L337",
+      "source_location": "L344",
       "_origin": "ast",
-      "id": "whatsapp_manager_rationale_337",
+      "id": "whatsapp_manager_rationale_344",
       "community": 57,
       "norm_label": "consulta o baileys via bridge para obter o pushname/contact name de um jid."
     },
@@ -3967,9 +4027,9 @@
       "label": "Resolve o melhor nome disponivel para um contato.      Ordem de prioridade:",
       "file_type": "rationale",
       "source_file": "whatsapp_manager.py",
-      "source_location": "L360",
+      "source_location": "L367",
       "_origin": "ast",
-      "id": "whatsapp_manager_rationale_360",
+      "id": "whatsapp_manager_rationale_367",
       "community": 57,
       "norm_label": "resolve o melhor nome disponivel para um contato.      ordem de prioridade:"
     },
@@ -3977,19 +4037,19 @@
       "label": "Extrai o primeiro objeto JSON v\u00e1lido de um texto usando balanceamento de chaves.",
       "file_type": "rationale",
       "source_file": "whatsapp_manager.py",
-      "source_location": "L390",
+      "source_location": "L397",
       "_origin": "ast",
-      "id": "whatsapp_manager_rationale_390",
-      "community": 53,
+      "id": "whatsapp_manager_rationale_397",
+      "community": 69,
       "norm_label": "extrai o primeiro objeto json valido de um texto usando balanceamento de chaves."
     },
     {
       "label": "Evita que nomes possessivos/parentesco do Andr\u00e9 (como 'pai', 'm\u00e3e', etc.) sejam",
       "file_type": "rationale",
       "source_file": "whatsapp_manager.py",
-      "source_location": "L441",
+      "source_location": "L448",
       "_origin": "ast",
-      "id": "whatsapp_manager_rationale_441",
+      "id": "whatsapp_manager_rationale_448",
       "community": 53,
       "norm_label": "evita que nomes possessivos/parentesco do andre (como 'pai', 'mae', etc.) sejam"
     },
@@ -3997,9 +4057,9 @@
       "label": "Classifica contatos usando a API do LLM (Gemini, OpenAI ou OpenRouter) com base",
       "file_type": "rationale",
       "source_file": "whatsapp_manager.py",
-      "source_location": "L453",
+      "source_location": "L460",
       "_origin": "ast",
-      "id": "whatsapp_manager_rationale_453",
+      "id": "whatsapp_manager_rationale_460",
       "community": 53,
       "norm_label": "classifica contatos usando a api do llm (gemini, openai ou openrouter) com base"
     },
@@ -4007,9 +4067,9 @@
       "label": "Sincroniza contatos do SQLite local para personal_contacts.json e envia para o G",
       "file_type": "rationale",
       "source_file": "whatsapp_manager.py",
-      "source_location": "L599",
+      "source_location": "L606",
       "_origin": "ast",
-      "id": "whatsapp_manager_rationale_599",
+      "id": "whatsapp_manager_rationale_606",
       "community": 57,
       "norm_label": "sincroniza contatos do sqlite local para personal_contacts.json e envia para o g"
     },
@@ -4017,9 +4077,9 @@
       "label": "Envia o arquivo personal_contacts.json local diretamente para o reposit\u00f3rio do G",
       "file_type": "rationale",
       "source_file": "whatsapp_manager.py",
-      "source_location": "L1055",
+      "source_location": "L1062",
       "_origin": "ast",
-      "id": "whatsapp_manager_rationale_1055",
+      "id": "whatsapp_manager_rationale_1062",
       "community": 3,
       "norm_label": "envia o arquivo personal_contacts.json local diretamente para o repositorio do g"
     },
@@ -4027,9 +4087,9 @@
       "label": "Instala as bibliotecas da Google API no venv do Hermes se ainda n\u00e3o estiverem di",
       "file_type": "rationale",
       "source_file": "whatsapp_manager.py",
-      "source_location": "L1125",
+      "source_location": "L1132",
       "_origin": "ast",
-      "id": "whatsapp_manager_rationale_1125",
+      "id": "whatsapp_manager_rationale_1132",
       "community": 58,
       "norm_label": "instala as bibliotecas da google api no venv do hermes se ainda nao estiverem di"
     },
@@ -4037,9 +4097,9 @@
       "label": "Baixa as configura\u00e7\u00f5es do reposit\u00f3rio privado do GitHub do cliente e faz merge c",
       "file_type": "rationale",
       "source_file": "whatsapp_manager.py",
-      "source_location": "L1171",
+      "source_location": "L1178",
       "_origin": "ast",
-      "id": "whatsapp_manager_rationale_1171",
+      "id": "whatsapp_manager_rationale_1178",
       "community": 59,
       "norm_label": "baixa as configuracoes do repositorio privado do github do cliente e faz merge c"
     },
@@ -4047,11 +4107,71 @@
       "label": "Atualiza o c\u00f3digo do plugin a partir do reposit\u00f3rio Git. Retorna True se houve m",
       "file_type": "rationale",
       "source_file": "whatsapp_manager.py",
-      "source_location": "L1286",
+      "source_location": "L1293",
       "_origin": "ast",
-      "id": "whatsapp_manager_rationale_1286",
+      "id": "whatsapp_manager_rationale_1293",
       "community": 58,
       "norm_label": "atualiza o codigo do plugin a partir do repositorio git. retorna true se houve m"
+    },
+    {
+      "label": "Resolve o chat_id can\u00f4nico a partir de um sender_id (JID ou LID).      Retorna o",
+      "file_type": "rationale",
+      "source_file": "whatsapp_manager.py",
+      "source_location": "L1404",
+      "_origin": "ast",
+      "id": "whatsapp_manager_rationale_1404",
+      "community": 3,
+      "norm_label": "resolve o chat_id canonico a partir de um sender_id (jid ou lid).      retorna o"
+    },
+    {
+      "label": "Constr\u00f3i o dicion\u00e1rio de contexto para quando o remetente \u00e9 o pr\u00f3prio Andr\u00e9 (don",
+      "file_type": "rationale",
+      "source_file": "whatsapp_manager.py",
+      "source_location": "L1419",
+      "_origin": "ast",
+      "id": "whatsapp_manager_rationale_1419",
+      "community": 3,
+      "norm_label": "constroi o dicionario de contexto para quando o remetente e o proprio andre (don"
+    },
+    {
+      "label": "Carrega o arquivo de persona (SOUL_WHATSAPP.md) e as regras de suporte (support_",
+      "file_type": "rationale",
+      "source_file": "whatsapp_manager.py",
+      "source_location": "L1440",
+      "_origin": "ast",
+      "id": "whatsapp_manager_rationale_1440",
+      "community": 3,
+      "norm_label": "carrega o arquivo de persona (soul_whatsapp.md) e as regras de suporte (support_"
+    },
+    {
+      "label": "Carrega o arquivo personal_contacts.json e sanitiza cada entrada.      Retorna {",
+      "file_type": "rationale",
+      "source_file": "whatsapp_manager.py",
+      "source_location": "L1472",
+      "_origin": "ast",
+      "id": "whatsapp_manager_rationale_1472",
+      "community": 70,
+      "norm_label": "carrega o arquivo personal_contacts.json e sanitiza cada entrada.      retorna {"
+    },
+    {
+      "label": "Constr\u00f3i o payload de contexto para contatos pessoais (Amigo, Parente, etc.).",
+      "file_type": "rationale",
+      "source_file": "whatsapp_manager.py",
+      "source_location": "L1491",
+      "_origin": "ast",
+      "id": "whatsapp_manager_rationale_1491",
+      "community": 3,
+      "norm_label": "constroi o payload de contexto para contatos pessoais (amigo, parente, etc.)."
+    },
+    {
+      "label": "Constr\u00f3i o payload de contexto para o modo suporte a clientes.      Retorna {\"co",
+      "file_type": "rationale",
+      "source_file": "whatsapp_manager.py",
+      "source_location": "L1555",
+      "_origin": "ast",
+      "id": "whatsapp_manager_rationale_1555",
+      "community": 67,
+      "norm_label": "constroi o payload de contexto para o modo suporte a clientes.      retorna {\"co"
     },
     {
       "label": "graphify.md",
@@ -9768,9 +9888,9 @@
       "source_file": "deploy/scripts/support_agent.py",
       "source_location": "L214",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scripts_support_agent_rationale_214",
-      "target": "scripts_support_agent_is_out_of_hours",
-      "confidence_score": 1.0
+      "target": "scripts_support_agent_is_out_of_hours"
     },
     {
       "relation": "calls",
@@ -9789,9 +9909,9 @@
       "source_file": "deploy/scripts/support_agent.py",
       "source_location": "L255",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scripts_support_agent_rationale_255",
-      "target": "scripts_support_agent_is_auto_reply",
-      "confidence_score": 1.0
+      "target": "scripts_support_agent_is_auto_reply"
     },
     {
       "relation": "calls",
@@ -9810,9 +9930,9 @@
       "source_file": "deploy/scripts/support_agent.py",
       "source_location": "L299",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scripts_support_agent_rationale_299",
-      "target": "scripts_support_agent_has_human_participated",
-      "confidence_score": 1.0
+      "target": "scripts_support_agent_has_human_participated"
     },
     {
       "relation": "calls",
@@ -9831,9 +9951,9 @@
       "source_file": "deploy/scripts/support_agent.py",
       "source_location": "L330",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scripts_support_agent_rationale_330",
-      "target": "scripts_support_agent_has_been_answered_by_us",
-      "confidence_score": 1.0
+      "target": "scripts_support_agent_has_been_answered_by_us"
     },
     {
       "relation": "calls",
@@ -9852,9 +9972,9 @@
       "source_file": "deploy/scripts/support_agent.py",
       "source_location": "L358",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "scripts_support_agent_rationale_358",
-      "target": "scripts_support_agent_is_promotional_or_system_email",
-      "confidence_score": 1.0
+      "target": "scripts_support_agent_is_promotional_or_system_email"
     },
     {
       "relation": "calls",
@@ -11932,6 +12052,36 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "whatsapp_manager.py",
+      "source_location": "L1418",
+      "weight": 1.0,
+      "source": "whatsapp_manager",
+      "target": "whatsapp_manager_build_owner_context",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "whatsapp_manager.py",
+      "source_location": "L1490",
+      "weight": 1.0,
+      "source": "whatsapp_manager",
+      "target": "whatsapp_manager_build_personal_prompt",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "whatsapp_manager.py",
+      "source_location": "L1554",
+      "weight": 1.0,
+      "source": "whatsapp_manager",
+      "target": "whatsapp_manager_build_support_prompt",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "whatsapp_manager.py",
       "source_location": "L293",
       "weight": 1.0,
       "confidence_score": 1.0,
@@ -12022,6 +12172,26 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "whatsapp_manager.py",
+      "source_location": "L1471",
+      "weight": 1.0,
+      "source": "whatsapp_manager",
+      "target": "whatsapp_manager_load_personal_contacts",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "whatsapp_manager.py",
+      "source_location": "L1439",
+      "weight": 1.0,
+      "source": "whatsapp_manager",
+      "target": "whatsapp_manager_load_support_files",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "whatsapp_manager.py",
       "source_location": "L282",
       "weight": 1.0,
       "confidence_score": 1.0,
@@ -12077,6 +12247,16 @@
       "confidence_score": 1.0,
       "source": "whatsapp_manager",
       "target": "whatsapp_manager_register"
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "whatsapp_manager.py",
+      "source_location": "L1403",
+      "weight": 1.0,
+      "source": "whatsapp_manager",
+      "target": "whatsapp_manager_resolve_chat_id",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -12163,11 +12343,11 @@
       "relation": "rationale_for",
       "confidence": "EXTRACTED",
       "source_file": "whatsapp_manager.py",
-      "source_location": "L36",
+      "source_location": "L40",
       "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "whatsapp_manager_rationale_36",
-      "target": "whatsapp_manager_get_media_info"
+      "source": "whatsapp_manager_rationale_40",
+      "target": "whatsapp_manager_get_media_info",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -12184,21 +12364,21 @@
       "relation": "rationale_for",
       "confidence": "EXTRACTED",
       "source_file": "whatsapp_manager.py",
-      "source_location": "L98",
+      "source_location": "L102",
       "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "whatsapp_manager_rationale_98",
-      "target": "whatsapp_manager_get_mime_type"
+      "source": "whatsapp_manager_rationale_102",
+      "target": "whatsapp_manager_get_mime_type",
+      "confidence_score": 1.0
     },
     {
       "relation": "rationale_for",
       "confidence": "EXTRACTED",
       "source_file": "whatsapp_manager.py",
-      "source_location": "L115",
+      "source_location": "L119",
       "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "whatsapp_manager_rationale_115",
-      "target": "whatsapp_manager_process_media_message"
+      "source": "whatsapp_manager_rationale_119",
+      "target": "whatsapp_manager_process_media_message",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -12215,31 +12395,31 @@
       "relation": "rationale_for",
       "confidence": "EXTRACTED",
       "source_file": "whatsapp_manager.py",
-      "source_location": "L196",
+      "source_location": "L200",
       "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "whatsapp_manager_rationale_196",
-      "target": "whatsapp_manager_update_db_message"
+      "source": "whatsapp_manager_rationale_200",
+      "target": "whatsapp_manager_update_db_message",
+      "confidence_score": 1.0
     },
     {
       "relation": "rationale_for",
       "confidence": "EXTRACTED",
       "source_file": "whatsapp_manager.py",
-      "source_location": "L229",
+      "source_location": "L233",
       "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "whatsapp_manager_rationale_229",
-      "target": "whatsapp_manager_persist_transcription_to_db"
+      "source": "whatsapp_manager_rationale_233",
+      "target": "whatsapp_manager_persist_transcription_to_db",
+      "confidence_score": 1.0
     },
     {
       "relation": "rationale_for",
       "confidence": "EXTRACTED",
       "source_file": "whatsapp_manager.py",
-      "source_location": "L250",
+      "source_location": "L254",
       "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "whatsapp_manager_rationale_250",
-      "target": "whatsapp_manager_resolve_phone_from_jid"
+      "source": "whatsapp_manager_rationale_254",
+      "target": "whatsapp_manager_resolve_phone_from_jid",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -12267,11 +12447,11 @@
       "relation": "rationale_for",
       "confidence": "EXTRACTED",
       "source_file": "whatsapp_manager.py",
-      "source_location": "L283",
+      "source_location": "L287",
       "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "whatsapp_manager_rationale_283",
-      "target": "whatsapp_manager_normalize_brazilian_phone"
+      "source": "whatsapp_manager_rationale_287",
+      "target": "whatsapp_manager_normalize_brazilian_phone",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -12288,11 +12468,11 @@
       "relation": "rationale_for",
       "confidence": "EXTRACTED",
       "source_file": "whatsapp_manager.py",
-      "source_location": "L294",
+      "source_location": "L298",
       "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "whatsapp_manager_rationale_294",
-      "target": "whatsapp_manager_check_bot_paused"
+      "source": "whatsapp_manager_rationale_298",
+      "target": "whatsapp_manager_check_bot_paused",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -12309,31 +12489,31 @@
       "relation": "rationale_for",
       "confidence": "EXTRACTED",
       "source_file": "whatsapp_manager.py",
-      "source_location": "L311",
+      "source_location": "L316",
       "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "whatsapp_manager_rationale_311",
-      "target": "whatsapp_manager_check_chat_silenced"
+      "source": "whatsapp_manager_rationale_316",
+      "target": "whatsapp_manager_check_chat_silenced",
+      "confidence_score": 1.0
     },
     {
       "relation": "rationale_for",
       "confidence": "EXTRACTED",
       "source_file": "whatsapp_manager.py",
-      "source_location": "L325",
+      "source_location": "L331",
       "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "whatsapp_manager_rationale_325",
-      "target": "whatsapp_manager_fetch_chat_history"
+      "source": "whatsapp_manager_rationale_331",
+      "target": "whatsapp_manager_fetch_chat_history",
+      "confidence_score": 1.0
     },
     {
       "relation": "rationale_for",
       "confidence": "EXTRACTED",
       "source_file": "whatsapp_manager.py",
-      "source_location": "L337",
+      "source_location": "L344",
       "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "whatsapp_manager_rationale_337",
-      "target": "whatsapp_manager_resolve_contact_name_from_bridge"
+      "source": "whatsapp_manager_rationale_344",
+      "target": "whatsapp_manager_resolve_contact_name_from_bridge",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -12350,11 +12530,11 @@
       "relation": "rationale_for",
       "confidence": "EXTRACTED",
       "source_file": "whatsapp_manager.py",
-      "source_location": "L360",
+      "source_location": "L367",
       "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "whatsapp_manager_rationale_360",
-      "target": "whatsapp_manager_best_contact_name"
+      "source": "whatsapp_manager_rationale_367",
+      "target": "whatsapp_manager_best_contact_name",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -12382,11 +12562,11 @@
       "relation": "rationale_for",
       "confidence": "EXTRACTED",
       "source_file": "whatsapp_manager.py",
-      "source_location": "L390",
+      "source_location": "L397",
       "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "whatsapp_manager_rationale_390",
-      "target": "whatsapp_manager_extract_json_from_text"
+      "source": "whatsapp_manager_rationale_397",
+      "target": "whatsapp_manager_extract_json_from_text",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -12404,6 +12584,17 @@
       "context": "call",
       "confidence": "EXTRACTED",
       "source_file": "whatsapp_manager.py",
+      "source_location": "L1482",
+      "weight": 1.0,
+      "source": "whatsapp_manager_load_personal_contacts",
+      "target": "whatsapp_manager_sanitize_classification_result",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "calls",
+      "context": "call",
+      "confidence": "EXTRACTED",
+      "source_file": "whatsapp_manager.py",
       "source_location": "L1246",
       "weight": 1.0,
       "confidence_score": 1.0,
@@ -12414,11 +12605,11 @@
       "relation": "rationale_for",
       "confidence": "EXTRACTED",
       "source_file": "whatsapp_manager.py",
-      "source_location": "L441",
+      "source_location": "L448",
       "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "whatsapp_manager_rationale_441",
-      "target": "whatsapp_manager_sanitize_classification_result"
+      "source": "whatsapp_manager_rationale_448",
+      "target": "whatsapp_manager_sanitize_classification_result",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -12435,11 +12626,11 @@
       "relation": "rationale_for",
       "confidence": "EXTRACTED",
       "source_file": "whatsapp_manager.py",
-      "source_location": "L453",
+      "source_location": "L460",
       "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "whatsapp_manager_rationale_453",
-      "target": "whatsapp_manager_classify_contact_via_llm"
+      "source": "whatsapp_manager_rationale_460",
+      "target": "whatsapp_manager_classify_contact_via_llm",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -12456,11 +12647,11 @@
       "relation": "rationale_for",
       "confidence": "EXTRACTED",
       "source_file": "whatsapp_manager.py",
-      "source_location": "L599",
+      "source_location": "L606",
       "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "whatsapp_manager_rationale_599",
-      "target": "whatsapp_manager_sync_contacts_from_db_internal"
+      "source": "whatsapp_manager_rationale_606",
+      "target": "whatsapp_manager_sync_contacts_from_db_internal",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -12477,21 +12668,21 @@
       "relation": "rationale_for",
       "confidence": "EXTRACTED",
       "source_file": "whatsapp_manager.py",
-      "source_location": "L1055",
+      "source_location": "L1062",
       "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "whatsapp_manager_rationale_1055",
-      "target": "whatsapp_manager_push_personal_contacts_to_github"
+      "source": "whatsapp_manager_rationale_1062",
+      "target": "whatsapp_manager_push_personal_contacts_to_github",
+      "confidence_score": 1.0
     },
     {
       "relation": "rationale_for",
       "confidence": "EXTRACTED",
       "source_file": "whatsapp_manager.py",
-      "source_location": "L1125",
+      "source_location": "L1132",
       "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "whatsapp_manager_rationale_1125",
-      "target": "whatsapp_manager_ensure_google_libs"
+      "source": "whatsapp_manager_rationale_1132",
+      "target": "whatsapp_manager_ensure_google_libs",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -12508,11 +12699,11 @@
       "relation": "rationale_for",
       "confidence": "EXTRACTED",
       "source_file": "whatsapp_manager.py",
-      "source_location": "L1171",
+      "source_location": "L1178",
       "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "whatsapp_manager_rationale_1171",
-      "target": "whatsapp_manager_pull_and_merge_configurations"
+      "source": "whatsapp_manager_rationale_1178",
+      "target": "whatsapp_manager_pull_and_merge_configurations",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -12529,11 +12720,11 @@
       "relation": "rationale_for",
       "confidence": "EXTRACTED",
       "source_file": "whatsapp_manager.py",
-      "source_location": "L1286",
+      "source_location": "L1293",
       "weight": 1.0,
-      "confidence_score": 1.0,
-      "source": "whatsapp_manager_rationale_1286",
-      "target": "whatsapp_manager_self_update_plugin_code"
+      "source": "whatsapp_manager_rationale_1293",
+      "target": "whatsapp_manager_self_update_plugin_code",
+      "confidence_score": 1.0
     },
     {
       "relation": "calls",
@@ -12545,6 +12736,66 @@
       "confidence_score": 1.0,
       "source": "whatsapp_manager_register",
       "target": "whatsapp_manager_self_update_plugin_code"
+    },
+    {
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "source_file": "whatsapp_manager.py",
+      "source_location": "L1404",
+      "weight": 1.0,
+      "source": "whatsapp_manager_rationale_1404",
+      "target": "whatsapp_manager_resolve_chat_id",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "source_file": "whatsapp_manager.py",
+      "source_location": "L1419",
+      "weight": 1.0,
+      "source": "whatsapp_manager_rationale_1419",
+      "target": "whatsapp_manager_build_owner_context",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "source_file": "whatsapp_manager.py",
+      "source_location": "L1440",
+      "weight": 1.0,
+      "source": "whatsapp_manager_rationale_1440",
+      "target": "whatsapp_manager_load_support_files",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "source_file": "whatsapp_manager.py",
+      "source_location": "L1472",
+      "weight": 1.0,
+      "source": "whatsapp_manager_rationale_1472",
+      "target": "whatsapp_manager_load_personal_contacts",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "source_file": "whatsapp_manager.py",
+      "source_location": "L1491",
+      "weight": 1.0,
+      "source": "whatsapp_manager_rationale_1491",
+      "target": "whatsapp_manager_build_personal_prompt",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "source_file": "whatsapp_manager.py",
+      "source_location": "L1555",
+      "weight": 1.0,
+      "source": "whatsapp_manager_rationale_1555",
+      "target": "whatsapp_manager_build_support_prompt",
+      "confidence_score": 1.0
     },
     {
       "relation": "contains",
@@ -15888,5 +16139,5 @@
     }
   ],
   "hyperedges": [],
-  "built_at_commit": "1a731bf316c1509962a70ba036842eaca9cef080"
+  "built_at_commit": "1596170ed1be60ee52f8554c0aabf7ac1f53d331"
 }

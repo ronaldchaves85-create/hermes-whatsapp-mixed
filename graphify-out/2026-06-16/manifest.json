@@ -40,9 +40,9 @@
     "semantic_hash": "732790100686744e70cbfefb9d0248cf"
   },
   "deploy/scripts/support_agent.py": {
-    "mtime": 1780637480.1064773,
-    "ast_hash": "737b0df4a053511e74ce489cd6c71192",
-    "semantic_hash": "737b0df4a053511e74ce489cd6c71192"
+    "mtime": 1781636279.7413828,
+    "ast_hash": "224077c15ec089086cd2824aa5502565",
+    "semantic_hash": ""
   },
   "deploy/scripts/sync_contacts_from_db.py": {
     "mtime": 1781141851.2870855,
@@ -140,9 +140,9 @@
     "semantic_hash": "e918e13715052c5a886e6c65181b5dcd"
   },
   "deploy/SOUL.md": {
-    "mtime": 1780005754.0033536,
-    "ast_hash": "9ac1b8b4f23e83947a7fd479249f1f9a",
-    "semantic_hash": "9ac1b8b4f23e83947a7fd479249f1f9a"
+    "mtime": 1781636279.7397666,
+    "ast_hash": "97292c61e980ea503fca29eed90b60c3",
+    "semantic_hash": ""
   },
   "deploy/SOUL_EMAIL.md": {
     "mtime": 1780626754.1329389,
@@ -150,9 +150,9 @@
     "semantic_hash": "b6f568b6121350f32d93c523e91a14ac"
   },
   "deploy/SOUL_WHATSAPP.md": {
-    "mtime": 1780675896.5406294,
-    "ast_hash": "045b0b40f7662eca8e77915bd2ef9fd9",
-    "semantic_hash": "045b0b40f7662eca8e77915bd2ef9fd9"
+    "mtime": 1781636279.7406595,
+    "ast_hash": "a999a8732dafae494a4e8e32a4cc0ae5",
+    "semantic_hash": ""
   },
   "deploy/docker-compose.easypanel.yml": {
     "mtime": 1781297588.575956,
@@ -180,9 +180,9 @@
     "semantic_hash": "d9a32093b2208ca6b97e0fb10eecf82f"
   },
   "deploy/support_rules.md": {
-    "mtime": 1780638185.0989015,
-    "ast_hash": "6017acba119b5f53da0d54685877af42",
-    "semantic_hash": "6017acba119b5f53da0d54685877af42"
+    "mtime": 1781636279.7419226,
+    "ast_hash": "48c773ca3becccc11703f1c5e4ebbca7",
+    "semantic_hash": ""
   },
   "plugin.yaml": {
     "mtime": 1781030217.1490884,

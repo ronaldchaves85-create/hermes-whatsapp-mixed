@@ -1,16 +1,16 @@
 # Graph Report - hermes-whatsapp-mixed  (2026-06-16)
 
 ## Corpus Check
-- 40 files · ~65,478 words
+- 40 files · ~65,471 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 754 nodes · 808 edges · 66 communities (36 shown, 30 thin omitted)
+- 766 nodes · 821 edges · 72 communities (37 shown, 35 thin omitted)
 - Extraction: 97% EXTRACTED · 3% INFERRED · 0% AMBIGUOUS · INFERRED: 24 edges (avg confidence: 0.88)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `1a731bf3`
+- Built from commit: `1596170e`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -79,6 +79,12 @@
 - [[_COMMUNITY_Community 63|Community 63]]
 - [[_COMMUNITY_Community 64|Community 64]]
 - [[_COMMUNITY_Community 65|Community 65]]
+- [[_COMMUNITY_Community 66|Community 66]]
+- [[_COMMUNITY_Community 67|Community 67]]
+- [[_COMMUNITY_Community 68|Community 68]]
+- [[_COMMUNITY_Community 69|Community 69]]
+- [[_COMMUNITY_Community 70|Community 70]]
+- [[_COMMUNITY_Community 71|Community 71]]
 
 ## God Nodes (most connected - your core abstractions)
 1. `TestWhatsAppManagerPlugin` - 39 edges
@@ -107,7 +113,7 @@
 ## Import Cycles
 - 1-file cycle: `deploy/scripts/support_agent.py -> deploy/scripts/support_agent.py`
 
-## Communities (66 total, 30 thin omitted)
+## Communities (72 total, 35 thin omitted)
 
 ### Community 0 - "Bridge Core (Main)"
 Cohesion: 0.03
@@ -122,8 +128,8 @@ Cohesion: 0.04
 Nodes (28): _ACCEPTED_HOST_VALUES, activityCounters, ALLOWED_USERS, app, args, AUDIO_CACHE_DIR, BOT_STATE_FILE, CHUNK_DELAY_MS (+20 more)
 
 ### Community 3 - "WhatsApp Manager Core"
-Cohesion: 0.14
-Nodes (13): _check_chat_silenced(), _fetch_chat_history(), _normalize_brazilian_phone(), _persist_transcription_to_db(), _push_personal_contacts_to_github(), WhatsApp Manager Plugin for André Alencar., Envia o arquivo personal_contacts.json local diretamente para o repositório do G, Atualiza o corpo da mensagem no SQLite detectando dinamicamente a coluna de ID. (+5 more)
+Cohesion: 0.13
+Nodes (13): _build_owner_context(), _build_personal_prompt(), _fetch_chat_history(), _load_support_files(), _push_personal_contacts_to_github(), WhatsApp Manager Plugin for André Alencar., Envia o arquivo personal_contacts.json local diretamente para o repositório do G, Resolve o chat_id canônico a partir de um sender_id (JID ou LID).      Retorna o (+5 more)
 
 ### Community 4 - "Google API Module"
 Cohesion: 0.10
@@ -210,8 +216,8 @@ Cohesion: 0.18
 Nodes (10): Exemplo 1: Conversa com o André (Admin - MODO A), Exemplo 2: Conversa com Cliente (Suporte WhatsApp - MODO B), Exemplo 3: Conversa com Cliente (Suporte WhatsApp - MODO B), Exemplo 4: Conversa com Cliente (Suporte WhatsApp - MODO B), Exemplo 5: Conversa com Cliente (Suporte WhatsApp - MODO B), 📝 EXEMPLOS PRÁTICOS DE DIÁLOGOS (FEW-SHOT), 👤 MODO A: Assistente Pessoal do André (Quando falar com André Alencar), 💼 MODO B: Chatbot de Suporte Comercial (Quando falar com Clientes) (+2 more)
 
 ### Community 53 - "Community 53"
-Cohesion: 0.20
-Nodes (7): Python unit tests for the whatsapp-manager plugin., _classify_contact_via_llm(), _extract_json_from_text(), Extrai o primeiro objeto JSON válido de um texto usando balanceamento de chaves., Evita que nomes possessivos/parentesco do André (como 'pai', 'mãe', etc.) sejam, Classifica contatos usando a API do LLM (Gemini, OpenAI ou OpenRouter) com base, _sanitize_classification_result()
+Cohesion: 0.25
+Nodes (5): Python unit tests for the whatsapp-manager plugin., _classify_contact_via_llm(), Evita que nomes possessivos/parentesco do André (como 'pai', 'mãe', etc.) sejam, Classifica contatos usando a API do LLM (Gemini, OpenAI ou OpenRouter) com base, _sanitize_classification_result()
 
 ### Community 54 - "Community 54"
 Cohesion: 0.25
@@ -239,28 +245,32 @@ Nodes (6): _check_bot_paused(), _pull_and_merge_configurations(), Baixa as confi
 
 ### Community 60 - "Community 60"
 Cohesion: 0.33
-Nodes (6): _get_media_info(), _get_mime_type(), _process_media_message(), Processa mensagem de mídia (áudio ou imagem) usando a API do Gemini.          Re, Extrai informações de mídia de um objeto de evento de forma extremamente robusta, Retorna o tipo MIME adequado com base na extensão do arquivo.
+Nodes (6): _get_media_info(), _get_mime_type(), _process_media_message(), Retorna o tipo MIME adequado com base na extensão do arquivo., Processa mensagem de mídia (áudio ou imagem) usando a API do Gemini.          Re, Extrai informações de mídia de um objeto de evento de forma extremamente robusta
 
 ### Community 61 - "Community 61"
 Cohesion: 0.40
 Nodes (4): 1. 🎛️ Pausa Global (Controlada na Ponte), 2. 🔇 Silenciamento Temporário (Conversas Específicas com Clientes), 📐 Arquitetura e Regras de Controle do Chatbot (WhatsApp), 🔄 Fluxo de Processamento (Resumo Técnico)
 
+### Community 66 - "Community 66"
+Cohesion: 0.50
+Nodes (4): _persist_transcription_to_db(), Atualiza o corpo da mensagem no SQLite detectando dinamicamente a coluna de ID., Executa a persistência da transcrição/descrição tratando eventuais race conditio, _update_db_message()
+
 ## Knowledge Gaps
 - **350 isolated node(s):** `recentLogs`, `errorCounters`, `activityCounters`, `args`, `PORT` (+345 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **30 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **35 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
 - **Why does `matchesAllowedUser()` connect `Allowlist & Phone Filter` to `Bridge Core (Main)`, `Message Debounce & Routing`, `Bridge Artifacts (deploy/docs alt)`, `Bridge Artifacts (docs alt)`?**
-  _High betweenness centrality (0.045) - this node is a cross-community bridge._
+  _High betweenness centrality (0.044) - this node is a cross-community bridge._
 - **Why does `onMessagesUpsert()` connect `Bridge Artifacts (deploy/docs alt)` to `Bridge Artifacts (deploy/docs)`, `Allowlist & Phone Filter`?**
-  _High betweenness centrality (0.029) - this node is a cross-community bridge._
+  _High betweenness centrality (0.028) - this node is a cross-community bridge._
 - **Why does `onMessagesUpsert()` connect `Bridge Artifacts (docs alt)` to `Bridge Artifacts (docs)`, `Allowlist & Phone Filter`?**
-  _High betweenness centrality (0.029) - this node is a cross-community bridge._
+  _High betweenness centrality (0.028) - this node is a cross-community bridge._
 - **What connects `WhatsApp Manager Plugin Package Entry Point.`, `recentLogs`, `errorCounters` to the rest of the system?**
-  _412 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _418 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Bridge Core (Main)` be split into smaller, more focused modules?**
   _Cohesion score 0.03278688524590164 - nodes in this community are weakly interconnected._
 - **Should `Bridge Artifacts (deploy/docs)` be split into smaller, more focused modules?**
