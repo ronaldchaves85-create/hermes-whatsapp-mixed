@@ -2880,7 +2880,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "tests_plugin_test",
-      "community": 53,
+      "community": 58,
       "norm_label": "plugin_test.py"
     },
     {
@@ -2890,7 +2890,7 @@
       "source_location": "L16",
       "_origin": "ast",
       "id": "tests_plugin_test_mockcontext",
-      "community": 62,
+      "community": 58,
       "norm_label": "mockcontext"
     },
     {
@@ -2900,7 +2900,7 @@
       "source_location": "L17",
       "_origin": "ast",
       "id": "tests_plugin_test_mockcontext_init",
-      "community": 62,
+      "community": 58,
       "norm_label": ".__init__()"
     },
     {
@@ -2910,7 +2910,7 @@
       "source_location": "L21",
       "_origin": "ast",
       "id": "tests_plugin_test_mockcontext_register_hook",
-      "community": 62,
+      "community": 58,
       "norm_label": ".register_hook()"
     },
     {
@@ -2920,7 +2920,7 @@
       "source_location": "L24",
       "_origin": "ast",
       "id": "tests_plugin_test_mockcontext_register_skill",
-      "community": 62,
+      "community": 58,
       "norm_label": ".register_skill()"
     },
     {
@@ -2940,7 +2940,7 @@
       "source_location": "L28",
       "_origin": "ast",
       "id": "tests_plugin_test_testwhatsappmanagerplugin_setup",
-      "community": 62,
+      "community": 58,
       "norm_label": ".setup()"
     },
     {
@@ -3130,7 +3130,7 @@
       "source_location": "L578",
       "_origin": "ast",
       "id": "tests_plugin_test_testwhatsappmanagerplugin_test_sanitize_classification_result_function",
-      "community": 53,
+      "community": 70,
       "norm_label": ".test_sanitize_classification_result_function()"
     },
     {
@@ -3314,13 +3314,103 @@
       "norm_label": ".test_classify_contact_custom_model()"
     },
     {
+      "label": ".test_resolve_chat_id_with_internal_map()",
+      "file_type": "code",
+      "source_file": "tests/plugin_test.py",
+      "source_location": "L1064",
+      "_origin": "ast",
+      "id": "tests_plugin_test_testwhatsappmanagerplugin_test_resolve_chat_id_with_internal_map",
+      "community": 67,
+      "norm_label": ".test_resolve_chat_id_with_internal_map()"
+    },
+    {
+      "label": ".test_resolve_chat_id_fallback()",
+      "file_type": "code",
+      "source_file": "tests/plugin_test.py",
+      "source_location": "L1074",
+      "_origin": "ast",
+      "id": "tests_plugin_test_testwhatsappmanagerplugin_test_resolve_chat_id_fallback",
+      "community": 68,
+      "norm_label": ".test_resolve_chat_id_fallback()"
+    },
+    {
+      "label": ".test_build_owner_context_with_history()",
+      "file_type": "code",
+      "source_file": "tests/plugin_test.py",
+      "source_location": "L1080",
+      "_origin": "ast",
+      "id": "tests_plugin_test_testwhatsappmanagerplugin_test_build_owner_context_with_history",
+      "community": 69,
+      "norm_label": ".test_build_owner_context_with_history()"
+    },
+    {
+      "label": ".test_load_support_files_existing()",
+      "file_type": "code",
+      "source_file": "tests/plugin_test.py",
+      "source_location": "L1089",
+      "_origin": "ast",
+      "id": "tests_plugin_test_testwhatsappmanagerplugin_test_load_support_files_existing",
+      "community": 71,
+      "norm_label": ".test_load_support_files_existing()"
+    },
+    {
+      "label": ".test_load_support_files_missing()",
+      "file_type": "code",
+      "source_file": "tests/plugin_test.py",
+      "source_location": "L1109",
+      "_origin": "ast",
+      "id": "tests_plugin_test_testwhatsappmanagerplugin_test_load_support_files_missing",
+      "community": 72,
+      "norm_label": ".test_load_support_files_missing()"
+    },
+    {
+      "label": ".test_load_personal_contacts_success()",
+      "file_type": "code",
+      "source_file": "tests/plugin_test.py",
+      "source_location": "L1118",
+      "_origin": "ast",
+      "id": "tests_plugin_test_testwhatsappmanagerplugin_test_load_personal_contacts_success",
+      "community": 73,
+      "norm_label": ".test_load_personal_contacts_success()"
+    },
+    {
+      "label": ".test_load_personal_contacts_error()",
+      "file_type": "code",
+      "source_file": "tests/plugin_test.py",
+      "source_location": "L1139",
+      "_origin": "ast",
+      "id": "tests_plugin_test_testwhatsappmanagerplugin_test_load_personal_contacts_error",
+      "community": 74,
+      "norm_label": ".test_load_personal_contacts_error()"
+    },
+    {
+      "label": ".test_build_personal_prompt()",
+      "file_type": "code",
+      "source_file": "tests/plugin_test.py",
+      "source_location": "L1145",
+      "_origin": "ast",
+      "id": "tests_plugin_test_testwhatsappmanagerplugin_test_build_personal_prompt",
+      "community": 75,
+      "norm_label": ".test_build_personal_prompt()"
+    },
+    {
+      "label": ".test_build_support_prompt()",
+      "file_type": "code",
+      "source_file": "tests/plugin_test.py",
+      "source_location": "L1176",
+      "_origin": "ast",
+      "id": "tests_plugin_test_testwhatsappmanagerplugin_test_build_support_prompt",
+      "community": 76,
+      "norm_label": ".test_build_support_prompt()"
+    },
+    {
       "label": "Python unit tests for the whatsapp-manager plugin.",
       "file_type": "rationale",
       "source_file": "tests/plugin_test.py",
       "source_location": "L1",
       "_origin": "ast",
       "id": "tests_plugin_test_rationale_1",
-      "community": 53,
+      "community": 58,
       "norm_label": "python unit tests for the whatsapp-manager plugin."
     },
     {
@@ -3492,6 +3582,96 @@
       "id": "tests_plugin_test_rationale_1043",
       "community": 21,
       "norm_label": "verifica que o classificador de contatos utiliza o modelo configurado no ambient"
+    },
+    {
+      "label": "Verifica _resolve_chat_id com entrada no dicion\u00e1rio _sender_to_chat.",
+      "file_type": "rationale",
+      "source_file": "tests/plugin_test.py",
+      "source_location": "L1065",
+      "_origin": "ast",
+      "id": "tests_plugin_test_rationale_1065",
+      "community": 67,
+      "norm_label": "verifica _resolve_chat_id com entrada no dicionario _sender_to_chat."
+    },
+    {
+      "label": "Verifica _resolve_chat_id fazendo fallback por split.",
+      "file_type": "rationale",
+      "source_file": "tests/plugin_test.py",
+      "source_location": "L1075",
+      "_origin": "ast",
+      "id": "tests_plugin_test_rationale_1075",
+      "community": 68,
+      "norm_label": "verifica _resolve_chat_id fazendo fallback por split."
+    },
+    {
+      "label": "Verifica se _build_owner_context inclui a diretriz e o hist\u00f3rico.",
+      "file_type": "rationale",
+      "source_file": "tests/plugin_test.py",
+      "source_location": "L1081",
+      "_origin": "ast",
+      "id": "tests_plugin_test_rationale_1081",
+      "community": 69,
+      "norm_label": "verifica se _build_owner_context inclui a diretriz e o historico."
+    },
+    {
+      "label": "Verifica se _load_support_files carrega arquivos quando eles existem.",
+      "file_type": "rationale",
+      "source_file": "tests/plugin_test.py",
+      "source_location": "L1090",
+      "_origin": "ast",
+      "id": "tests_plugin_test_rationale_1090",
+      "community": 71,
+      "norm_label": "verifica se _load_support_files carrega arquivos quando eles existem."
+    },
+    {
+      "label": "Verifica se _load_support_files usa fallbacks quando arquivos n\u00e3o existem.",
+      "file_type": "rationale",
+      "source_file": "tests/plugin_test.py",
+      "source_location": "L1110",
+      "_origin": "ast",
+      "id": "tests_plugin_test_rationale_1110",
+      "community": 72,
+      "norm_label": "verifica se _load_support_files usa fallbacks quando arquivos nao existem."
+    },
+    {
+      "label": "Verifica se _load_personal_contacts l\u00ea e sanitiza contatos.",
+      "file_type": "rationale",
+      "source_file": "tests/plugin_test.py",
+      "source_location": "L1119",
+      "_origin": "ast",
+      "id": "tests_plugin_test_rationale_1119",
+      "community": 73,
+      "norm_label": "verifica se _load_personal_contacts le e sanitiza contatos."
+    },
+    {
+      "label": "Verifica se _load_personal_contacts trata exce\u00e7\u00f5es de IO retornando dicion\u00e1rio v",
+      "file_type": "rationale",
+      "source_file": "tests/plugin_test.py",
+      "source_location": "L1140",
+      "_origin": "ast",
+      "id": "tests_plugin_test_rationale_1140",
+      "community": 74,
+      "norm_label": "verifica se _load_personal_contacts trata excecoes de io retornando dicionario v"
+    },
+    {
+      "label": "Verifica se _build_personal_prompt constr\u00f3i o prompt corretamente com campos opc",
+      "file_type": "rationale",
+      "source_file": "tests/plugin_test.py",
+      "source_location": "L1146",
+      "_origin": "ast",
+      "id": "tests_plugin_test_rationale_1146",
+      "community": 75,
+      "norm_label": "verifica se _build_personal_prompt constroi o prompt corretamente com campos opc"
+    },
+    {
+      "label": "Verifica se _build_support_prompt inclui soul, regras e hist\u00f3rico.",
+      "file_type": "rationale",
+      "source_file": "tests/plugin_test.py",
+      "source_location": "L1177",
+      "_origin": "ast",
+      "id": "tests_plugin_test_rationale_1177",
+      "community": 76,
+      "norm_label": "verifica se _build_support_prompt inclui soul, regras e historico."
     },
     {
       "label": "test_gemini_classification.py",
@@ -3700,7 +3880,7 @@
       "source_location": "L286",
       "_origin": "ast",
       "id": "whatsapp_manager_normalize_brazilian_phone",
-      "community": 71,
+      "community": 3,
       "norm_label": "_normalize_brazilian_phone()"
     },
     {
@@ -3720,7 +3900,7 @@
       "source_location": "L315",
       "_origin": "ast",
       "id": "whatsapp_manager_check_chat_silenced",
-      "community": 68,
+      "community": 3,
       "norm_label": "_check_chat_silenced()"
     },
     {
@@ -3760,7 +3940,7 @@
       "source_location": "L396",
       "_origin": "ast",
       "id": "whatsapp_manager_extract_json_from_text",
-      "community": 69,
+      "community": 53,
       "norm_label": "_extract_json_from_text()"
     },
     {
@@ -3770,7 +3950,7 @@
       "source_location": "L447",
       "_origin": "ast",
       "id": "whatsapp_manager_sanitize_classification_result",
-      "community": 53,
+      "community": 70,
       "norm_label": "_sanitize_classification_result()"
     },
     {
@@ -3890,7 +4070,7 @@
       "source_location": "L1554",
       "_origin": "ast",
       "id": "whatsapp_manager_build_support_prompt",
-      "community": 67,
+      "community": 3,
       "norm_label": "_build_support_prompt()"
     },
     {
@@ -3980,7 +4160,7 @@
       "source_location": "L287",
       "_origin": "ast",
       "id": "whatsapp_manager_rationale_287",
-      "community": 71,
+      "community": 3,
       "norm_label": "normaliza numeros de telefone brasileiros para comparacao segura (tratando o dig"
     },
     {
@@ -4000,7 +4180,7 @@
       "source_location": "L316",
       "_origin": "ast",
       "id": "whatsapp_manager_rationale_316",
-      "community": 68,
+      "community": 3,
       "norm_label": "verifica se uma conversa especifica esta silenciada temporariamente."
     },
     {
@@ -4040,7 +4220,7 @@
       "source_location": "L397",
       "_origin": "ast",
       "id": "whatsapp_manager_rationale_397",
-      "community": 69,
+      "community": 53,
       "norm_label": "extrai o primeiro objeto json valido de um texto usando balanceamento de chaves."
     },
     {
@@ -4050,7 +4230,7 @@
       "source_location": "L448",
       "_origin": "ast",
       "id": "whatsapp_manager_rationale_448",
-      "community": 53,
+      "community": 70,
       "norm_label": "evita que nomes possessivos/parentesco do andre (como 'pai', 'mae', etc.) sejam"
     },
     {
@@ -4170,7 +4350,7 @@
       "source_location": "L1555",
       "_origin": "ast",
       "id": "whatsapp_manager_rationale_1555",
-      "community": 67,
+      "community": 3,
       "norm_label": "constroi o payload de contexto para o modo suporte a clientes.      retorna {\"co"
     },
     {
@@ -5880,7 +6060,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "hermes_architecture_skill",
-      "community": 46,
+      "community": 62,
       "norm_label": "skill.md"
     },
     {
@@ -6570,7 +6750,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "deploy_support_rules",
-      "community": 6,
+      "community": 62,
       "norm_label": "support_rules.md"
     },
     {
@@ -7536,7 +7716,7 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 46,
+      "community": 62,
       "norm_label": "hermes overview",
       "id": "readme_hermes_overview"
     },
@@ -7549,7 +7729,7 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 46,
+      "community": 62,
       "norm_label": "multi-profile system",
       "id": "readme_multi_profile_system"
     },
@@ -7562,7 +7742,7 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 46,
+      "community": 62,
       "norm_label": "auto-update system",
       "id": "readme_auto_update_system"
     },
@@ -7575,7 +7755,7 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 6,
+      "community": 62,
       "norm_label": "github config sync",
       "id": "readme_github_sync"
     },
@@ -7588,7 +7768,7 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 46,
+      "community": 62,
       "norm_label": "deploy guide",
       "id": "deploy_readme_deploy_guide"
     },
@@ -7601,7 +7781,7 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 6,
+      "community": 62,
       "norm_label": "hermes persona (soul)",
       "id": "deploy_soul_persona"
     },
@@ -7614,7 +7794,7 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 6,
+      "community": 62,
       "norm_label": "email support persona",
       "id": "deploy_soul_email_persona"
     },
@@ -7627,7 +7807,7 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 6,
+      "community": 62,
       "norm_label": "whatsapp support persona",
       "id": "deploy_soul_whatsapp_persona"
     },
@@ -7666,7 +7846,7 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 46,
+      "community": 62,
       "norm_label": "whatsapp env vars skill",
       "id": "whatsapp_env_vars_skill"
     },
@@ -7692,7 +7872,7 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 46,
+      "community": 62,
       "norm_label": "plugin yaml manifest",
       "id": "plugin_yaml_plugin"
     },
@@ -7744,7 +7924,7 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 6,
+      "community": 62,
       "norm_label": "empreendedorserial brand identity",
       "id": "soul_empreendedor_serial"
     },
@@ -7757,7 +7937,7 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 6,
+      "community": 62,
       "norm_label": "andre personal assistant mode",
       "id": "soul_andre_persona"
     },
@@ -7770,7 +7950,7 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 6,
+      "community": 62,
       "norm_label": "customer support mode",
       "id": "soul_customer_support_mode"
     },
@@ -7783,7 +7963,7 @@
       "captured_at": null,
       "author": null,
       "contributor": null,
-      "community": 6,
+      "community": 62,
       "norm_label": "email support mode",
       "id": "soul_email_support_mode"
     },
@@ -11302,6 +11482,36 @@
       "relation": "method",
       "confidence": "EXTRACTED",
       "source_file": "tests/plugin_test.py",
+      "source_location": "L1080",
+      "weight": 1.0,
+      "source": "tests_plugin_test_testwhatsappmanagerplugin",
+      "target": "tests_plugin_test_testwhatsappmanagerplugin_test_build_owner_context_with_history",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/plugin_test.py",
+      "source_location": "L1145",
+      "weight": 1.0,
+      "source": "tests_plugin_test_testwhatsappmanagerplugin",
+      "target": "tests_plugin_test_testwhatsappmanagerplugin_test_build_personal_prompt",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/plugin_test.py",
+      "source_location": "L1176",
+      "weight": 1.0,
+      "source": "tests_plugin_test_testwhatsappmanagerplugin",
+      "target": "tests_plugin_test_testwhatsappmanagerplugin_test_build_support_prompt",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/plugin_test.py",
       "source_location": "L728",
       "weight": 1.0,
       "confidence_score": 1.0,
@@ -11397,6 +11607,46 @@
       "confidence_score": 1.0,
       "source": "tests_plugin_test_testwhatsappmanagerplugin",
       "target": "tests_plugin_test_testwhatsappmanagerplugin_test_get_mime_type"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/plugin_test.py",
+      "source_location": "L1139",
+      "weight": 1.0,
+      "source": "tests_plugin_test_testwhatsappmanagerplugin",
+      "target": "tests_plugin_test_testwhatsappmanagerplugin_test_load_personal_contacts_error",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/plugin_test.py",
+      "source_location": "L1118",
+      "weight": 1.0,
+      "source": "tests_plugin_test_testwhatsappmanagerplugin",
+      "target": "tests_plugin_test_testwhatsappmanagerplugin_test_load_personal_contacts_success",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/plugin_test.py",
+      "source_location": "L1089",
+      "weight": 1.0,
+      "source": "tests_plugin_test_testwhatsappmanagerplugin",
+      "target": "tests_plugin_test_testwhatsappmanagerplugin_test_load_support_files_existing",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/plugin_test.py",
+      "source_location": "L1109",
+      "weight": 1.0,
+      "source": "tests_plugin_test_testwhatsappmanagerplugin",
+      "target": "tests_plugin_test_testwhatsappmanagerplugin_test_load_support_files_missing",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -11567,6 +11817,26 @@
       "confidence_score": 1.0,
       "source": "tests_plugin_test_testwhatsappmanagerplugin",
       "target": "tests_plugin_test_testwhatsappmanagerplugin_test_process_media_message_multiple_images_limit"
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/plugin_test.py",
+      "source_location": "L1074",
+      "weight": 1.0,
+      "source": "tests_plugin_test_testwhatsappmanagerplugin",
+      "target": "tests_plugin_test_testwhatsappmanagerplugin_test_resolve_chat_id_fallback",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "method",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/plugin_test.py",
+      "source_location": "L1064",
+      "weight": 1.0,
+      "source": "tests_plugin_test_testwhatsappmanagerplugin",
+      "target": "tests_plugin_test_testwhatsappmanagerplugin_test_resolve_chat_id_with_internal_map",
+      "confidence_score": 1.0
     },
     {
       "relation": "method",
@@ -11895,6 +12165,96 @@
       "target": "tests_plugin_test_testwhatsappmanagerplugin_test_classify_contact_custom_model"
     },
     {
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/plugin_test.py",
+      "source_location": "L1065",
+      "weight": 1.0,
+      "source": "tests_plugin_test_rationale_1065",
+      "target": "tests_plugin_test_testwhatsappmanagerplugin_test_resolve_chat_id_with_internal_map",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/plugin_test.py",
+      "source_location": "L1075",
+      "weight": 1.0,
+      "source": "tests_plugin_test_rationale_1075",
+      "target": "tests_plugin_test_testwhatsappmanagerplugin_test_resolve_chat_id_fallback",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/plugin_test.py",
+      "source_location": "L1081",
+      "weight": 1.0,
+      "source": "tests_plugin_test_rationale_1081",
+      "target": "tests_plugin_test_testwhatsappmanagerplugin_test_build_owner_context_with_history",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/plugin_test.py",
+      "source_location": "L1090",
+      "weight": 1.0,
+      "source": "tests_plugin_test_rationale_1090",
+      "target": "tests_plugin_test_testwhatsappmanagerplugin_test_load_support_files_existing",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/plugin_test.py",
+      "source_location": "L1110",
+      "weight": 1.0,
+      "source": "tests_plugin_test_rationale_1110",
+      "target": "tests_plugin_test_testwhatsappmanagerplugin_test_load_support_files_missing",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/plugin_test.py",
+      "source_location": "L1119",
+      "weight": 1.0,
+      "source": "tests_plugin_test_rationale_1119",
+      "target": "tests_plugin_test_testwhatsappmanagerplugin_test_load_personal_contacts_success",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/plugin_test.py",
+      "source_location": "L1140",
+      "weight": 1.0,
+      "source": "tests_plugin_test_rationale_1140",
+      "target": "tests_plugin_test_testwhatsappmanagerplugin_test_load_personal_contacts_error",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/plugin_test.py",
+      "source_location": "L1146",
+      "weight": 1.0,
+      "source": "tests_plugin_test_rationale_1146",
+      "target": "tests_plugin_test_testwhatsappmanagerplugin_test_build_personal_prompt",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "rationale_for",
+      "confidence": "EXTRACTED",
+      "source_file": "tests/plugin_test.py",
+      "source_location": "L1177",
+      "weight": 1.0,
+      "source": "tests_plugin_test_rationale_1177",
+      "target": "tests_plugin_test_testwhatsappmanagerplugin_test_build_support_prompt",
+      "confidence_score": 1.0
+    },
+    {
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "tests/test_gemini_classification.py",
@@ -12054,9 +12414,9 @@
       "source_file": "whatsapp_manager.py",
       "source_location": "L1418",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "whatsapp_manager",
-      "target": "whatsapp_manager_build_owner_context",
-      "confidence_score": 1.0
+      "target": "whatsapp_manager_build_owner_context"
     },
     {
       "relation": "contains",
@@ -12064,9 +12424,9 @@
       "source_file": "whatsapp_manager.py",
       "source_location": "L1490",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "whatsapp_manager",
-      "target": "whatsapp_manager_build_personal_prompt",
-      "confidence_score": 1.0
+      "target": "whatsapp_manager_build_personal_prompt"
     },
     {
       "relation": "contains",
@@ -12074,9 +12434,9 @@
       "source_file": "whatsapp_manager.py",
       "source_location": "L1554",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "whatsapp_manager",
-      "target": "whatsapp_manager_build_support_prompt",
-      "confidence_score": 1.0
+      "target": "whatsapp_manager_build_support_prompt"
     },
     {
       "relation": "contains",
@@ -12174,9 +12534,9 @@
       "source_file": "whatsapp_manager.py",
       "source_location": "L1471",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "whatsapp_manager",
-      "target": "whatsapp_manager_load_personal_contacts",
-      "confidence_score": 1.0
+      "target": "whatsapp_manager_load_personal_contacts"
     },
     {
       "relation": "contains",
@@ -12184,9 +12544,9 @@
       "source_file": "whatsapp_manager.py",
       "source_location": "L1439",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "whatsapp_manager",
-      "target": "whatsapp_manager_load_support_files",
-      "confidence_score": 1.0
+      "target": "whatsapp_manager_load_support_files"
     },
     {
       "relation": "contains",
@@ -12254,9 +12614,9 @@
       "source_file": "whatsapp_manager.py",
       "source_location": "L1403",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "whatsapp_manager",
-      "target": "whatsapp_manager_resolve_chat_id",
-      "confidence_score": 1.0
+      "target": "whatsapp_manager_resolve_chat_id"
     },
     {
       "relation": "contains",
@@ -12345,9 +12705,9 @@
       "source_file": "whatsapp_manager.py",
       "source_location": "L40",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "whatsapp_manager_rationale_40",
-      "target": "whatsapp_manager_get_media_info",
-      "confidence_score": 1.0
+      "target": "whatsapp_manager_get_media_info"
     },
     {
       "relation": "calls",
@@ -12366,9 +12726,9 @@
       "source_file": "whatsapp_manager.py",
       "source_location": "L102",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "whatsapp_manager_rationale_102",
-      "target": "whatsapp_manager_get_mime_type",
-      "confidence_score": 1.0
+      "target": "whatsapp_manager_get_mime_type"
     },
     {
       "relation": "rationale_for",
@@ -12376,9 +12736,9 @@
       "source_file": "whatsapp_manager.py",
       "source_location": "L119",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "whatsapp_manager_rationale_119",
-      "target": "whatsapp_manager_process_media_message",
-      "confidence_score": 1.0
+      "target": "whatsapp_manager_process_media_message"
     },
     {
       "relation": "calls",
@@ -12397,9 +12757,9 @@
       "source_file": "whatsapp_manager.py",
       "source_location": "L200",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "whatsapp_manager_rationale_200",
-      "target": "whatsapp_manager_update_db_message",
-      "confidence_score": 1.0
+      "target": "whatsapp_manager_update_db_message"
     },
     {
       "relation": "rationale_for",
@@ -12407,9 +12767,9 @@
       "source_file": "whatsapp_manager.py",
       "source_location": "L233",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "whatsapp_manager_rationale_233",
-      "target": "whatsapp_manager_persist_transcription_to_db",
-      "confidence_score": 1.0
+      "target": "whatsapp_manager_persist_transcription_to_db"
     },
     {
       "relation": "rationale_for",
@@ -12417,9 +12777,9 @@
       "source_file": "whatsapp_manager.py",
       "source_location": "L254",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "whatsapp_manager_rationale_254",
-      "target": "whatsapp_manager_resolve_phone_from_jid",
-      "confidence_score": 1.0
+      "target": "whatsapp_manager_resolve_phone_from_jid"
     },
     {
       "relation": "calls",
@@ -12449,9 +12809,9 @@
       "source_file": "whatsapp_manager.py",
       "source_location": "L287",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "whatsapp_manager_rationale_287",
-      "target": "whatsapp_manager_normalize_brazilian_phone",
-      "confidence_score": 1.0
+      "target": "whatsapp_manager_normalize_brazilian_phone"
     },
     {
       "relation": "calls",
@@ -12470,9 +12830,9 @@
       "source_file": "whatsapp_manager.py",
       "source_location": "L298",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "whatsapp_manager_rationale_298",
-      "target": "whatsapp_manager_check_bot_paused",
-      "confidence_score": 1.0
+      "target": "whatsapp_manager_check_bot_paused"
     },
     {
       "relation": "calls",
@@ -12491,9 +12851,9 @@
       "source_file": "whatsapp_manager.py",
       "source_location": "L316",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "whatsapp_manager_rationale_316",
-      "target": "whatsapp_manager_check_chat_silenced",
-      "confidence_score": 1.0
+      "target": "whatsapp_manager_check_chat_silenced"
     },
     {
       "relation": "rationale_for",
@@ -12501,9 +12861,9 @@
       "source_file": "whatsapp_manager.py",
       "source_location": "L331",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "whatsapp_manager_rationale_331",
-      "target": "whatsapp_manager_fetch_chat_history",
-      "confidence_score": 1.0
+      "target": "whatsapp_manager_fetch_chat_history"
     },
     {
       "relation": "rationale_for",
@@ -12511,9 +12871,9 @@
       "source_file": "whatsapp_manager.py",
       "source_location": "L344",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "whatsapp_manager_rationale_344",
-      "target": "whatsapp_manager_resolve_contact_name_from_bridge",
-      "confidence_score": 1.0
+      "target": "whatsapp_manager_resolve_contact_name_from_bridge"
     },
     {
       "relation": "calls",
@@ -12532,9 +12892,9 @@
       "source_file": "whatsapp_manager.py",
       "source_location": "L367",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "whatsapp_manager_rationale_367",
-      "target": "whatsapp_manager_best_contact_name",
-      "confidence_score": 1.0
+      "target": "whatsapp_manager_best_contact_name"
     },
     {
       "relation": "calls",
@@ -12564,9 +12924,9 @@
       "source_file": "whatsapp_manager.py",
       "source_location": "L397",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "whatsapp_manager_rationale_397",
-      "target": "whatsapp_manager_extract_json_from_text",
-      "confidence_score": 1.0
+      "target": "whatsapp_manager_extract_json_from_text"
     },
     {
       "relation": "calls",
@@ -12586,9 +12946,9 @@
       "source_file": "whatsapp_manager.py",
       "source_location": "L1482",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "whatsapp_manager_load_personal_contacts",
-      "target": "whatsapp_manager_sanitize_classification_result",
-      "confidence_score": 1.0
+      "target": "whatsapp_manager_sanitize_classification_result"
     },
     {
       "relation": "calls",
@@ -12607,9 +12967,9 @@
       "source_file": "whatsapp_manager.py",
       "source_location": "L448",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "whatsapp_manager_rationale_448",
-      "target": "whatsapp_manager_sanitize_classification_result",
-      "confidence_score": 1.0
+      "target": "whatsapp_manager_sanitize_classification_result"
     },
     {
       "relation": "calls",
@@ -12628,9 +12988,9 @@
       "source_file": "whatsapp_manager.py",
       "source_location": "L460",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "whatsapp_manager_rationale_460",
-      "target": "whatsapp_manager_classify_contact_via_llm",
-      "confidence_score": 1.0
+      "target": "whatsapp_manager_classify_contact_via_llm"
     },
     {
       "relation": "calls",
@@ -12649,9 +13009,9 @@
       "source_file": "whatsapp_manager.py",
       "source_location": "L606",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "whatsapp_manager_rationale_606",
-      "target": "whatsapp_manager_sync_contacts_from_db_internal",
-      "confidence_score": 1.0
+      "target": "whatsapp_manager_sync_contacts_from_db_internal"
     },
     {
       "relation": "calls",
@@ -12670,9 +13030,9 @@
       "source_file": "whatsapp_manager.py",
       "source_location": "L1062",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "whatsapp_manager_rationale_1062",
-      "target": "whatsapp_manager_push_personal_contacts_to_github",
-      "confidence_score": 1.0
+      "target": "whatsapp_manager_push_personal_contacts_to_github"
     },
     {
       "relation": "rationale_for",
@@ -12680,9 +13040,9 @@
       "source_file": "whatsapp_manager.py",
       "source_location": "L1132",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "whatsapp_manager_rationale_1132",
-      "target": "whatsapp_manager_ensure_google_libs",
-      "confidence_score": 1.0
+      "target": "whatsapp_manager_ensure_google_libs"
     },
     {
       "relation": "calls",
@@ -12701,9 +13061,9 @@
       "source_file": "whatsapp_manager.py",
       "source_location": "L1178",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "whatsapp_manager_rationale_1178",
-      "target": "whatsapp_manager_pull_and_merge_configurations",
-      "confidence_score": 1.0
+      "target": "whatsapp_manager_pull_and_merge_configurations"
     },
     {
       "relation": "calls",
@@ -12722,9 +13082,9 @@
       "source_file": "whatsapp_manager.py",
       "source_location": "L1293",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "whatsapp_manager_rationale_1293",
-      "target": "whatsapp_manager_self_update_plugin_code",
-      "confidence_score": 1.0
+      "target": "whatsapp_manager_self_update_plugin_code"
     },
     {
       "relation": "calls",
@@ -12743,9 +13103,9 @@
       "source_file": "whatsapp_manager.py",
       "source_location": "L1404",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "whatsapp_manager_rationale_1404",
-      "target": "whatsapp_manager_resolve_chat_id",
-      "confidence_score": 1.0
+      "target": "whatsapp_manager_resolve_chat_id"
     },
     {
       "relation": "rationale_for",
@@ -12753,9 +13113,9 @@
       "source_file": "whatsapp_manager.py",
       "source_location": "L1419",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "whatsapp_manager_rationale_1419",
-      "target": "whatsapp_manager_build_owner_context",
-      "confidence_score": 1.0
+      "target": "whatsapp_manager_build_owner_context"
     },
     {
       "relation": "rationale_for",
@@ -12763,9 +13123,9 @@
       "source_file": "whatsapp_manager.py",
       "source_location": "L1440",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "whatsapp_manager_rationale_1440",
-      "target": "whatsapp_manager_load_support_files",
-      "confidence_score": 1.0
+      "target": "whatsapp_manager_load_support_files"
     },
     {
       "relation": "rationale_for",
@@ -12773,9 +13133,9 @@
       "source_file": "whatsapp_manager.py",
       "source_location": "L1472",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "whatsapp_manager_rationale_1472",
-      "target": "whatsapp_manager_load_personal_contacts",
-      "confidence_score": 1.0
+      "target": "whatsapp_manager_load_personal_contacts"
     },
     {
       "relation": "rationale_for",
@@ -12783,9 +13143,9 @@
       "source_file": "whatsapp_manager.py",
       "source_location": "L1491",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "whatsapp_manager_rationale_1491",
-      "target": "whatsapp_manager_build_personal_prompt",
-      "confidence_score": 1.0
+      "target": "whatsapp_manager_build_personal_prompt"
     },
     {
       "relation": "rationale_for",
@@ -12793,9 +13153,9 @@
       "source_file": "whatsapp_manager.py",
       "source_location": "L1555",
       "weight": 1.0,
+      "confidence_score": 1.0,
       "source": "whatsapp_manager_rationale_1555",
-      "target": "whatsapp_manager_build_support_prompt",
-      "confidence_score": 1.0
+      "target": "whatsapp_manager_build_support_prompt"
     },
     {
       "relation": "contains",
@@ -16139,5 +16499,5 @@
     }
   ],
   "hyperedges": [],
-  "built_at_commit": "1596170ed1be60ee52f8554c0aabf7ac1f53d331"
+  "built_at_commit": "d447b508f85eaa97571ca5f3ea8061d9020b7fa5"
 }

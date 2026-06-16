@@ -29,6 +29,114 @@ import logging
 logger = logging.getLogger("whatsapp_manager")
 
 
+class PluginConfig:
+    @property
+    def google_api_key(self) -> str:
+        return os.getenv("GOOGLE_API_KEY", "").strip()
+
+    @property
+    def whatsapp_client_media_model(self) -> str:
+        return os.getenv("WHATSAPP_CLIENT_MEDIA_MODEL", "gemini-3.1-flash-lite").strip()
+
+    @property
+    def message_server_url(self) -> str:
+        return os.getenv("MESSAGE_SERVER_URL", "http://127.0.0.1:18732").strip()
+    
+    @property
+    def whatsapp_bridge_url(self) -> str:
+        return os.getenv("WHATSAPP_BRIDGE_URL", "http://127.0.0.1:3000").strip()
+
+    @property
+    def openai_api_key(self) -> str:
+        return os.getenv("OPENAI_API_KEY", "").strip()
+
+    @property
+    def openrouter_api_key(self) -> str:
+        return os.getenv("OPENROUTER_API_KEY", "").strip()
+
+    @property
+    def whatsapp_contact_classifier_model(self) -> str:
+        return os.getenv("WHATSAPP_CONTACT_CLASSIFIER_MODEL", "").strip()
+
+    @property
+    def whatsapp_sync_max_classifications(self) -> int:
+        val = os.getenv("WHATSAPP_SYNC_MAX_CLASSIFICATIONS", "100").strip()
+        try:
+            return int(val)
+        except ValueError:
+            return 100
+
+    @property
+    def whatsapp_sync_min_messages(self) -> int:
+        val = os.getenv("WHATSAPP_SYNC_MIN_MESSAGES", "3").strip()
+        try:
+            return int(val)
+        except ValueError:
+            return 3
+
+    @property
+    def config_repo(self) -> str:
+        return os.getenv("CONFIG_REPO", "").strip()
+
+    @property
+    def config_github_token(self) -> str:
+        return os.getenv("CONFIG_GITHUB_TOKEN", "").strip()
+
+    @property
+    def hermes_setup_github_user(self) -> str:
+        return os.getenv("HERMES_SETUP_GITHUB_USER", "").strip()
+
+    @property
+    def dev_github_user(self) -> str:
+        return os.getenv("DEV_GITHUB_USER", "").strip()
+
+    @property
+    def dev_github_token(self) -> str:
+        return os.getenv("DEV_GITHUB_TOKEN", "").strip()
+
+    @property
+    def github_user(self) -> str:
+        return (self.hermes_setup_github_user or self.dev_github_user or "empreendedorserial").strip()
+
+    @property
+    def whatsapp_owner_number(self) -> str:
+        return os.getenv("WHATSAPP_OWNER_NUMBER", "").strip()
+
+    @property
+    def whatsapp_owner_model(self) -> str:
+        return os.getenv("WHATSAPP_OWNER_MODEL", "gemini-3.1-flash-lite").strip()
+
+    @property
+    def whatsapp_owner_provider(self) -> str:
+        return os.getenv("WHATSAPP_OWNER_PROVIDER", "gemini").strip()
+
+    @property
+    def whatsapp_client_model(self) -> str:
+        return os.getenv("WHATSAPP_CLIENT_MODEL", "gemini-3.1-flash-lite").strip()
+
+    @property
+    def whatsapp_client_provider(self) -> str:
+        return os.getenv("WHATSAPP_CLIENT_PROVIDER", "gemini").strip()
+
+    @property
+    def whatsapp_first_response_delay_s(self) -> int:
+        val = os.getenv("WHATSAPP_FIRST_RESPONSE_DELAY_S", "30").strip()
+        try:
+            return int(val)
+        except ValueError:
+            return 30
+
+    @property
+    def whatsapp_live_classify_cooldown(self) -> int:
+        val = os.getenv("WHATSAPP_LIVE_CLASSIFY_COOLDOWN", "3600").strip()
+        try:
+            return int(val)
+        except ValueError:
+            return 3600
+
+config = PluginConfig()
+
+
 # Mapeamento temporário sender_id -> chat_id (usado entre pre_gateway_dispatch e pre_llm_call)
 _sender_to_chat: dict[str, str] = {}
 
@@ -120,8 +228,8 @@ def _process_media_message(event) -> str | None:
     
     Retorna a transcrição ou descrição, ou None se falhar/não for mídia.
     """
-    google_key = os.getenv("GOOGLE_API_KEY", "").strip()
-    media_model = os.getenv("WHATSAPP_CLIENT_MEDIA_MODEL", "gemini-3.1-flash-lite").strip()
+    google_key = config.google_api_key
+    media_model = config.whatsapp_client_media_model
     if not google_key:
         logger.info("Google API Key não configurada para processamento de mídia.")
         return None
@@ -277,10 +385,10 @@ def _resolve_phone_from_jid(jid: str) -> str:
     return f"{jid_part}@{domain_part}"
 
 # URL do servidor de mensagens
-MESSAGE_SERVER_URL = os.getenv("MESSAGE_SERVER_URL", "http://127.0.0.1:18732")
+MESSAGE_SERVER_URL = config.message_server_url
 
 # URL do bridge WhatsApp
-BRIDGE_URL = os.getenv("WHATSAPP_BRIDGE_URL", "http://127.0.0.1:3000")
+BRIDGE_URL = config.whatsapp_bridge_url
 
 
 def _normalize_brazilian_phone(phone: str) -> str:
@@ -458,9 +566,9 @@ def _sanitize_classification_result(res: dict) -> dict:
 
 def _classify_contact_via_llm(name: str, chat_history: str, stats_info: str) -> dict:
     """Classifica contatos usando a API do LLM (Gemini, OpenAI ou OpenRouter) com base no histórico e estatísticas."""
-    google_key = os.getenv("GOOGLE_API_KEY", "").strip()
-    openai_key = os.getenv("OPENAI_API_KEY", "").strip()
-    openrouter_key = os.getenv("OPENROUTER_API_KEY", "").strip()
+    google_key = config.google_api_key
+    openai_key = config.openai_api_key
+    openrouter_key = config.openrouter_api_key
 
     prompt = (
         "You are a classification assistant for a WhatsApp bot.\n"
@@ -514,7 +622,7 @@ def _classify_contact_via_llm(name: str, chat_history: str, stats_info: str) -> 
         "}"
     )
 
-    classify_model = os.getenv("WHATSAPP_CONTACT_CLASSIFIER_MODEL", "").strip()
+    classify_model = config.whatsapp_contact_classifier_model
 
     # 1. Tentar Gemini API
     if google_key:
@@ -638,8 +746,8 @@ def _sync_contacts_from_db_internal(force: bool = True) -> str:
 
     db_contacts = {}
     classification_count = 0
-    max_classifications = int(os.getenv("WHATSAPP_SYNC_MAX_CLASSIFICATIONS", "100").strip())
-    min_msg_threshold = int(os.getenv("WHATSAPP_SYNC_MIN_MESSAGES", "3").strip())
+    max_classifications = config.whatsapp_sync_max_classifications
+    min_msg_threshold = config.whatsapp_sync_min_messages
     skipped_few_msgs = 0
     skipped_due_to_limit = 0
     hit_limit = False
@@ -997,9 +1105,9 @@ def _sync_contacts_from_db_internal(force: bool = True) -> str:
         result_str = "Nenhum contato novo ou pendente encontrado para adicionar."
 
     # 4. Sincronizar com GitHub
-    config_repo = os.getenv("CONFIG_REPO", "").strip()
-    config_token = os.getenv("CONFIG_GITHUB_TOKEN", "").strip()
-    setup_user = os.getenv("HERMES_SETUP_GITHUB_USER", "").strip()
+    config_repo = config.config_repo
+    config_token = config.config_github_token
+    setup_user = config.hermes_setup_github_user
 
     if config_repo and config_token:
         if "/" in config_repo:
@@ -1069,9 +1177,9 @@ def _push_personal_contacts_to_github() -> bool:
     if not pc_path.exists():
         return False
 
-    config_repo = os.getenv("CONFIG_REPO", "").strip()
-    config_token = os.getenv("CONFIG_GITHUB_TOKEN", "").strip()
-    setup_user = os.getenv("HERMES_SETUP_GITHUB_USER", "").strip()
+    config_repo = config.config_repo
+    config_token = config.config_github_token
+    setup_user = config.hermes_setup_github_user
 
     if not config_repo or not config_token:
         return False
@@ -1182,10 +1290,10 @@ def _pull_and_merge_configurations():
     except Exception:
         pass
 
-    config_repo = os.getenv("CONFIG_REPO", "").strip()
-    config_token = os.getenv("CONFIG_GITHUB_TOKEN", "").strip()
-    setup_user = os.getenv("HERMES_SETUP_GITHUB_USER", "").strip()
-    dev_user = os.getenv("DEV_GITHUB_USER", "").strip()
+    config_repo = config.config_repo
+    config_token = config.config_github_token
+    setup_user = config.hermes_setup_github_user
+    dev_user = config.dev_github_user
 
     if not config_repo:
         config_repo = "hermes_agent_context_contatcs"
@@ -1291,8 +1399,8 @@ def _pull_and_merge_configurations():
 
 def _self_update_plugin_code() -> bool:
     """Atualiza o código do plugin a partir do repositório Git. Retorna True se houve mudanças no próprio plugin."""
-    github_user = (os.getenv("HERMES_SETUP_GITHUB_USER") or os.getenv("DEV_GITHUB_USER") or "empreendedorserial").strip()
-    code_token = os.getenv("DEV_GITHUB_TOKEN", "").strip()
+    github_user = config.github_user
+    code_token = config.dev_github_token
 
     raw_root = f"https://raw.githubusercontent.com/{github_user}/hermes-whatsapp-mixed/main"
     plugin_dir = Path("/opt/data/.hermes/plugins/whatsapp-manager")
@@ -1635,9 +1743,9 @@ def register(ctx):
 
         # Auto-criação do repositório privado se necessário (Executado no boot de forma 100% transparente)
         try:
-            config_repo = os.getenv("CONFIG_REPO", "").strip()
-            config_token = os.getenv("CONFIG_GITHUB_TOKEN", "").strip()
-            setup_user = os.getenv("HERMES_SETUP_GITHUB_USER", "").strip()
+            config_repo = config.config_repo
+            config_token = config.config_github_token
+            setup_user = config.hermes_setup_github_user
 
             if config_repo and config_token:
                 # Local imports removed to avoid scope issues
@@ -1735,7 +1843,7 @@ def register(ctx):
             logger.error(f"Erro no processo automático de configuração de repositório: {repo_err}")
 
         # 3. Bootstrap automático de personas e regras (se ausentes no volume)
-        github_user = (os.getenv("HERMES_SETUP_GITHUB_USER") or os.getenv("DEV_GITHUB_USER") or "empreendedorserial").strip()
+        github_user = config.github_user
         raw_base_url = f"https://raw.githubusercontent.com/{github_user}/hermes-whatsapp-mixed/main/deploy"
 
         personal_contacts_path = Path("/opt/data/personal_contacts.json")
@@ -1796,7 +1904,7 @@ def register(ctx):
                 logger.info(f"✓ google_api.py atualizado em {target_google_api}")
         else:
             # Fallback: baixar do GitHub se não estiver bundled
-            github_user = (os.getenv("HERMES_SETUP_GITHUB_USER") or os.getenv("DEV_GITHUB_USER") or "empreendedorserial").strip()
+            github_user = config.github_user
             google_api_url = f"https://raw.githubusercontent.com/{github_user}/hermes-whatsapp-mixed/main/deploy/scripts/google_api.py"
             if not target_google_api.exists():
                 try:
@@ -1894,7 +2002,7 @@ def register(ctx):
         clean_sender = "".join(c for c in resolved_sender.split("@")[0].split(":")[0] if c.isdigit())
 
         # Identificar dono (André)
-        owner_number = os.getenv("WHATSAPP_OWNER_NUMBER", "").strip()
+        owner_number = config.whatsapp_owner_number
         if not owner_number:
             return None  # Não definido → plugin não faz nada
 
@@ -2000,10 +2108,10 @@ def register(ctx):
         try:
             session_key = gateway._session_key_for_source(event.source)
             if session_key:
-                owner_model = os.getenv("WHATSAPP_OWNER_MODEL", "gemini-3.1-flash-lite").strip()
-                owner_provider = os.getenv("WHATSAPP_OWNER_PROVIDER", "gemini").strip()
-                client_model = os.getenv("WHATSAPP_CLIENT_MODEL", "gemini-3.1-flash-lite").strip()
-                client_provider = os.getenv("WHATSAPP_CLIENT_PROVIDER", "gemini").strip()
+                owner_model = config.whatsapp_owner_model
+                owner_provider = config.whatsapp_owner_provider
+                client_model = config.whatsapp_client_model
+                client_provider = config.whatsapp_client_provider
                 
                 if is_owner:
                     gateway._session_model_overrides[session_key] = {
@@ -2044,7 +2152,7 @@ def register(ctx):
         if platform != "whatsapp":
             return None
 
-        owner_number = os.getenv("WHATSAPP_OWNER_NUMBER", "").strip()
+        owner_number = config.whatsapp_owner_number
         if not owner_number:
             return None
 
@@ -2068,7 +2176,7 @@ def register(ctx):
         is_first_turn = context.get("is_first_turn", False) if context else False
         if is_first_turn:
             try:
-                delay_s = int(os.getenv("WHATSAPP_FIRST_RESPONSE_DELAY_S", "30").strip())
+                delay_s = config.whatsapp_first_response_delay_s
                 if delay_s > 0:
                     logger.info(f"Aplicando delay de {delay_s}s para a primeira resposta ao cliente...")
                     time.sleep(delay_s)
@@ -2109,7 +2217,7 @@ def register(ctx):
         # Verificar se precisa de classificação em tempo real
         needs_live_classify = False
         target_key = clean_jid
-        live_classify_threshold_seconds = int(os.getenv("WHATSAPP_LIVE_CLASSIFY_COOLDOWN", "3600").strip())
+        live_classify_threshold_seconds = config.whatsapp_live_classify_cooldown
         if contact_info:
             old_defaults = ["Conversa inicial.", "Conversa muito curta.", "Conversa inicial de suporte/atendimento.", "Pendente de classificação."]
             has_old_default_summary = contact_info.get("summary") in old_defaults
@@ -2132,7 +2240,7 @@ def register(ctx):
             try:
                 import sqlite3
                 import datetime
-                min_msg_threshold = int(os.getenv("WHATSAPP_SYNC_MIN_MESSAGES", "3").strip())
+                min_msg_threshold = config.whatsapp_sync_min_messages
                 bridge_db_path = Path("/opt/data/.hermes/whatsapp_messages.db")
                 state_db_path = Path("/opt/data/.hermes/state.db")
                 msg_count = 0
@@ -2291,10 +2399,10 @@ def register(ctx):
 
                     def push_contacts_to_github_bg():
                         try:
-                            config_repo = os.getenv("CONFIG_REPO", "").strip()
-                            config_token = os.getenv("CONFIG_GITHUB_TOKEN", "").strip()
-                            setup_user = os.getenv("HERMES_SETUP_GITHUB_USER", "").strip()
-                            dev_user = os.getenv("DEV_GITHUB_USER", "").strip()
+                            config_repo = config.config_repo
+                            config_token = config.config_github_token
+                            setup_user = config.hermes_setup_github_user
+                            dev_user = config.dev_github_user
                             if config_repo and config_token:
                                 if "/" in config_repo:
                                     repo_user, repo_name = config_repo.split("/")

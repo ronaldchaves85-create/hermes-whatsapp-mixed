@@ -80,8 +80,8 @@
     "semantic_hash": ""
   },
   "tests/plugin_test.py": {
-    "mtime": 1781634289.558739,
-    "ast_hash": "438684d163c7f042a399fd2cca6871f2",
+    "mtime": 1781644147.114778,
+    "ast_hash": "41ac97c34051dcb88f6aa3a858f91c08",
     "semantic_hash": ""
   },
   "tests/test_gemini_classification.py": {
