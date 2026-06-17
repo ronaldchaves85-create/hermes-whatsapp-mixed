@@ -27,6 +27,25 @@ from pathlib import Path
 import logging
 
 logger = logging.getLogger("whatsapp_manager")
+logger.setLevel(logging.INFO)
+
+# Configuração do handler para exibir logs no console (stdout/stderr) com o prefixo [whatsapp-manager]
+if not logger.handlers:
+    class WhatsAppManagerLogHandler(logging.Handler):
+        def emit(self, record):
+            try:
+                msg = self.format(record)
+                if record.levelno >= logging.WARNING:
+                    _original_print(msg, file=sys.stderr)
+                else:
+                    _original_print(msg, file=sys.stdout)
+            except Exception:
+                self.handleError(record)
+
+    handler = WhatsAppManagerLogHandler()
+    handler.setFormatter(logging.Formatter('[whatsapp-manager] %(message)s'))
+    logger.addHandler(handler)
+    logger.propagate = False
 
 
 class PluginConfig:
