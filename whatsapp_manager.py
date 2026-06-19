@@ -13,6 +13,7 @@ import datetime
 import urllib.request
 import urllib.error
 import urllib.parse
+import unicodedata
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
@@ -1601,11 +1602,114 @@ def _resolve_chat_id(sender_id: str) -> str:
     return chat_id
 
 
-def _build_owner_context(history_section: str) -> dict:
+_CONTACT_QUERY_PATTERNS = [
+    r"conversa\w*\s+com\s+([A-ZÀ-Úa-zà-ú]{2,})",
+    r"histórico\s+d[eo]\s+([A-ZÀ-Úa-zà-ú]{2,})",
+    r"o\s+que\s+([A-ZÀ-Úa-zà-ú]{2,})\s+(?:disse|falou|mandou|perguntou|escreveu)",
+    r"(?:falar|falei|falaste|fale)\s+com\s+([A-ZÀ-Úa-zà-ú]{2,})",
+    r"mensagens?\s+d[eo]\s+([A-ZÀ-Úa-zà-ú]{2,})",
+    r"([A-ZÀ-Úa-zà-ú]{2,})\s+(?:me\s+)?(?:mandou|disse|perguntou|falou|escreveu)",
+    r"acessa\w*\s+(?:a\s+)?conversa\w*\s+(?:com\s+)?(?:a\s+|o\s+)?([A-ZÀ-Úa-zà-ú]{2,})",
+]
+
+
+def _normalize_text(s: str) -> str:
+    return "".join(
+        c for c in unicodedata.normalize("NFD", s.lower())
+        if unicodedata.category(c) != "Mn"
+    )
+
+
+def _detect_contact_query(text: str) -> str | None:
+    for pattern in _CONTACT_QUERY_PATTERNS:
+        m = re.search(pattern, text, re.IGNORECASE)
+        if m:
+            candidate = m.group(1).strip()
+            if len(candidate) >= 2:
+                return candidate
+    return None
+
+
+def _search_contact_by_name(query: str) -> tuple[str | None, dict | None]:
+    personal_contacts = _load_personal_contacts()
+    query_norm = _normalize_text(query)
+    best_key, best_data, best_score = None, None, 0
+    for key, data in personal_contacts.items():
+        for field in ["name", "nickname", "pet_name"]:
+            value = data.get(field) or ""
+            value_norm = _normalize_text(value)
+            if value_norm and (query_norm in value_norm or value_norm in query_norm):
+                score = len(value_norm)
+                if score > best_score:
+                    best_key, best_data, best_score = key, data, score
+    return best_key, best_data
+
+
+def _fetch_cross_session_history(phone: str, limit: int = 30) -> str:
+    rows: list = []
+
+    bridge_db = Path("/opt/data/.hermes/whatsapp_messages.db")
+    if bridge_db.exists():
+        try:
+            with sqlite3.connect(str(bridge_db)) as conn:
+                cur = conn.cursor()
+                cur.execute(
+                    """
+                    SELECT from_me, sender_name, body, timestamp
+                    FROM messages
+                    WHERE chat_id LIKE ? AND body IS NOT NULL AND body != ''
+                    ORDER BY timestamp DESC LIMIT ?
+                    """,
+                    (f"{phone}%", limit),
+                )
+                rows = cur.fetchall()
+        except sqlite3.Error as e:
+            logger.warning(f"[cross-session] Erro ao ler whatsapp_messages.db: {e}")
+
+    if not rows:
+        state_db = Path("/opt/data/.hermes/state.db")
+        if state_db.exists():
+            try:
+                with sqlite3.connect(str(state_db)) as conn:
+                    cur = conn.cursor()
+                    cur.execute(
+                        """
+                        SELECT m.role, NULL, m.content, m.timestamp
+                        FROM messages m JOIN sessions s ON m.session_id = s.id
+                        WHERE s.user_id LIKE ? AND s.source = 'whatsapp'
+                        AND m.content IS NOT NULL
+                        ORDER BY m.timestamp DESC LIMIT ?
+                        """,
+                        (f"{phone}%", limit),
+                    )
+                    rows = cur.fetchall()
+            except sqlite3.Error as e:
+                logger.warning(f"[cross-session] Erro ao ler state.db: {e}")
+
+    if not rows:
+        return ""
+
+    lines = []
+    for from_me, sender_name, body, _ts in reversed(rows):
+        speaker = "André" if from_me else (sender_name or "Contato")
+        lines.append(f"{speaker}: {body}")
+    return "\n".join(lines)
+
+
+def _build_owner_context(history_section: str, cross_context: str = "") -> dict:
     """Constrói o dicionário de contexto para quando o remetente é o próprio André (dono).
 
     Retorna o payload {"context": "..."} pronto para injeção no LLM.
     """
+    cross_block = ""
+    if cross_context:
+        cross_block = (
+            "\n\n### HISTÓRICO DE CONVERSA SOLICITADA ###\n"
+            "O André pediu acesso ao histórico de outra conversa. Abaixo estão as mensagens encontradas. "
+            "Use este histórico para responder à pergunta dele sobre esse contato.\n\n"
+            f"{cross_context}\n"
+            "### FIM DO HISTÓRICO SOLICITADO ###"
+        )
     return {
         "context": (
             "### DIRETRIZ CRÍTICA DE COMPORTAMENTO ###\n"
@@ -1618,6 +1722,7 @@ def _build_owner_context(history_section: str) -> dict:
             "ou status como '📖 read_file: ...', 'terminal', etc. Toda a execução de ferramentas "
             "deve ser 100% invisível para o usuário final."
             f"{history_section}"
+            f"{cross_block}"
         )
     }
 
@@ -2247,7 +2352,32 @@ def pre_llm_call(*args, **kwargs):
             "para responder à nova mensagem do André.\n\n"
             f"{history_context}"
         ) if history_context else ""
-        return _build_owner_context(history_section)
+
+        # Detectar se André está perguntando sobre outra conversa/contato
+        cross_context = ""
+        last_user_line = ""
+        if history_context:
+            for line in reversed(history_context.splitlines()):
+                stripped = line.strip()
+                if stripped.lower().startswith("você:") or stripped.lower().startswith("andré:"):
+                    last_user_line = stripped
+                    break
+        detected_name = _detect_contact_query(last_user_line)
+        if detected_name:
+            contact_key, contact_data = _search_contact_by_name(detected_name)
+            if contact_key:
+                phone = contact_key.split("@")[0]
+                cross_history = _fetch_cross_session_history(phone, limit=30)
+                if cross_history:
+                    contact_name = contact_data.get("name", detected_name) if contact_data else detected_name
+                    cross_context = f"Conversa com {contact_name} ({phone}):\n\n{cross_history}"
+                    logger.info(f"[cross-session] Injetando histórico de {contact_name} ({phone})")
+                else:
+                    logger.warning(f"[cross-session] Contato '{detected_name}' encontrado mas sem histórico nos DBs")
+            else:
+                logger.info(f"[cross-session] Nome '{detected_name}' não encontrado em personal_contacts")
+
+        return _build_owner_context(history_section, cross_context=cross_context)
 
     # ── Modo B: Cliente / Contato pessoal ────────────────────────────────
     is_first_turn = context.get("is_first_turn", False) if context else False
