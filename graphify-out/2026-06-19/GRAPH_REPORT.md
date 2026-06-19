@@ -1,11 +1,11 @@
 # Graph Report - hermes-whatsapp-mixed  (2026-06-19)
 
 ## Corpus Check
-- 42 files · ~72,750 words
+- 42 files · ~73,129 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 924 nodes · 1015 edges · 59 communities (45 shown, 14 thin omitted)
+- 910 nodes · 998 edges · 90 communities (41 shown, 49 thin omitted)
 - Extraction: 98% EXTRACTED · 2% INFERRED · 0% AMBIGUOUS · INFERRED: 24 edges (avg confidence: 0.88)
 - Token cost: 0 input · 0 output
 
@@ -40,6 +40,18 @@
 - [[_COMMUNITY_JID Phone Resolution|JID Phone Resolution]]
 - [[_COMMUNITY_Unknown LID Passthrough|Unknown LID Passthrough]]
 - [[_COMMUNITY_Owner Message Skip Logic|Owner Message Skip Logic]]
+- [[_COMMUNITY_Silenced Chat Skip Logic|Silenced Chat Skip Logic]]
+- [[_COMMUNITY_Bot Pause LID Cache|Bot Pause LID Cache]]
+- [[_COMMUNITY_Custom Provider Env Vars|Custom Provider Env Vars]]
+- [[_COMMUNITY_Media Info (Direct Attrs)|Media Info (Direct Attrs)]]
+- [[_COMMUNITY_Media Info (Dict Payload)|Media Info (Dict Payload)]]
+- [[_COMMUNITY_MIME Type Detection|MIME Type Detection]]
+- [[_COMMUNITY_Audio Processing|Audio Processing]]
+- [[_COMMUNITY_Audio Custom Model|Audio Custom Model]]
+- [[_COMMUNITY_Image Multi-limit|Image Multi-limit]]
+- [[_COMMUNITY_Custom Print Redirection|Custom Print Redirection]]
+- [[_COMMUNITY_DB Message Update|DB Message Update]]
+- [[_COMMUNITY_Plugin Self-Update Git|Plugin Self-Update Git]]
 - [[_COMMUNITY_QR Code Endpoint|QR Code Endpoint]]
 - [[_COMMUNITY_WhatsApp Status Endpoint|WhatsApp Status Endpoint]]
 - [[_COMMUNITY_Debug Changelog|Debug Changelog]]
@@ -67,23 +79,42 @@
 - [[_COMMUNITY_Community 64|Community 64]]
 - [[_COMMUNITY_Community 65|Community 65]]
 - [[_COMMUNITY_Community 66|Community 66]]
+- [[_COMMUNITY_Community 67|Community 67]]
+- [[_COMMUNITY_Community 68|Community 68]]
+- [[_COMMUNITY_Community 69|Community 69]]
 - [[_COMMUNITY_Community 70|Community 70]]
+- [[_COMMUNITY_Community 71|Community 71]]
+- [[_COMMUNITY_Community 72|Community 72]]
+- [[_COMMUNITY_Community 73|Community 73]]
+- [[_COMMUNITY_Community 74|Community 74]]
+- [[_COMMUNITY_Community 75|Community 75]]
+- [[_COMMUNITY_Community 76|Community 76]]
 - [[_COMMUNITY_Community 77|Community 77]]
+- [[_COMMUNITY_Community 78|Community 78]]
+- [[_COMMUNITY_Community 79|Community 79]]
+- [[_COMMUNITY_Community 80|Community 80]]
+- [[_COMMUNITY_Community 81|Community 81]]
+- [[_COMMUNITY_Community 82|Community 82]]
 - [[_COMMUNITY_Community 83|Community 83]]
+- [[_COMMUNITY_Community 85|Community 85]]
+- [[_COMMUNITY_Community 87|Community 87]]
+- [[_COMMUNITY_Community 88|Community 88]]
+- [[_COMMUNITY_Community 89|Community 89]]
+- [[_COMMUNITY_Community 90|Community 90]]
 - [[_COMMUNITY_Community 91|Community 91]]
 - [[_COMMUNITY_Community 92|Community 92]]
 
 ## God Nodes (most connected - your core abstractions)
-1. `PluginConfig` - 23 edges
-2. `TestContactManagementAndSync` - 16 edges
+1. `TestWhatsAppManagerPlugin` - 62 edges
+2. `PluginConfig` - 23 edges
 3. `WhatsApp Bot — Sistema Completo` - 16 edges
 4. `📚 FAQs e Resolução de Problemas Técnicos` - 16 edges
 5. `_sync_contacts_from_db_internal()` - 15 edges
 6. `🤖 Hermes Agent - Modo Misto Híbrido (WhatsApp + Gmail)` - 14 edges
-7. `TestMessageRoutingAndDispatch` - 13 edges
-8. `TestMediaMessageProcessing` - 13 edges
-9. `TestLLMContextAndPrompting` - 12 edges
-10. `TestUtilityFunctionsAndLogs` - 11 edges
+7. `pre_llm_call()` - 11 edges
+8. `📋 Changelog & Sessão de Debug — `whatsapp-manager`` - 11 edges
+9. `Arquitetura do Hermes Agent` - 11 edges
+10. `onMessagesUpsert()` - 10 edges
 
 ## Surprising Connections (you probably didn't know these)
 - `Gemini Key Test` --semantically_similar_to--> `OAuth2 Flow`  [INFERRED] [semantically similar]
@@ -100,11 +131,11 @@
 ## Import Cycles
 - 1-file cycle: `deploy/scripts/support_agent.py -> deploy/scripts/support_agent.py`
 
-## Communities (59 total, 14 thin omitted)
+## Communities (90 total, 49 thin omitted)
 
 ### Community 0 - "Bridge Core (Main)"
 Cohesion: 0.03
-Nodes (36): _ACCEPTED_HOST_VALUES, activityCounters, adminRouter, ALLOWED_USERS, app, args, AUDIO_CACHE_DIR, BOT_STATE_FILE (+28 more)
+Nodes (33): _ACCEPTED_HOST_VALUES, activityCounters, ALLOWED_USERS, app, args, AUDIO_CACHE_DIR, BOT_STATE_FILE, CHUNK_DELAY_MS (+25 more)
 
 ### Community 1 - "Bridge Artifacts (deploy/docs)"
 Cohesion: 0.03
@@ -115,8 +146,8 @@ Cohesion: 0.03
 Nodes (33): _ACCEPTED_HOST_VALUES, activityCounters, ALLOWED_USERS, app, args, AUDIO_CACHE_DIR, BOT_STATE_FILE, CHUNK_DELAY_MS (+25 more)
 
 ### Community 3 - "WhatsApp Manager Core"
-Cohesion: 0.13
-Nodes (19): _build_owner_context(), _build_personal_prompt(), _build_support_prompt(), _fetch_chat_history(), _live_classify_contact(), _load_personal_contacts(), _load_support_files(), pre_llm_call() (+11 more)
+Cohesion: 0.15
+Nodes (17): _build_owner_context(), _build_personal_prompt(), _build_support_prompt(), _fetch_chat_history(), _load_support_files(), _normalize_brazilian_phone(), pre_llm_call(), WhatsApp Manager Plugin para André Alencar. (+9 more)
 
 ### Community 4 - "Google API Module"
 Cohesion: 0.10
@@ -129,10 +160,6 @@ Nodes (19): Allowlist, Contact Filter, Conversation Silence, Debounce Logic, Gem
 ### Community 6 - "Deployment Infrastructure"
 Cohesion: 0.07
 Nodes (30): 10. Configuração de Integrações e Pagamentos, 11. Instalações Múltiplas do Dealer, 12. Pagamento de Parcerias e Colaborações, 13. Problemas Técnicos em Plataformas de Parceria, 14. Problemas de Acesso ao Chatkanban, 15. Uso de APIs Diferentes no Agendamento V4 Chatwoot, 1. Api Connector, 1. Parcerias, Patrocínios e Anunciantes (Sponsorships) (+22 more)
-
-### Community 7 - "Plugin Integration Tests"
-Cohesion: 0.08
-Nodes (12): LID presente no cache deve ser convertido para JID de telefone clássico., JIDs de telefone padrão devem passar sem alteração., LID não presente no cache deve ser retornado sem alteração de formato., Verifica que _resolve_phone_from_jid trata entrada vazia., Verifica que _resolve_phone_from_jid resolve LIDs mapeados., Verifica _resolve_chat_id com entrada no dicionário _sender_to_chat., Verifica _resolve_chat_id fazendo fallback por split., Verifica se _load_support_files carrega arquivos quando eles existem. (+4 more)
 
 ### Community 8 - "Gmail & OAuth Integration"
 Cohesion: 0.06
@@ -174,18 +201,6 @@ Nodes (4): commit_file_to_github(), download_file(), safe_download(), setup.sh s
 Cohesion: 0.50
 Nodes (4): Graphify Integration Rules, Gemini Developer Rules, BeforeTool Hook Command, Gemini Tool Hooks
 
-### Community 21 - "Custom Model Classification"
-Cohesion: 0.09
-Nodes (12): Verifica que o processamento de imagens se limita a no máximo 5 imagens por mens, Verifica que _process_media_message retorna None se GOOGLE_API_KEY estiver ausen, Verifica que _process_media_message retorna None se o evento não contiver mídia., Verifica que _process_media_message retorna None para tipos de mídia não suporta, Verifica que _process_media_message retorna None se o arquivo físico não existir, Verifica que pre_gateway_dispatch processa áudio, atualiza evento e persiste no, Verifica _get_media_info com atributos diretos no objeto., Verifica _get_media_info com dicionário interno (raw_event). (+4 more)
-
-### Community 22 - "Phone Resolution (LID)"
-Cohesion: 0.12
-Nodes (5): Mensagem manual do dono para terceiro (chat_id != owner) deve retornar skip., Mensagem de cliente em chat silenciado deve retornar skip., Pre-dispatch deve honrar as variáveis WHATSAPP_OWNER_PROVIDER e WHATSAPP_CLIENT_, Verifica que pre_gateway_dispatch intercepta o comando sync contacts do dono., TestMessageRoutingAndDispatch
-
-### Community 23 - "JID Phone Resolution"
-Cohesion: 0.14
-Nodes (4): Verifica se _build_owner_context inclui a diretriz e o histórico., Verifica se _build_personal_prompt constrói o prompt corretamente com campos opc, Verifica se _build_support_prompt inclui soul, regras e histórico., TestLLMContextAndPrompting
-
 ### Community 45 - "Community 45"
 Cohesion: 0.05
 Nodes (41): 1. Garantir as Credenciais do Google na Stack, 1. Pausa Global (`stop_bot` / `start_bot`), 1. Sincronização Periódica e Inteligente (GitHub ➔ Servidor), 2. Auto-Update de Código com Reinício Automático, 2. Pedir o Link ao Bot (No Console do Hermes ou no Telegram), 2. Silenciamento Temporário Automático (10 minutos), 3. Classificação Dinâmica e Blindagem de Contatos, 3. Entregar o Link de Retorno ao Bot (+33 more)
@@ -219,8 +234,8 @@ Cohesion: 0.18
 Nodes (10): Exemplo 1: Conversa com o André (Admin - MODO A), Exemplo 2: Conversa com Cliente (Suporte WhatsApp - MODO B), Exemplo 3: Conversa com Cliente (Suporte WhatsApp - MODO B), Exemplo 4: Conversa com Cliente (Suporte WhatsApp - MODO B), Exemplo 5: Conversa com Cliente (Suporte WhatsApp - MODO B), 📝 EXEMPLOS PRÁTICOS DE DIÁLOGOS (FEW-SHOT), 👤 MODO A: Assistente Pessoal do André (Quando falar com André Alencar), 💼 MODO B: Chatbot de Suporte Comercial (Quando falar com Clientes) (+2 more)
 
 ### Community 53 - "Community 53"
-Cohesion: 0.12
-Nodes (16): Python unit tests for the whatsapp-manager plugin., Verifica que o auto-updater do plugin usa git fetch/reset quando .git existe., Verifica que o classificador de contatos utiliza o modelo configurado no ambient, TestExternalServicesAndUpdates, _best_contact_name(), _classify_contact_via_llm(), _extract_json_from_text(), Consulta o Baileys via bridge para obter o pushName/contact name de um JID. (+8 more)
+Cohesion: 0.25
+Nodes (8): _call_llm_api(), _classify_contact_via_llm(), _extract_json_from_text(), _live_classify_contact(), Classifica (ou re-classifica) um contato em tempo real durante pre_llm_call., Extrai o primeiro objeto JSON válido de um texto usando balanceamento de chaves., Envia uma requisição HTTP POST para uma API de LLM e extrai o texto da resposta., Classifica contatos usando a API do LLM (Gemini, OpenAI ou OpenRouter) com base
 
 ### Community 54 - "Community 54"
 Cohesion: 0.25
@@ -235,20 +250,20 @@ Cohesion: 0.25
 Nodes (7): Diagnóstico e Logs do WhatsApp, Logs Físicos no Servidor, O que o agente deve fazer, Passo 1 — Obter o domínio do servidor, Passo 2 — Diagnóstico via Requisição Local (se executado pelo agente no terminal), Passo 3 — Apresentar as Instruções e URLs ao Usuário, Quando usar esta skill
 
 ### Community 57 - "Community 57"
-Cohesion: 0.29
-Nodes (7): _github_put_file(), _push_personal_contacts_to_github(), Sobe um arquivo para o GitHub via API REST (GET sha → PUT content).      Args:, Envia o arquivo personal_contacts.json local diretamente para o repositório do G, Atualiza o código do plugin a partir do repositório Git. Retorna True se houve m, _run_periodic_sync(), _self_update_plugin_code()
+Cohesion: 0.17
+Nodes (13): _best_contact_name(), _github_put_file(), _push_personal_contacts_to_github(), Sobe um arquivo para o GitHub via API REST (GET sha → PUT content).      Args:, Envia o arquivo personal_contacts.json local diretamente para o repositório do G, Atualiza o código do plugin a partir do repositório Git. Retorna True se houve m, Consulta o Baileys via bridge para obter o pushName/contact name de um JID., Resolve o melhor nome disponivel para um contato.      Ordem de prioridade: (+5 more)
 
 ### Community 58 - "Community 58"
-Cohesion: 0.33
-Nodes (5): WhatsApp Manager Plugin Package Entry Point., commit_file_to_repo(), _ensure_google_libs(), Instala as bibliotecas da Google API no venv do Hermes se ainda não estiverem di, register()
+Cohesion: 0.17
+Nodes (7): WhatsApp Manager Plugin Package Entry Point., MockContext, Python unit tests for the whatsapp-manager plugin., commit_file_to_repo(), _ensure_google_libs(), Instala as bibliotecas da Google API no venv do Hermes se ainda não estiverem di, register()
 
 ### Community 59 - "Community 59"
 Cohesion: 0.16
 Nodes (14): Deploy Guide, Email Support Persona, Hermes Persona (SOUL), WhatsApp Support Persona, Plugin YAML Manifest, Auto-Update System, GitHub Config Sync, Hermes Overview (+6 more)
 
 ### Community 60 - "Community 60"
-Cohesion: 0.20
-Nodes (11): _check_chat_silenced(), _get_media_info(), _get_mime_type(), _normalize_brazilian_phone(), pre_gateway_dispatch(), _process_media_message(), Extrai informações de mídia de um objeto de evento de forma extremamente robusta, Retorna o tipo MIME adequado com base na extensão do arquivo. (+3 more)
+Cohesion: 0.18
+Nodes (13): _check_bot_paused(), _check_chat_silenced(), _get_media_info(), _get_mime_type(), pre_gateway_dispatch(), _process_media_message(), Extrai informações de mídia de um objeto de evento de forma extremamente robusta, Retorna o tipo MIME adequado com base na extensão do arquivo. (+5 more)
 
 ### Community 61 - "Community 61"
 Cohesion: 0.40
@@ -260,11 +275,11 @@ Nodes (4): _persist_transcription_to_db(), Atualiza o corpo da mensagem no SQLit
 
 ### Community 70 - "Community 70"
 Cohesion: 0.33
-Nodes (6): _check_bot_paused(), _pull_and_merge_configurations(), Baixa as configurações do repositório privado do GitHub do cliente e faz merge c, Traduz JID do WhatsApp (seja LID ou formato padrão) para JID com telefone clássi, Verifica se o bot está pausado via endpoint do bridge e atualiza o mapa de LIDs., _resolve_phone_from_jid()
+Nodes (6): _load_personal_contacts(), _pull_and_merge_configurations(), Baixa as configurações do repositório privado do GitHub do cliente e faz merge c, Carrega o arquivo personal_contacts.json e sanitiza cada entrada.      Retorna {, Evita que nomes possessivos/parentesco do André (como 'pai', 'mãe', etc.) sejam, _sanitize_classification_result()
 
-### Community 83 - "Community 83"
-Cohesion: 0.11
-Nodes (10): _check_bot_paused deve atualizar _lid_to_phone quando a resposta contiver lidToP, Verifica que WARNING+/ERROR vão para stderr e INFO vai para stdout via _WMLogHan, Verifica a atualização do banco SQLite com detecção dinâmica de colunas., Verifica _update_db_message com coluna de ID msg_id., Verifica _update_db_message com coluna de ID id., Verifica que _update_db_message retorna -1 quando não há nenhuma coluna de ID., Verifica que _update_db_message retorna -2 quando ocorre uma exceção., Verifica que _persist_transcription_to_db não cria thread se a inserção for imed (+2 more)
+### Community 85 - "Community 85"
+Cohesion: 0.33
+Nodes (3): Verifica que _update_db_message retorna -2 quando ocorre uma exceção., Verifica que _persist_transcription_to_db não cria thread se a inserção for imed, Verifica que _persist_transcription_to_db lança thread e retenta se retorno for
 
 ### Community 91 - "Community 91"
 Cohesion: 0.07
@@ -275,23 +290,23 @@ Cohesion: 0.10
 Nodes (20): Critério global de conclusão, Dependências entre fases, Eixo A — Performance, Eixo B — Integração Chatwoot, Fase A1 — Cache de arquivos lidos em toda mensagem, Fase A2 — Mover live classification para background, Fase A3 — Remover log de debug síncrono do hot path, Fase A4 — Cache de status bot/chat com paralelização dos checks (+12 more)
 
 ## Knowledge Gaps
-- **400 isolated node(s):** `recentLogs`, `errorCounters`, `activityCounters`, `args`, `PORT` (+395 more)
+- **397 isolated node(s):** `recentLogs`, `errorCounters`, `activityCounters`, `args`, `PORT` (+392 more)
   These have ≤1 connection - possible missing edges or undocumented components.
-- **14 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
+- **49 thin communities (<3 nodes) omitted from report** — run `graphify query` to explore isolated nodes.
 
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
+- **Why does `TestWhatsAppManagerPlugin` connect `Plugin Integration Tests` to `Custom Model Classification`, `Phone Resolution (LID)`, `JID Phone Resolution`, `Unknown LID Passthrough`, `Owner Message Skip Logic`, `Silenced Chat Skip Logic`, `Bot Pause LID Cache`, `Custom Provider Env Vars`, `Media Info (Direct Attrs)`, `Media Info (Dict Payload)`, `MIME Type Detection`, `Audio Processing`, `Audio Custom Model`, `Image Multi-limit`, `Custom Print Redirection`, `DB Message Update`, `Plugin Self-Update Git`, `Community 58`, `Community 67`, `Community 68`, `Community 69`, `Community 71`, `Community 72`, `Community 73`, `Community 74`, `Community 75`, `Community 76`, `Community 78`, `Community 79`, `Community 80`, `Community 81`, `Community 82`, `Community 83`, `Community 85`, `Community 87`, `Community 88`, `Community 89`, `Community 90`?**
+  _High betweenness centrality (0.047) - this node is a cross-community bridge._
 - **Why does `matchesAllowedUser()` connect `Allowlist & Phone Filter` to `Bridge Core (Main)`, `Message Debounce & Routing`, `Bridge Artifacts (deploy/docs alt)`, `Bridge Artifacts (docs alt)`?**
-  _High betweenness centrality (0.038) - this node is a cross-community bridge._
+  _High betweenness centrality (0.036) - this node is a cross-community bridge._
 - **Why does `datetime` connect `Google API Module` to `WhatsApp Manager Core`?**
   _High betweenness centrality (0.025) - this node is a cross-community bridge._
-- **Why does `onMessagesUpsert()` connect `Bridge Artifacts (deploy/docs alt)` to `Bridge Artifacts (deploy/docs)`, `Allowlist & Phone Filter`?**
-  _High betweenness centrality (0.025) - this node is a cross-community bridge._
 - **What connects `WhatsApp Manager Plugin Package Entry Point.`, `recentLogs`, `errorCounters` to the rest of the system?**
-  _494 weakly-connected nodes found - possible documentation gaps or missing edges._
+  _488 weakly-connected nodes found - possible documentation gaps or missing edges._
 - **Should `Bridge Core (Main)` be split into smaller, more focused modules?**
-  _Cohesion score 0.028985507246376812 - nodes in this community are weakly interconnected._
+  _Cohesion score 0.03278688524590164 - nodes in this community are weakly interconnected._
 - **Should `Bridge Artifacts (deploy/docs)` be split into smaller, more focused modules?**
   _Cohesion score 0.03278688524590164 - nodes in this community are weakly interconnected._
 - **Should `Bridge Artifacts (docs)` be split into smaller, more focused modules?**

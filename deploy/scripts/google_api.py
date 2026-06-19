@@ -3,6 +3,11 @@
 google_api.py — Auxiliar de autenticação OAuth2 para a Gmail API
 Usado por: support_agent.py
 
+⚠️  ATENÇÃO — CÓPIA DE MANUTENÇÃO
+Este arquivo é uma cópia de /google_api.py (raiz do projeto).
+NÃO EDITE DIRETAMENTE. Faça alterações no arquivo raiz e execute:
+    cp ../../google_api.py deploy/scripts/google_api.py
+
 Fluxo:
   1. Lê GOOGLE_CLIENT_ID / GOOGLE_CLIENT_SECRET do ambiente (Portainer stack env ou .env)
   2. Carrega/salva o refresh_token em /opt/data/.hermes/google_token.json

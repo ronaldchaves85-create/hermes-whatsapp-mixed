@@ -1,27 +1,19 @@
-"""WhatsApp Manager Plugin for André Alencar."""
+"""WhatsApp Manager Plugin para André Alencar."""
 
-import builtins
 import sys
-
-_original_print = builtins.print
-
-def _custom_print(*args, **kwargs):
-    msg = " ".join(str(arg) for arg in args)
-    if (msg.strip().startswith("⚠️") or 
-        msg.strip().startswith("❌") or 
-        "compression model" in msg.lower() or 
-        "compression threshold" in msg.lower()):
-        kwargs["file"] = sys.stderr
-    _original_print(*args, **kwargs)
-
-builtins.print = _custom_print
-
 import os
+import re
 import json
-import urllib.request
-import urllib.error
+import shutil
+import sqlite3
 import base64
 import time
+import threading
+import datetime
+import urllib.request
+import urllib.error
+import urllib.parse
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
 import logging
@@ -29,23 +21,22 @@ import logging
 logger = logging.getLogger("whatsapp_manager")
 logger.setLevel(logging.INFO)
 
-# Configuração do handler para exibir logs no console (stdout/stderr) com o prefixo [whatsapp-manager]
+# Handler personalizado: INFO→stdout, WARNING+→stderr, com prefixo [whatsapp-manager]
 if not logger.handlers:
-    class WhatsAppManagerLogHandler(logging.Handler):
+    class _WMLogHandler(logging.Handler):
         def emit(self, record):
             try:
                 msg = self.format(record)
-                if record.levelno >= logging.WARNING:
-                    _original_print(msg, file=sys.stderr)
-                else:
-                    _original_print(msg, file=sys.stdout)
+                stream = sys.stderr if record.levelno >= logging.WARNING else sys.stdout
+                print(msg, file=stream)
             except Exception:
                 self.handleError(record)
 
-    handler = WhatsAppManagerLogHandler()
-    handler.setFormatter(logging.Formatter('[whatsapp-manager] %(message)s'))
-    logger.addHandler(handler)
+    _handler = _WMLogHandler()
+    _handler.setFormatter(logging.Formatter('[whatsapp-manager] %(message)s'))
+    logger.addHandler(_handler)
     logger.propagate = False
+
 
 
 class PluginConfig:
@@ -161,6 +152,14 @@ _sender_to_chat: dict[str, str] = {}
 
 # Mapeamento LID -> telefone obtido da ponte no bot-status
 _lid_to_phone: dict[str, str] = {}
+
+# Cache TTL para _check_bot_paused() — evita HTTP a cada mensagem
+_BOT_STATUS_TTL_S: int = int(os.getenv("WHATSAPP_BOT_STATUS_TTL_S", "5"))
+_bot_status_cache: dict = {"paused": False, "ts": 0.0}
+
+# Cache TTL para _check_chat_silenced() — evita HTTP a cada mensagem
+_CHAT_STATUS_TTL_S: int = int(os.getenv("WHATSAPP_CHAT_STATUS_TTL_S", "5"))
+_chat_status_cache: dict[str, dict] = {}  # chat_id -> {"silenced": bool, "ts": float}
 
 
 def _get_media_info(event) -> dict:
@@ -325,7 +324,6 @@ def _process_media_message(event) -> str | None:
 
 def _update_db_message(db_path: str, msg_id: str, new_body: str) -> int:
     """Atualiza o corpo da mensagem no SQLite detectando dinamicamente a coluna de ID."""
-    import sqlite3
     try:
         conn = sqlite3.connect(db_path)
         cursor = conn.cursor()
@@ -363,9 +361,7 @@ def _persist_transcription_to_db(db_path: str, msg_id: str, new_body: str):
     if rows == 0:
         # Se 0 linhas afetadas, a mensagem pode não ter sido inserida ainda.
         # Spawna uma thread em background para tentar atualizar com retries.
-        import threading
         def _bg_update():
-            import time
             for delay in [1, 3, 5]:
                 time.sleep(delay)
                 r = _update_db_message(db_path, msg_id, new_body)
@@ -422,8 +418,15 @@ def _normalize_brazilian_phone(phone: str) -> str:
 
 
 def _check_bot_paused() -> bool:
-    """Verifica se o bot está pausado via endpoint do bridge e atualiza o mapa de LIDs."""
-    global _lid_to_phone
+    """Verifica se o bot está pausado via endpoint do bridge e atualiza o mapa de LIDs.
+
+    Resultado é cacheado por _BOT_STATUS_TTL_S segundos (padrão: 5s via env
+    WHATSAPP_BOT_STATUS_TTL_S) para evitar uma chamada HTTP a cada mensagem.
+    """
+    global _lid_to_phone, _bot_status_cache
+    now = time.time()
+    if now - _bot_status_cache["ts"] < _BOT_STATUS_TTL_S:
+        return _bot_status_cache["paused"]
     try:
         url = f"{BRIDGE_URL}/bot-status"
         req = urllib.request.Request(url, headers={"Content-Type": "application/json"})
@@ -432,23 +435,33 @@ def _check_bot_paused() -> bool:
             new_map = data.get("lidToPhone")
             if isinstance(new_map, dict):
                 _lid_to_phone.update(new_map)
-            return data.get("botPaused", False)
+            paused = data.get("botPaused", False)
+            _bot_status_cache = {"paused": paused, "ts": now}
+            return paused
     except (urllib.error.URLError, urllib.error.HTTPError, json.JSONDecodeError, OSError):
         # Bridge offline ou resposta inválida — retorna padrão seguro
         return False
 
 
-
 def _check_chat_silenced(chat_id: str) -> bool:
-    """Verifica se uma conversa específica está silenciada temporariamente."""
+    """Verifica se uma conversa específica está silenciada temporariamente.
+
+    Resultado é cacheado por _CHAT_STATUS_TTL_S segundos (padrão: 5s via env
+    WHATSAPP_CHAT_STATUS_TTL_S) para evitar uma chamada HTTP a cada mensagem.
+    """
+    now = time.time()
+    cached = _chat_status_cache.get(chat_id)
+    if cached and now - cached["ts"] < _CHAT_STATUS_TTL_S:
+        return cached["silenced"]
     try:
-        import urllib.parse
         safe_chat_id = urllib.parse.quote(chat_id)
         url = f"{BRIDGE_URL}/chat-status/{safe_chat_id}"
         req = urllib.request.Request(url, headers={"Content-Type": "application/json"})
         with urllib.request.urlopen(req, timeout=3) as resp:
             data = json.loads(resp.read().decode("utf-8"))
-            return data.get("isSilenced", False)
+            silenced = data.get("isSilenced", False)
+            _chat_status_cache[chat_id] = {"silenced": silenced, "ts": now}
+            return silenced
     except (urllib.error.URLError, urllib.error.HTTPError, json.JSONDecodeError, OSError):
         # Bridge offline ou resposta inválida — retorna padrão seguro
         return False
@@ -522,7 +535,6 @@ def _best_contact_name(jid: str, bridge_name: str | None, db_name: str | None, p
 
 def _extract_json_from_text(text: str) -> dict:
     """Extrai o primeiro objeto JSON válido de um texto usando balanceamento de chaves."""
-    import re
     # Remove blocos markdown ```json ... ``` ou ``` ... ```
     text = re.sub(r"```(?:json)?\s*", "", text)
     text = re.sub(r"```", "", text)
@@ -581,6 +593,34 @@ def _sanitize_classification_result(res: dict) -> dict:
         if isinstance(val, str) and val.lower().strip() in forbidden:
             res[field] = None
     return res
+
+
+def _call_llm_api(url: str, headers: dict, payload: dict, extract_fn, timeout: int = 30) -> str | None:
+    """Envia uma requisição HTTP POST para uma API de LLM e extrai o texto da resposta.
+
+    Args:
+        url: URL da API.
+        headers: Headers HTTP (Content-Type, Authorization, etc.).
+        payload: Corpo da requisição como dict (será serializado para JSON).
+        extract_fn: Função que recebe o dict de resposta e retorna o texto extraido.
+        timeout: Timeout em segundos (padrão: 30).
+
+    Returns:
+        Texto extraido ou None em caso de erro.
+    """
+    try:
+        req = urllib.request.Request(
+            url, data=json.dumps(payload).encode("utf-8"), headers=headers, method="POST"
+        )
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            result = json.loads(resp.read().decode("utf-8"))
+            return extract_fn(result)
+    except (urllib.error.URLError, urllib.error.HTTPError) as e:
+        logger.debug(f"_call_llm_api HTTP error ({url}): {e}")
+        return None
+    except (json.JSONDecodeError, KeyError, IndexError) as e:
+        logger.debug(f"_call_llm_api parse error ({url}): {e}")
+        return None
 
 
 def _classify_contact_via_llm(name: str, chat_history: str, stats_info: str) -> dict:
@@ -645,74 +685,65 @@ def _classify_contact_via_llm(name: str, chat_history: str, stats_info: str) -> 
 
     # 1. Tentar Gemini API
     if google_key:
-        try:
-            model_to_use = classify_model if (classify_model and "gemini" in classify_model.lower()) else "gemini-3.1-flash-lite"
-            url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_to_use}:generateContent?key={google_key}"
-            headers = {"Content-Type": "application/json"}
-            payload = {
+        model_to_use = classify_model if (classify_model and "gemini" in classify_model.lower()) else "gemini-3.1-flash-lite"
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_to_use}:generateContent?key={google_key}"
+        text_content = _call_llm_api(
+            url,
+            headers={"Content-Type": "application/json"},
+            payload={
                 "contents": [{"parts": [{"text": prompt}]}],
-                "generationConfig": {"responseMimeType": "application/json", "maxOutputTokens": 4096}
-            }
-            req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers=headers, method="POST")
-            with urllib.request.urlopen(req, timeout=45) as resp:
-                result = json.loads(resp.read().decode("utf-8"))
-                text_content = result["candidates"][0]["content"]["parts"][0]["text"]
+                "generationConfig": {"responseMimeType": "application/json", "maxOutputTokens": 4096},
+            },
+            extract_fn=lambda r: r["candidates"][0]["content"]["parts"][0]["text"],
+            timeout=45,
+        )
+        if text_content:
+            try:
                 return _sanitize_classification_result(_extract_json_from_text(text_content))
-        except Exception as e:
-            logger.error(f"Falha ao classificar via Gemini: {e}")
+            except Exception as e:
+                logger.error(f"Falha ao classificar via Gemini: {e}")
 
     # 2. Tentar OpenAI API
     if openai_key:
-        try:
-            model_to_use = classify_model if (classify_model and any(prefix in classify_model.lower() for prefix in ["gpt", "o1-", "o3-"])) else "gpt-4o-mini"
-            url = "https://api.openai.com/v1/chat/completions"
-            headers = {
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {openai_key}"
-            }
-            payload = {
-                "model": model_to_use,
-                "messages": [{"role": "user", "content": prompt}],
-                "response_format": {"type": "json_object"}
-            }
-            req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers=headers, method="POST")
-            with urllib.request.urlopen(req, timeout=10) as resp:
-                result = json.loads(resp.read().decode("utf-8"))
-                text_content = result["choices"][0]["message"]["content"]
+        model_to_use = classify_model if (classify_model and any(p in classify_model.lower() for p in ["gpt", "o1-", "o3-"])) else "gpt-4o-mini"
+        text_content = _call_llm_api(
+            "https://api.openai.com/v1/chat/completions",
+            headers={"Content-Type": "application/json", "Authorization": f"Bearer {openai_key}"},
+            payload={"model": model_to_use, "messages": [{"role": "user", "content": prompt}], "response_format": {"type": "json_object"}},
+            extract_fn=lambda r: r["choices"][0]["message"]["content"],
+            timeout=30,
+        )
+        if text_content:
+            try:
                 return _sanitize_classification_result(_extract_json_from_text(text_content))
-        except Exception as e:
-            logger.error(f"Falha ao classificar via OpenAI: {e}")
+            except Exception as e:
+                logger.error(f"Falha ao classificar via OpenAI: {e}")
 
+    # 3. Tentar OpenRouter API
     if openrouter_key:
-        try:
-            if classify_model:
-                if "/" in classify_model:
-                    model_to_use = classify_model
-                elif "gemini" in classify_model.lower():
-                    model_to_use = f"google/{classify_model}"
-                elif "gpt" in classify_model.lower():
-                    model_to_use = f"openai/{classify_model}"
-                else:
-                    model_to_use = classify_model
+        if classify_model:
+            if "/" in classify_model:
+                model_to_use = classify_model
+            elif "gemini" in classify_model.lower():
+                model_to_use = f"google/{classify_model}"
+            elif "gpt" in classify_model.lower():
+                model_to_use = f"openai/{classify_model}"
             else:
-                model_to_use = "google/gemini-3.1-flash-lite"
-            url = "https://openrouter.ai/api/v1/chat/completions"
-            headers = {
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {openrouter_key}"
-            }
-            payload = {
-                "model": model_to_use,
-                "messages": [{"role": "user", "content": prompt}],
-                "response_format": {"type": "json_object"}
-            }
-            req = urllib.request.Request(url, data=json.dumps(payload).encode("utf-8"), headers=headers, method="POST")
-            with urllib.request.urlopen(req, timeout=10) as resp:
-                result = json.loads(resp.read().decode("utf-8"))
-                text_content = result["choices"][0]["message"]["content"]
+                model_to_use = classify_model
+        else:
+            model_to_use = "google/gemini-3.1-flash-lite"
+        text_content = _call_llm_api(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers={"Content-Type": "application/json", "Authorization": f"Bearer {openrouter_key}"},
+            payload={"model": model_to_use, "messages": [{"role": "user", "content": prompt}], "response_format": {"type": "json_object"}},
+            extract_fn=lambda r: r["choices"][0]["message"]["content"],
+            timeout=30,
+        )
+        if text_content:
+            try:
                 return _sanitize_classification_result(_extract_json_from_text(text_content))
-        except Exception as e:
-            logger.error(f"Falha ao classificar via OpenRouter: {e}")
+            except Exception as e:
+                logger.error(f"Falha ao classificar via OpenRouter: {e}")
 
     # Fallback default se nenhuma API key estiver disponível ou todas falharem
     return {
@@ -725,7 +756,7 @@ def _classify_contact_via_llm(name: str, chat_history: str, stats_info: str) -> 
         "intent": "Obter ajuda ou informações sobre os sistemas do André.",
         "frequency": "esporádica",
         "product": None,
-        "guidelines": "Responda de forma prestativa."
+        "guidelines": "Responda de forma prestativa.",
     }
 
 
@@ -1025,7 +1056,8 @@ def _sync_contacts_from_db_internal(force: bool = True) -> str:
                 "history": chat_history,
                 "stats": stats_info,
                 "existing_key": existing_key,
-                "is_stale": is_stale
+                "is_stale": is_stale,
+                "max_ts": max_ts,  # propagado para o merge (bug-fix: evita usar variável de escopo outer)
             }
             classification_count += 1
         if conn is not None:
@@ -1036,23 +1068,42 @@ def _sync_contacts_from_db_internal(force: bool = True) -> str:
         return f"Erro ao ler banco de dados SQLite: {e}"
 
     # 3. Mesclar dados mantendo os já existentes com classificação inteligente via LLM
+    # Paralelizar as chamadas ao LLM (I/O-bound) usando ThreadPoolExecutor
     updated = False
     added_count = 0
-    for chat_id, info in db_contacts.items():
+    contact_items = list(db_contacts.items())
+
+    def _classify_item(item):
+        """Classifica um item de db_contacts e retorna (chat_id, info, classification)."""
+        chat_id, info = item
+        classification = _classify_contact_via_llm(
+            info["name"], info["history"], info["stats"]
+        )
+        return chat_id, info, classification
+
+    max_workers = min(4, len(contact_items)) if contact_items else 1
+    classified_results: list[tuple] = []
+
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        future_map = {pool.submit(_classify_item, item): item[0] for item in contact_items}
+        for future in as_completed(future_map):
+            try:
+                classified_results.append(future.result())
+            except Exception as classify_err:
+                chat_id_failed = future_map[future]
+                logger.error(f"Erro ao classificar contato {chat_id_failed}: {classify_err}")
+
+    for chat_id, info, classification in classified_results:
         name = info["name"]
-        chat_history = info["history"]
-        stats_info = info["stats"]
         existing_key = info["existing_key"]
         is_stale = info.get("is_stale", False)
+        max_ts = info.get("max_ts")  # propagado corretamente do dict
+
         resolved_chat = _resolve_phone_from_jid(chat_id)
         phone = resolved_chat.split("@")[0]
-        
-        # Classificação baseada no nome, estatísticas e histórico de conversas via LLM
-        classification = _classify_contact_via_llm(name, chat_history, stats_info)
-        
         target_key = existing_key if existing_key else resolved_chat
         existing_data = personal_contacts.get(target_key, {})
-        
+
         if is_stale:
             # Migração se o relacionamento existente for manual/específico
             man_rel = existing_data.get("manual_relationship")
@@ -1138,44 +1189,19 @@ def _sync_contacts_from_db_internal(force: bool = True) -> str:
             repo_name = config_repo
 
         try:
-            with open(pc_path, "rb") as f:
-                content = f.read()
-            content_b64 = base64.b64encode(content).decode("utf-8")
-            
-            # Buscar SHA atual do arquivo no GitHub para evitar conflito
-            get_url = f"https://api.github.com/repos/{repo_user}/{repo_name}/contents/personal_contacts.json"
-            req_get = urllib.request.Request(get_url)
-            req_get.add_header("Authorization", f"token {config_token}")
-            req_get.add_header("Accept", "application/vnd.github+json")
-            req_get.add_header("User-Agent", "Hermes-Agent-Plugin")
-            
-            sha = None
-            try:
-                with urllib.request.urlopen(req_get, timeout=10) as resp:
-                    data = json.loads(resp.read().decode("utf-8"))
-                    sha = data.get("sha")
-            except urllib.error.HTTPError as e:
-                if e.code != 404:
-                    logger.warning(f"Erro ao buscar SHA: {e}")
-            
-            # Atualizar conteúdo
-            put_data = {
-                "message": "Update personal_contacts.json from WhatsApp database history",
-                "content": content_b64,
-                "branch": "main"
-            }
-            if sha:
-                put_data["sha"] = sha
-                
-            req_put = urllib.request.Request(get_url, data=json.dumps(put_data).encode("utf-8"), method="PUT")
-            req_put.add_header("Authorization", f"token {config_token}")
-            req_put.add_header("Accept", "application/vnd.github+json")
-            req_put.add_header("User-Agent", "Hermes-Agent-Plugin")
-            req_put.add_header("Content-Type", "application/json")
-            
-            with urllib.request.urlopen(req_put, timeout=10) as resp:
-                if resp.status in [200, 201]:
-                    result_str += "\n✓ personal_contacts.json sincronizado com o GitHub com sucesso!"
+            content = pc_path.read_bytes()
+            ok = _github_put_file(
+                repo_user=repo_user,
+                repo_name=repo_name,
+                token=config_token,
+                github_path="personal_contacts.json",
+                content=content,
+                commit_msg="Update personal_contacts.json from WhatsApp database history",
+            )
+            if ok:
+                result_str += "\n✓ personal_contacts.json sincronizado com o GitHub com sucesso!"
+            else:
+                result_str += "\n⚠️ Falha ao sincronizar com GitHub."
         except Exception as e:
             result_str += f"\n⚠️ Falha ao sincronizar com GitHub: {e}"
     else:
@@ -1185,13 +1211,71 @@ def _sync_contacts_from_db_internal(force: bool = True) -> str:
 
 
 
+def _github_put_file(
+    repo_user: str,
+    repo_name: str,
+    token: str,
+    github_path: str,
+    content: bytes,
+    commit_msg: str,
+    branch: str = "main",
+    timeout: int = 10,
+) -> bool:
+    """Sobe um arquivo para o GitHub via API REST (GET sha → PUT content).
+
+    Args:
+        repo_user: Dono do repositório (ex: "empreendedorserial").
+        repo_name: Nome do repositório.
+        token: Token de acesso pessoal do GitHub.
+        github_path: Caminho do arquivo no repositório (ex: "personal_contacts.json").
+        content: Conteúdo binário do arquivo.
+        commit_msg: Mensagem de commit.
+        branch: Branch de destino (padrão: "main").
+        timeout: Timeout em segundos para cada requisição HTTP.
+
+    Returns:
+        True se criado/atualizado com sucesso, False caso contrário.
+    """
+    content_b64 = base64.b64encode(content).decode("utf-8")
+    file_url = f"https://api.github.com/repos/{repo_user}/{repo_name}/contents/{github_path}"
+    base_headers = {
+        "Authorization": f"token {token}",
+        "Accept": "application/vnd.github+json",
+        "User-Agent": "Hermes-Agent-Plugin",
+    }
+
+    # 1. Obter SHA atual (necessário para atualizar arquivo existente)
+    sha = None
+    try:
+        req_get = urllib.request.Request(file_url, headers=base_headers)
+        with urllib.request.urlopen(req_get, timeout=timeout) as resp:
+            sha = json.loads(resp.read().decode("utf-8")).get("sha")
+    except urllib.error.HTTPError as e:
+        if e.code != 404:
+            logger.warning(f"_github_put_file: erro ao buscar SHA de {github_path}: {e}")
+    except Exception as e:
+        logger.warning(f"_github_put_file: erro inesperado buscando SHA: {e}")
+
+    # 2. Criar ou atualizar o arquivo
+    put_data: dict = {"message": commit_msg, "content": content_b64, "branch": branch}
+    if sha:
+        put_data["sha"] = sha
+    try:
+        req_put = urllib.request.Request(
+            file_url,
+            data=json.dumps(put_data).encode("utf-8"),
+            headers={**base_headers, "Content-Type": "application/json"},
+            method="PUT",
+        )
+        with urllib.request.urlopen(req_put, timeout=timeout) as resp:
+            return resp.status in [200, 201]
+    except Exception as e:
+        logger.error(f"_github_put_file: falha ao enviar {github_path}: {e}")
+        return False
+
+
 def _push_personal_contacts_to_github() -> bool:
     """Envia o arquivo personal_contacts.json local diretamente para o repositório do GitHub."""
-    import base64
-    import json
-    import urllib.request
-    import urllib.error
-    from pathlib import Path
     pc_path = Path("/opt/data/personal_contacts.json")
     if not pc_path.exists():
         return False
@@ -1212,43 +1296,18 @@ def _push_personal_contacts_to_github() -> bool:
         repo_name = config_repo
 
     try:
-        with open(pc_path, "rb") as f:
-            content = f.read()
-        content_b64 = base64.b64encode(content).decode("utf-8")
-        
-        get_url = f"https://api.github.com/repos/{repo_user}/{repo_name}/contents/personal_contacts.json"
-        req_get = urllib.request.Request(get_url)
-        req_get.add_header("Authorization", f"token {config_token}")
-        req_get.add_header("Accept", "application/vnd.github+json")
-        req_get.add_header("User-Agent", "Hermes-Agent-Plugin")
-        
-        sha = None
-        try:
-            with urllib.request.urlopen(req_get, timeout=10) as resp:
-                data = json.loads(resp.read().decode("utf-8"))
-                sha = data.get("sha")
-        except urllib.error.HTTPError as e:
-            if e.code != 404:
-                logger.warning(f"Erro ao buscar SHA no push manual: {e}")
-        
-        put_data = {
-            "message": "Manual/Agent update of personal_contacts.json",
-            "content": content_b64,
-            "branch": "main"
-        }
-        if sha:
-            put_data["sha"] = sha
-            
-        req_put = urllib.request.Request(get_url, data=json.dumps(put_data).encode("utf-8"), method="PUT")
-        req_put.add_header("Authorization", f"token {config_token}")
-        req_put.add_header("Accept", "application/vnd.github+json")
-        req_put.add_header("User-Agent", "Hermes-Agent-Plugin")
-        req_put.add_header("Content-Type", "application/json")
-        
-        with urllib.request.urlopen(req_put, timeout=10) as resp:
-            if resp.status in [200, 201]:
-                logger.info("✓ personal_contacts.json sincronizado com o GitHub com sucesso via push detectado.")
-                return True
+        content = pc_path.read_bytes()
+        ok = _github_put_file(
+            repo_user=repo_user,
+            repo_name=repo_name,
+            token=config_token,
+            github_path="personal_contacts.json",
+            content=content,
+            commit_msg="Manual/Agent update of personal_contacts.json",
+        )
+        if ok:
+            logger.info("✓ personal_contacts.json sincronizado com o GitHub com sucesso via push detectado.")
+        return ok
     except Exception as e:
         logger.error(f"Falha ao sincronizar personal_contacts.json manual com o GitHub: {e}")
     return False
@@ -1707,6 +1766,652 @@ def _build_support_prompt(whatsapp_soul: str, rules_content: str, history_sectio
     }
 
 
+def _live_classify_contact(
+    sender_id: str,
+    db_query_jid: str,
+    phone_number: str,
+    contact_info: dict | None,
+    target_key: str,
+    personal_contacts: dict,
+) -> dict | None:
+    """Classifica (ou re-classifica) um contato em tempo real durante pre_llm_call.
+
+    Consulta o SQLite local para obter histórico e estatísticas, chama o LLM
+    e persiste o resultado em personal_contacts.json + GitHub (em background).
+
+    Args:
+        sender_id: JID completo do remetente.
+        db_query_jid: JID normalizado para consulta no banco.
+        phone_number: Número de telefone limpo (apenas dígitos + sufixo s.whatsapp.net).
+        contact_info: Dados existentes do contato (ou None se novo).
+        target_key: Chave a usar em personal_contacts (clean_jid ou phone_number).
+        personal_contacts: Dicionário completo carregado de personal_contacts.json.
+
+    Returns:
+        Dicionário com os dados classificados, ou None se não houver dados suficientes.
+    """
+    min_msg_threshold = config.whatsapp_sync_min_messages
+    bridge_db_path = Path("/opt/data/.hermes/whatsapp_messages.db")
+    state_db_path = Path("/opt/data/.hermes/state.db")
+    msg_count = 0
+    min_ts = None
+    max_ts = None
+    db_name = None
+    chat_history_lines: list[str] = []
+    conn = None
+
+    # 1. Tentar whatsapp_messages.db (fonte primária)
+    if bridge_db_path.exists():
+        conn = sqlite3.connect(str(bridge_db_path))
+        cursor = conn.cursor()
+        cursor.execute("""
+            SELECT COUNT(*), MIN(timestamp), MAX(timestamp), MAX(sender_name)
+            FROM messages WHERE chat_id = ?
+        """, (db_query_jid,))
+        row = cursor.fetchone()
+        if row and row[0]:
+            msg_count, min_ts, max_ts, db_name = row
+        if (not msg_count) and phone_number:
+            cursor.execute("""
+                SELECT COUNT(*), MIN(timestamp), MAX(timestamp), MAX(sender_name)
+                FROM messages WHERE chat_id LIKE ?
+            """, (f"{phone_number}%",))
+            fetched = cursor.fetchone()
+            if fetched and fetched[0]:
+                msg_count, min_ts, max_ts, db_name = fetched
+        if not msg_count:
+            cursor.execute("""
+                SELECT from_me, sender_name, body FROM messages
+                WHERE chat_id = ? AND body IS NOT NULL AND body != ''
+                ORDER BY timestamp DESC LIMIT 15
+            """, (db_query_jid,))
+            rows_msgs = cursor.fetchall()
+            rows_msgs.reverse()
+            for f_me, s_name, msg_body in rows_msgs:
+                sender_lbl = "André" if f_me else (s_name or "Contato")
+                chat_history_lines.append(f"[{sender_lbl}]: {msg_body}")
+
+    # 2. Fallback: state.db (sessions + messages do gateway)
+    if (not msg_count) and state_db_path.exists():
+        try:
+            state_conn = sqlite3.connect(str(state_db_path))
+            sc = state_conn.cursor()
+            sc.execute("""
+                SELECT COUNT(*), MAX(started_at) FROM sessions
+                WHERE source = 'whatsapp' AND user_id = ?
+            """, (db_query_jid,))
+            row = sc.fetchone()
+            if row and row[0]:
+                msg_count = row[0]
+                max_ts = row[1] or max_ts
+            sc.execute("""
+                SELECT m.role, m.content FROM messages m
+                JOIN sessions s ON m.session_id = s.id
+                WHERE s.user_id = ? AND s.source = 'whatsapp' AND m.content IS NOT NULL
+                ORDER BY m.timestamp DESC LIMIT 15
+            """, (db_query_jid,))
+            rows_msgs = sc.fetchall()
+            rows_msgs.reverse()
+            for role, content in rows_msgs:
+                sender_lbl = "André" if role == "assistant" else (db_name or "Contato")
+                chat_history_lines.append(f"[{sender_lbl}]: {(content or '')[:300]}")
+            state_conn.close()
+        except Exception as state_err:
+            logger.warning(f"live sync: erro lendo state.db: {state_err}")
+
+    if not msg_count:
+        return None
+
+    # 3. Montar stats e histórico
+    stats_info = f"Total messages: {msg_count}."
+    if min_ts and max_ts:
+        try:
+            first_date = datetime.datetime.fromtimestamp(min_ts).strftime('%Y-%m-%d')
+            last_date = datetime.datetime.fromtimestamp(max_ts).strftime('%Y-%m-%d')
+            stats_info += f" First message date: {first_date}. Last message date: {last_date}."
+        except (ValueError, OSError):
+            pass
+
+    name = (contact_info.get("name") if contact_info else None) or db_name or f"Contato {phone_number}"
+
+    # 4. Classificar (ou reusar se poucas mensagens)
+    if msg_count < min_msg_threshold:
+        prev_rel = contact_info.get("relationship") if contact_info else None
+        if prev_rel and prev_rel not in ["Cliente", "Vendedor", "Pendente de classificação"]:
+            classification = {
+                "relationship": prev_rel,
+                "tone": contact_info.get("tone", "informal e amigável"),
+                "nickname": contact_info.get("nickname"),
+                "pet_name": contact_info.get("pet_name"),
+                "frequent_greeting": contact_info.get("frequent_greeting"),
+                "summary": contact_info.get("summary", "Conversa muito curta."),
+                "intent": "Contato inicial.",
+                "frequency": contact_info.get("frequency", "esporádica"),
+                "guidelines": contact_info.get("guidelines", "Responda como André."),
+            }
+        else:
+            classification = {
+                "relationship": "Cliente",
+                "tone": "polido e profissional",
+                "nickname": None, "pet_name": None,
+                "frequent_greeting": None,
+                "summary": "Conversa muito curta.",
+                "intent": "Contato inicial.",
+                "frequency": "esporádica",
+                "guidelines": "Responda de forma prestativa.",
+            }
+    else:
+        if conn:
+            cursor.execute("""
+                SELECT from_me, sender_name, body FROM messages
+                WHERE chat_id = ? AND body IS NOT NULL AND body != ''
+                ORDER BY timestamp DESC LIMIT 15
+            """, (db_query_jid,))
+            rows_msgs = cursor.fetchall()
+            rows_msgs.reverse()
+            history_lines = [
+                f"[{'André' if f_me else (s_name or name or 'Contato')}]: {msg_body}"
+                for f_me, s_name, msg_body in rows_msgs
+            ]
+            chat_history = "\n".join(history_lines)
+        else:
+            chat_history = "\n".join(chat_history_lines)
+        classification = _classify_contact_via_llm(name, chat_history, stats_info)
+
+    if conn is not None:
+        conn.close()
+
+    # 5. Mesclar com dados existentes preservando campos manuais
+    man_rel = (contact_info.get("manual_relationship") if contact_info else None)
+    if not man_rel and contact_info and contact_info.get("relationship") in ["Vendedor", "Amigo", "AmigoProximo", "Parente", "Filho"]:
+        man_rel = contact_info.get("relationship")
+
+    new_data = {
+        "name": name,
+        "relationship": man_rel or classification.get("relationship", "Cliente"),
+        "manual_relationship": man_rel,
+        "notes": contact_info.get("notes") if contact_info else None,
+        "product": (contact_info.get("product") if contact_info else None) or classification.get("product"),
+        "tone": classification.get("tone", "polido e profissional"),
+        "nickname": classification.get("nickname"),
+        "pet_name": classification.get("pet_name"),
+        "frequent_greeting": classification.get("frequent_greeting"),
+        "summary": classification.get("summary", "Conversa inicial."),
+        "intent": classification.get("intent", "Suporte/Atendimento."),
+        "frequency": classification.get("frequency", "esporádica"),
+        "guidelines": classification.get("guidelines", "Responda de forma prestativa."),
+        "last_interaction": time.time(),
+    }
+
+    # 6. Persistir localmente
+    personal_contacts[target_key] = new_data
+    try:
+        with open("/opt/data/personal_contacts.json", "w", encoding="utf-8") as f:
+            json.dump(personal_contacts, f, indent=2, ensure_ascii=False)
+    except OSError as write_err:
+        logger.error(f"Erro ao gravar personal_contacts.json no live sync: {write_err}")
+
+    # 7. Push ao GitHub em background
+    def _push_bg():
+        try:
+            config_repo = config.config_repo
+            config_token = config.config_github_token
+            setup_user = config.hermes_setup_github_user
+            dev_user = config.dev_github_user
+            if config_repo and config_token:
+                repo_user, repo_name = (
+                    config_repo.split("/") if "/" in config_repo
+                    else (setup_user or dev_user or "empreendedorserial", config_repo)
+                )
+                _github_put_file(
+                    repo_user=repo_user, repo_name=repo_name, token=config_token,
+                    github_path="personal_contacts.json",
+                    content=Path("/opt/data/personal_contacts.json").read_bytes(),
+                    commit_msg=f"Live update personal_contacts.json for {name}",
+                )
+        except Exception as push_err:
+            logger.error(f"Erro no push do live sync para o GitHub: {push_err}")
+
+    threading.Thread(target=_push_bg, daemon=True).start()
+    return new_data
+
+
+def commit_file_to_repo(repo_user, repo_name, config_token, local_path, github_path, default_url):
+    content = b""
+    if os.path.exists(local_path):
+        try:
+            with open(local_path, "rb") as f:
+                content = f.read()
+        except Exception:
+            pass
+    if not content and default_url:
+        try:
+            with urllib.request.urlopen(default_url, timeout=10) as r:
+                content = r.read()
+        except Exception as dl_err:
+            logger.error(f"Erro ao baixar template {github_path}: {dl_err}")
+
+    if content:
+        content_b64 = base64.b64encode(content).decode("utf-8")
+        put_url = f"https://api.github.com/repos/{repo_user}/{repo_name}/contents/{github_path}"
+        put_data = json.dumps({
+            "message": f"Add initial {github_path}",
+            "content": content_b64,
+            "branch": "main"
+        }).encode("utf-8")
+
+        put_req = urllib.request.Request(put_url, data=put_data, method="PUT")
+        put_req.add_header("Authorization", f"token {config_token}")
+        put_req.add_header("Accept", "application/vnd.github+json")
+        put_req.add_header("User-Agent", "Hermes-Agent-Plugin")
+        put_req.add_header("Content-Type", "application/json")
+
+        try:
+            with urllib.request.urlopen(put_req, timeout=10) as put_resp:
+                if put_resp.status in [200, 201]:
+                    logger.info(f"✓ Arquivo '{github_path}' inicializado no repositório.")
+        except Exception as put_err:
+            logger.error(f"Erro ao commitar {github_path}: {put_err}")
+
+
+def pre_gateway_dispatch(*args, **kwargs):
+    context = kwargs.get("context")
+    if not context:
+        for arg in args:
+            if isinstance(arg, dict):
+                context = arg
+                break
+    
+    event = None
+    gateway = None
+    if context:
+        event = context.get("event")
+        gateway = context.get("gateway")
+        
+    if not event:
+        event = kwargs.get("event")
+        
+    if not gateway:
+        gateway = kwargs.get("gateway")
+        
+    if not event or not gateway:
+        return None
+
+    # Apenas processar se for plataforma WhatsApp
+    platform_val = getattr(event.source.platform, "value", event.source.platform)
+    if platform_val != "whatsapp":
+        return None
+
+    # Processamento de Mídia (Áudio e Imagem) via Gemini
+    media_info = _get_media_info(event)
+    if media_info["has_media"] and media_info["media_urls"]:
+        media_type = media_info["media_type"]
+        if media_type in ["ptt", "audio", "image"]:
+            result_text = _process_media_message(event)
+            if result_text:
+                if media_type in ["ptt", "audio"]:
+                    display_text = f'[Áudio: "{result_text}"]'
+                else:
+                    display_text = f'[Imagem: {result_text}]'
+                
+                # Atualizar o evento em memória
+                event.text = display_text
+                if hasattr(event, "body"):
+                    event.body = display_text
+                for attr in ["raw", "raw_event", "payload", "data"]:
+                    if hasattr(event, attr):
+                        val = getattr(event, attr)
+                        if isinstance(val, dict):
+                            val["body"] = display_text
+                            val["text"] = display_text
+                
+                # Atualizar o banco SQLite local do Hermes em background
+                db_path = Path("/opt/data/.hermes/whatsapp_messages.db")
+                if db_path.exists() and media_info["message_id"]:
+                    _persist_transcription_to_db(str(db_path), media_info["message_id"], display_text)
+
+
+    # Identificar remetente (com resolução de LID para número de telefone clássico)
+    sender_id = event.source.user_id or ""
+    resolved_sender = _resolve_phone_from_jid(sender_id)
+    clean_sender = "".join(c for c in resolved_sender.split("@")[0].split(":")[0] if c.isdigit())
+
+    # Identificar dono (André)
+    owner_number = config.whatsapp_owner_number
+    if not owner_number:
+        return None  # Não definido → plugin não faz nada
+
+    clean_owner = "".join(c for c in owner_number.split("@")[0].split(":")[0] if c.isdigit())
+    is_owner = (_normalize_brazilian_phone(clean_sender) == _normalize_brazilian_phone(clean_owner))
+
+    # Identificar chat
+    chat_id = str(event.source.chat_id) if event.source.chat_id else ""
+    resolved_chat = _resolve_phone_from_jid(chat_id)
+    clean_chat = "".join(c for c in resolved_chat.split("@")[0].split(":")[0] if c.isdigit())
+    is_self_chat = (clean_sender == clean_chat)
+
+    msg_text = (event.text or "").strip()
+
+    # Comando para sincronizar e importar contatos do SQLite para personal_contacts.json e GitHub
+    normalized_msg = msg_text.strip().lower().replace("_", " ").replace("-", " ")
+    try:
+        logger.debug(
+            f"[debug] sender='{sender_id}' (clean='{clean_sender}', norm='{_normalize_brazilian_phone(clean_sender)}')"
+            f" owner='{owner_number}' (clean='{clean_owner}', norm='{_normalize_brazilian_phone(clean_owner)}')"
+            f" is_owner={is_owner} msg='{msg_text}' normalized='{normalized_msg}'"
+        )
+    except Exception as log_e:
+        logger.error(f"Erro ao gravar debug log: {log_e}")
+    sync_commands = [
+        "sync contacts", "sync_contacts",
+        "importar contatos", "importar_contatos",
+        "sync contatos", "sync_contatos",
+        "sincronizar contatos", "sincronizar_contatos"
+    ]
+    
+    is_sync_cmd = False
+    for cmd in sync_commands:
+        cmd_norm = cmd.replace("_", " ").replace("-", " ")
+        if normalized_msg.startswith(cmd_norm):
+            is_sync_cmd = True
+            break
+
+    if is_owner and is_sync_cmd:
+        logger.info("Comando de sincronização detectado (forçando atualização).")
+        chat_id = str(event.source.chat_id) if event.source.chat_id else ""
+        
+        try:
+            result_info = _sync_contacts_from_db_internal(force=True)
+            response_msg = (
+                "👤 *Sincronização de Contatos*\n\n"
+                f"{result_info}"
+            )
+        except Exception as e:
+            response_msg = f"❌ Erro na sincronização interna: {e}"
+        
+        # Enviar de volta
+        if chat_id:
+            try:
+                url = f"{BRIDGE_URL}/send"
+                payload = json.dumps({
+                    "chatId": chat_id,
+                    "message": response_msg
+                }).encode("utf-8")
+                req = urllib.request.Request(url, data=payload, method="POST")
+                req.add_header("Content-Type", "application/json")
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    pass
+            except Exception as send_err:
+                logger.error(f"Erro ao enviar resposta do comando: {send_err}")
+        
+        return {"action": "skip", "reason": "sync-contacts-command"}
+
+    # Se for mensagem manual enviada pelo dono no WhatsApp para outro contato, pulamos a resposta do LLM
+    if is_owner and not is_self_chat:
+        return {"action": "skip", "reason": "owner-manual-message"}
+
+    # Ignorar mensagens de status do bot (stop_bot/start_bot responses)
+    if msg_text in [
+        "🐼 *Bot Paused*\n\nO chatbot está descansando. Use `start_bot` para retomar.",
+        "🚀 *Bot Ativo*\n\nO chatbot voltou a funcionar!",
+        "⏸️ *Atendimento do WhatsApp pausado.* Os clientes não receberão respostas da IA a partir de agora.",
+        "▶️ *Atendimento do WhatsApp ativo.* A IA voltará a responder os clientes automaticamente."
+    ]:
+        return {"action": "skip", "reason": "bot-status-message"}
+
+    is_personal_chat = (clean_chat == clean_owner)
+
+    # Se não for o dono, verificar status de pausa e injetar histórico da conversa
+    if not is_owner:
+        # Verificar se o bot está pausado via stop_bot
+        if _check_bot_paused():
+            return {"action": "skip", "reason": "bot-pausado"}
+
+        chat_id = str(event.source.chat_id) if event.source.chat_id else ""
+
+        # Verificar se a conversa específica está silenciada temporariamente
+        if chat_id and _check_chat_silenced(chat_id):
+            return {"action": "skip", "reason": "conversa-silenciada"}
+
+        if chat_id and sender_id:
+            _sender_to_chat[sender_id] = chat_id
+    else:
+        # Para o dono, salvar chat_id também
+        chat_id = str(event.source.chat_id) if event.source.chat_id else ""
+        if chat_id and sender_id:
+            _sender_to_chat[sender_id] = chat_id
+
+    # Roteamento Dinâmico de Modelos (Dono vs Clientes)
+    try:
+        session_key = gateway._session_key_for_source(event.source)
+        if session_key:
+            owner_model = config.whatsapp_owner_model
+            owner_provider = config.whatsapp_owner_provider
+            client_model = config.whatsapp_client_model
+            client_provider = config.whatsapp_client_provider
+            
+            if is_owner:
+                gateway._session_model_overrides[session_key] = {
+                    "model": owner_model,
+                    "provider": owner_provider
+                }
+            else:
+                gateway._session_model_overrides[session_key] = {
+                    "model": client_model,
+                    "provider": client_provider
+                }
+    except Exception as e:
+        logger.error(f"Erro ao aplicar override de modelo: {e}")
+
+    return None
+
+
+def pre_llm_call(*args, **kwargs):
+    context = kwargs.get("context")
+    if not context:
+        for arg in args:
+            if isinstance(arg, dict):
+                context = arg
+                break
+
+    platform = None
+    sender_id = None
+    if context:
+        platform = context.get("platform")
+        sender_id = context.get("sender_id")
+
+    if not platform:
+        platform = kwargs.get("platform")
+
+    if not sender_id:
+        sender_id = kwargs.get("sender_id")
+
+    if platform != "whatsapp":
+        return None
+
+    owner_number = config.whatsapp_owner_number
+    if not owner_number:
+        return None
+
+    clean_sender = "".join(c for c in sender_id.split("@")[0].split(":")[0] if c.isdigit()) if sender_id else ""
+    clean_owner = "".join(c for c in owner_number.split("@")[0].split(":")[0] if c.isdigit())
+
+    # ── Modo A: André (dono) ──────────────────────────────────────────────
+    if _normalize_brazilian_phone(clean_sender) == _normalize_brazilian_phone(clean_owner):
+        chat_id = _resolve_chat_id(sender_id)
+        history_context = _fetch_chat_history(chat_id, limit=50) if chat_id else ""
+        history_section = (
+            "\n\n### HISTÓRICO DE MENSAGENS ANTERIORES ###\n"
+            "Abaixo está o histórico recente da conversa para você entender o contexto anterior. "
+            "NÃO responda novamente a essas mensagens do histórico, use-as apenas como contexto "
+            "para responder à nova mensagem do André.\n\n"
+            f"{history_context}"
+        ) if history_context else ""
+        return _build_owner_context(history_section)
+
+    # ── Modo B: Cliente / Contato pessoal ────────────────────────────────
+    is_first_turn = context.get("is_first_turn", False) if context else False
+    if is_first_turn:
+        try:
+            delay_s = config.whatsapp_first_response_delay_s
+            if delay_s > 0:
+                logger.info(f"Aplicando delay de {delay_s}s para a primeira resposta ao cliente...")
+                time.sleep(delay_s)
+        except (ValueError, OSError) as e:
+            logger.error(f"Erro ao aplicar delay: {e}")
+
+    whatsapp_soul, rules_content = _load_support_files()
+    personal_contacts = _load_personal_contacts()
+
+    # Resolver JIDs e telefone
+    db_query_jid = sender_id
+    parts_db = sender_id.split("@")
+    if len(parts_db) == 2:
+        jid_part, domain_part = parts_db
+        db_query_jid = f"{jid_part.split(':')[0]}@{domain_part}"
+
+    resolved_sender = _resolve_phone_from_jid(sender_id)
+    clean_jid = resolved_sender
+    parts = resolved_sender.split("@")
+    if len(parts) == 2:
+        jid_part, domain_part = parts
+        clean_jid = f"{jid_part.split(':')[0]}@{domain_part}"
+    phone_number = clean_jid.split("@")[0]
+
+    chat_id = _resolve_chat_id(sender_id)
+    history_context = _fetch_chat_history(chat_id, limit=50) if chat_id else ""
+    history_section = (
+        "### HISTÓRICO DE MENSAGENS ANTERIORES ###\n"
+        "Abaixo está o histórico recente da conversa para você entender o contexto anterior. "
+        "NÃO responda novamente a essas mensagens do histórico, use-as apenas como contexto "
+        "para responder à nova mensagem do cliente.\n\n"
+        f"{history_context}\n\n"
+    ) if history_context else ""
+
+    # Buscar info de contato no JSON
+    contact_info = personal_contacts.get(clean_jid) or personal_contacts.get(phone_number)
+
+    # Verificar se precisa de classificação em tempo real
+    needs_live_classify = False
+    target_key = clean_jid
+    live_classify_threshold_seconds = config.whatsapp_live_classify_cooldown
+    if contact_info:
+        old_defaults = ["Conversa inicial.", "Conversa muito curta.", "Conversa inicial de suporte/atendimento.", "Pendente de classificação."]
+        has_old_default_summary = contact_info.get("summary") in old_defaults
+        if has_old_default_summary or not contact_info.get("summary") or not contact_info.get("intent") or not contact_info.get("frequency"):
+            needs_live_classify = True
+            if phone_number in personal_contacts:
+                target_key = phone_number
+        else:
+            last_interaction_ts = contact_info.get("last_interaction", 0)
+            if last_interaction_ts and (time.time() - last_interaction_ts) > live_classify_threshold_seconds:
+                needs_live_classify = True
+                logger.info(f"Re-classificando {phone_number}: última interação há {int((time.time() - last_interaction_ts) / 60)} min.")
+                if phone_number in personal_contacts:
+                    target_key = phone_number
+    else:
+        needs_live_classify = True
+        target_key = clean_jid
+
+    if needs_live_classify:
+        try:
+            new_contact_data = _live_classify_contact(
+                sender_id=sender_id,
+                db_query_jid=db_query_jid,
+                phone_number=phone_number,
+                contact_info=contact_info,
+                target_key=target_key,
+                personal_contacts=personal_contacts,
+            )
+            if new_contact_data is not None:
+                contact_info = new_contact_data
+        except Exception as live_err:
+            logger.error(f"Erro na classificação em tempo real do contato: {live_err}")
+
+    relationship = "Cliente"
+    if contact_info:
+        relationship = contact_info.get("manual_relationship") or contact_info.get("relationship") or "Cliente"
+
+    if contact_info and relationship != "Cliente":
+        return _build_personal_prompt(contact_info, relationship, history_section)
+
+    return _build_support_prompt(whatsapp_soul, rules_content, history_section)
+
+
+def _run_periodic_sync():
+    import time
+    from pathlib import Path
+    pc_path = Path("/opt/data/personal_contacts.json")
+    
+    last_code_check = time.time()
+    last_contact_sync = time.time()
+    last_git_pull = time.time()
+    
+    last_pc_mtime = 0.0
+    if pc_path.exists():
+        try:
+            last_pc_mtime = os.path.getmtime(pc_path)
+        except Exception:
+            pass
+
+    # Aguarda 60 segundos após o boot antes de iniciar as verificações em loop
+    time.sleep(60)
+    
+    while True:
+        # 1. Verificar se personal_contacts.json foi modificado localmente
+        if pc_path.exists():
+            try:
+                current_mtime = os.path.getmtime(pc_path)
+                if current_mtime > last_pc_mtime:
+                    logger.info(f"Modificação local detectada em {pc_path}. Sincronizando com o GitHub...")
+                    if _push_personal_contacts_to_github():
+                        last_pc_mtime = current_mtime
+                    else:
+                        last_pc_mtime = current_mtime
+            except Exception as e:
+                logger.error(f"Erro ao monitorar modificações locais de contatos: {e}")
+
+        # 2. Puxar configurações do GitHub (a cada 1 hora / 3600 segundos)
+        if time.time() - last_git_pull >= 3600:
+            last_git_pull = time.time()
+            try:
+                logger.info("Iniciando puxada periódica de configurações do GitHub...")
+                _pull_and_merge_configurations()
+                if pc_path.exists():
+                    last_pc_mtime = os.path.getmtime(pc_path)
+            except Exception as e:
+                logger.error(f"Erro na puxada periódica de configurações: {e}")
+
+        # 3. Sincronizar contatos (executa apenas a cada 24 horas)
+        if time.time() - last_contact_sync >= 86400:
+            last_contact_sync = time.time()
+            try:
+                logger.info("Iniciando sincronização periódica automática de contatos...")
+                res = _sync_contacts_from_db_internal(force=False)
+                logger.info(f"Sincronização periódica concluída: {res}")
+                if pc_path.exists():
+                    last_pc_mtime = os.path.getmtime(pc_path)
+            except Exception as e:
+                logger.error(f"Erro na sincronização periódica: {e}")
+
+        # 4. Verificar atualizações de código a cada 24 horas (86400 segundos)
+        if time.time() - last_code_check >= 86400:
+            last_code_check = time.time()
+            try:
+                logger.info("Verificando atualizações de código do plugin...")
+                if _self_update_plugin_code():
+                    logger.info("Código do plugin atualizado! Reiniciando container...")
+                    os._exit(0)
+            except Exception as e:
+                logger.error(f"Erro ao checar auto-update de código: {e}")
+
+        time.sleep(60)
+
+
+# ── Comentário de separação ─────────────────────────────────────────────────
+# Helpers extraídos acima são testáveis diretamente sem instanciar register().
+# ────────────────────────────────────────────────────────────────────────────
+
 def register(ctx):
 
     # Auto-inicialização e cópia dos arquivos da ponte
@@ -1810,50 +2515,12 @@ def register(ctx):
                                     logger.info(f"✓ Repositório privado '{repo_user}/{repo_name}' criado com sucesso no GitHub!")
                                     time.sleep(3) # Aguarda o GitHub provisionar o branch main
 
-                                    # Função auxiliar para commitar via API
-                                    def commit_file_to_repo(local_path, github_path, default_url):
-                                        content = b""
-                                        if os.path.exists(local_path):
-                                            try:
-                                                with open(local_path, "rb") as f:
-                                                    content = f.read()
-                                            except Exception:
-                                                pass
-                                        if not content and default_url:
-                                            try:
-                                                with urllib.request.urlopen(default_url, timeout=10) as r:
-                                                    content = r.read()
-                                            except Exception as dl_err:
-                                                logger.error(f"Erro ao baixar template {github_path}: {dl_err}")
-
-                                        if content:
-                                            content_b64 = base64.b64encode(content).decode("utf-8")
-                                            put_url = f"https://api.github.com/repos/{repo_user}/{repo_name}/contents/{github_path}"
-                                            put_data = json.dumps({
-                                                "message": f"Add initial {github_path}",
-                                                "content": content_b64,
-                                                "branch": "main"
-                                            }).encode("utf-8")
-
-                                            put_req = urllib.request.Request(put_url, data=put_data, method="PUT")
-                                            put_req.add_header("Authorization", f"token {config_token}")
-                                            put_req.add_header("Accept", "application/vnd.github+json")
-                                            put_req.add_header("User-Agent", "Hermes-Agent-Plugin")
-                                            put_req.add_header("Content-Type", "application/json")
-
-                                            try:
-                                                with urllib.request.urlopen(put_req, timeout=10) as put_resp:
-                                                    if put_resp.status in [200, 201]:
-                                                        logger.info(f"✓ Arquivo '{github_path}' inicializado no repositório.")
-                                            except Exception as put_err:
-                                                logger.error(f"Erro ao commitar {github_path}: {put_err}")
-
                                     raw_base = "https://raw.githubusercontent.com/empreendedorserial/hermes-whatsapp-mixed/main/deploy"
-                                    commit_file_to_repo("/opt/data/SOUL.md", "SOUL.md", f"{raw_base}/SOUL.md")
-                                    commit_file_to_repo("/opt/data/SOUL_WHATSAPP.md", "SOUL_WHATSAPP.md", f"{raw_base}/SOUL_WHATSAPP.md")
-                                    commit_file_to_repo("/opt/data/SOUL_EMAIL.md", "SOUL_EMAIL.md", f"{raw_base}/SOUL_EMAIL.md")
-                                    commit_file_to_repo("/opt/data/support_rules.md", "support_rules.md", f"{raw_base}/support_rules.md")
-                                    commit_file_to_repo("/opt/data/personal_contacts.json", "personal_contacts.json", f"{raw_base}/personal_contacts.json.example")
+                                    commit_file_to_repo(repo_user, repo_name, config_token, "/opt/data/SOUL.md", "SOUL.md", f"{raw_base}/SOUL.md")
+                                    commit_file_to_repo(repo_user, repo_name, config_token, "/opt/data/SOUL_WHATSAPP.md", "SOUL_WHATSAPP.md", f"{raw_base}/SOUL_WHATSAPP.md")
+                                    commit_file_to_repo(repo_user, repo_name, config_token, "/opt/data/SOUL_EMAIL.md", "SOUL_EMAIL.md", f"{raw_base}/SOUL_EMAIL.md")
+                                    commit_file_to_repo(repo_user, repo_name, config_token, "/opt/data/support_rules.md", "support_rules.md", f"{raw_base}/support_rules.md")
+                                    commit_file_to_repo(repo_user, repo_name, config_token, "/opt/data/personal_contacts.json", "personal_contacts.json", f"{raw_base}/personal_contacts.json.example")
                         except Exception as create_err:
                             logger.error(f"Erro ao criar repositório: {create_err}")
                 except Exception as check_err:
@@ -1957,520 +2624,9 @@ def register(ctx):
     except Exception as skills_err:
         logger.error(f"Erro ao registrar skills: {skills_err}")
 
-    # Hook 1: pre_gateway_dispatch (Filtro e controle de comandos)
-    def pre_gateway_dispatch(*args, **kwargs):
-        context = kwargs.get("context")
-        if not context:
-            for arg in args:
-                if isinstance(arg, dict):
-                    context = arg
-                    break
-        
-        event = None
-        gateway = None
-        if context:
-            event = context.get("event")
-            gateway = context.get("gateway")
-            
-        if not event:
-            event = kwargs.get("event")
-            
-        if not gateway:
-            gateway = kwargs.get("gateway")
-            
-        if not event or not gateway:
-            return None
+    # pre_gateway_dispatch local removido (usando a versão global do módulo)
 
-        # Apenas processar se for plataforma WhatsApp
-        platform_val = getattr(event.source.platform, "value", event.source.platform)
-        if platform_val != "whatsapp":
-            return None
-
-        # Processamento de Mídia (Áudio e Imagem) via Gemini
-        media_info = _get_media_info(event)
-        if media_info["has_media"] and media_info["media_urls"]:
-            media_type = media_info["media_type"]
-            if media_type in ["ptt", "audio", "image"]:
-                result_text = _process_media_message(event)
-                if result_text:
-                    if media_type in ["ptt", "audio"]:
-                        display_text = f'[Áudio: "{result_text}"]'
-                    else:
-                        display_text = f'[Imagem: {result_text}]'
-                    
-                    # Atualizar o evento em memória
-                    event.text = display_text
-                    if hasattr(event, "body"):
-                        event.body = display_text
-                    for attr in ["raw", "raw_event", "payload", "data"]:
-                        if hasattr(event, attr):
-                            val = getattr(event, attr)
-                            if isinstance(val, dict):
-                                val["body"] = display_text
-                                val["text"] = display_text
-                    
-                    # Atualizar o banco SQLite local do Hermes em background
-                    db_path = Path("/opt/data/.hermes/whatsapp_messages.db")
-                    if db_path.exists() and media_info["message_id"]:
-                        _persist_transcription_to_db(str(db_path), media_info["message_id"], display_text)
-
-
-        # Identificar remetente (com resolução de LID para número de telefone clássico)
-        sender_id = event.source.user_id or ""
-        resolved_sender = _resolve_phone_from_jid(sender_id)
-        clean_sender = "".join(c for c in resolved_sender.split("@")[0].split(":")[0] if c.isdigit())
-
-        # Identificar dono (André)
-        owner_number = config.whatsapp_owner_number
-        if not owner_number:
-            return None  # Não definido → plugin não faz nada
-
-        clean_owner = "".join(c for c in owner_number.split("@")[0].split(":")[0] if c.isdigit())
-        is_owner = (_normalize_brazilian_phone(clean_sender) == _normalize_brazilian_phone(clean_owner))
-
-        # Identificar chat
-        chat_id = str(event.source.chat_id) if event.source.chat_id else ""
-        resolved_chat = _resolve_phone_from_jid(chat_id)
-        clean_chat = "".join(c for c in resolved_chat.split("@")[0].split(":")[0] if c.isdigit())
-        is_self_chat = (clean_sender == clean_chat)
-
-        msg_text = (event.text or "").strip()
-
-        # Comando para sincronizar e importar contatos do SQLite para personal_contacts.json e GitHub
-        normalized_msg = msg_text.strip().lower().replace("_", " ").replace("-", " ")
-        try:
-            with open("/opt/data/whatsapp_manager_debug.log", "a", encoding="utf-8") as debug_f:
-                import time
-                debug_f.write(f"[{time.strftime('%Y-%m-%d %H:%M:%S')}] sender='{sender_id}' (clean='{clean_sender}', norm='{_normalize_brazilian_phone(clean_sender)}') owner='{owner_number}' (clean='{clean_owner}', norm='{_normalize_brazilian_phone(clean_owner)}') is_owner={is_owner} msg='{msg_text}' normalized='{normalized_msg}'\n")
-        except Exception as log_e:
-            logger.error(f"Erro ao gravar debug log: {log_e}")
-        sync_commands = [
-            "sync contacts", "sync_contacts",
-            "importar contatos", "importar_contatos",
-            "sync contatos", "sync_contatos",
-            "sincronizar contatos", "sincronizar_contatos"
-        ]
-        
-        is_sync_cmd = False
-        for cmd in sync_commands:
-            cmd_norm = cmd.replace("_", " ").replace("-", " ")
-            if normalized_msg.startswith(cmd_norm):
-                is_sync_cmd = True
-                break
-
-        if is_owner and is_sync_cmd:
-            logger.info("Comando de sincronização detectado (forçando atualização).")
-            chat_id = str(event.source.chat_id) if event.source.chat_id else ""
-            
-            try:
-                result_info = _sync_contacts_from_db_internal(force=True)
-                response_msg = (
-                    "👤 *Sincronização de Contatos*\n\n"
-                    f"{result_info}"
-                )
-            except Exception as e:
-                response_msg = f"❌ Erro na sincronização interna: {e}"
-            
-            # Enviar de volta
-            if chat_id:
-                try:
-                    url = f"{BRIDGE_URL}/send"
-                    payload = json.dumps({
-                        "chatId": chat_id,
-                        "message": response_msg
-                    }).encode("utf-8")
-                    req = urllib.request.Request(url, data=payload, method="POST")
-                    req.add_header("Content-Type", "application/json")
-                    with urllib.request.urlopen(req, timeout=10) as resp:
-                        pass
-                except Exception as send_err:
-                    logger.error(f"Erro ao enviar resposta do comando: {send_err}")
-            
-            return {"action": "skip", "reason": "sync-contacts-command"}
-
-        # Se for mensagem manual enviada pelo dono no WhatsApp para outro contato, pulamos a resposta do LLM
-        if is_owner and not is_self_chat:
-            return {"action": "skip", "reason": "owner-manual-message"}
-
-        # Ignorar mensagens de status do bot (stop_bot/start_bot responses)
-        if msg_text in [
-            "🐼 *Bot Paused*\n\nO chatbot está descansando. Use `start_bot` para retomar.",
-            "🚀 *Bot Ativo*\n\nO chatbot voltou a funcionar!",
-            "⏸️ *Atendimento do WhatsApp pausado.* Os clientes não receberão respostas da IA a partir de agora.",
-            "▶️ *Atendimento do WhatsApp ativo.* A IA voltará a responder os clientes automaticamente."
-        ]:
-            return {"action": "skip", "reason": "bot-status-message"}
-
-        is_personal_chat = (clean_chat == clean_owner)
-
-        # Se não for o dono, verificar status de pausa e injetar histórico da conversa
-        if not is_owner:
-            # Verificar se o bot está pausado via stop_bot
-            if _check_bot_paused():
-                return {"action": "skip", "reason": "bot-pausado"}
-
-            chat_id = str(event.source.chat_id) if event.source.chat_id else ""
-
-            # Verificar se a conversa específica está silenciada temporariamente
-            if chat_id and _check_chat_silenced(chat_id):
-                return {"action": "skip", "reason": "conversa-silenciada"}
-
-            if chat_id and sender_id:
-                _sender_to_chat[sender_id] = chat_id
-        else:
-            # Para o dono, salvar chat_id também
-            chat_id = str(event.source.chat_id) if event.source.chat_id else ""
-            if chat_id and sender_id:
-                _sender_to_chat[sender_id] = chat_id
-
-        # Roteamento Dinâmico de Modelos (Dono vs Clientes)
-        try:
-            session_key = gateway._session_key_for_source(event.source)
-            if session_key:
-                owner_model = config.whatsapp_owner_model
-                owner_provider = config.whatsapp_owner_provider
-                client_model = config.whatsapp_client_model
-                client_provider = config.whatsapp_client_provider
-                
-                if is_owner:
-                    gateway._session_model_overrides[session_key] = {
-                        "model": owner_model,
-                        "provider": owner_provider
-                    }
-                else:
-                    gateway._session_model_overrides[session_key] = {
-                        "model": client_model,
-                        "provider": client_provider
-                    }
-        except Exception as e:
-            logger.error(f"Erro ao aplicar override de modelo: {e}")
-
-        return None
-
-    # Hook 2: pre_llm_call (Direcionamento de comportamento)
-    def pre_llm_call(*args, **kwargs):
-        context = kwargs.get("context")
-        if not context:
-            for arg in args:
-                if isinstance(arg, dict):
-                    context = arg
-                    break
-
-        platform = None
-        sender_id = None
-        if context:
-            platform = context.get("platform")
-            sender_id = context.get("sender_id")
-
-        if not platform:
-            platform = kwargs.get("platform")
-
-        if not sender_id:
-            sender_id = kwargs.get("sender_id")
-
-        if platform != "whatsapp":
-            return None
-
-        owner_number = config.whatsapp_owner_number
-        if not owner_number:
-            return None
-
-        clean_sender = "".join(c for c in sender_id.split("@")[0].split(":")[0] if c.isdigit()) if sender_id else ""
-        clean_owner = "".join(c for c in owner_number.split("@")[0].split(":")[0] if c.isdigit())
-
-        # ── Modo A: André (dono) ──────────────────────────────────────────────
-        if _normalize_brazilian_phone(clean_sender) == _normalize_brazilian_phone(clean_owner):
-            chat_id = _resolve_chat_id(sender_id)
-            history_context = _fetch_chat_history(chat_id, limit=50) if chat_id else ""
-            history_section = (
-                "\n\n### HISTÓRICO DE MENSAGENS ANTERIORES ###\n"
-                "Abaixo está o histórico recente da conversa para você entender o contexto anterior. "
-                "NÃO responda novamente a essas mensagens do histórico, use-as apenas como contexto "
-                "para responder à nova mensagem do André.\n\n"
-                f"{history_context}"
-            ) if history_context else ""
-            return _build_owner_context(history_section)
-
-        # ── Modo B: Cliente / Contato pessoal ────────────────────────────────
-        is_first_turn = context.get("is_first_turn", False) if context else False
-        if is_first_turn:
-            try:
-                delay_s = config.whatsapp_first_response_delay_s
-                if delay_s > 0:
-                    logger.info(f"Aplicando delay de {delay_s}s para a primeira resposta ao cliente...")
-                    time.sleep(delay_s)
-            except (ValueError, OSError) as e:
-                logger.error(f"Erro ao aplicar delay: {e}")
-
-        whatsapp_soul, rules_content = _load_support_files()
-        personal_contacts = _load_personal_contacts()
-
-        # Resolver JIDs e telefone
-        db_query_jid = sender_id
-        parts_db = sender_id.split("@")
-        if len(parts_db) == 2:
-            jid_part, domain_part = parts_db
-            db_query_jid = f"{jid_part.split(':')[0]}@{domain_part}"
-
-        resolved_sender = _resolve_phone_from_jid(sender_id)
-        clean_jid = resolved_sender
-        parts = resolved_sender.split("@")
-        if len(parts) == 2:
-            jid_part, domain_part = parts
-            clean_jid = f"{jid_part.split(':')[0]}@{domain_part}"
-        phone_number = clean_jid.split("@")[0]
-
-        chat_id = _resolve_chat_id(sender_id)
-        history_context = _fetch_chat_history(chat_id, limit=50) if chat_id else ""
-        history_section = (
-            "### HISTÓRICO DE MENSAGENS ANTERIORES ###\n"
-            "Abaixo está o histórico recente da conversa para você entender o contexto anterior. "
-            "NÃO responda novamente a essas mensagens do histórico, use-as apenas como contexto "
-            "para responder à nova mensagem do cliente.\n\n"
-            f"{history_context}\n\n"
-        ) if history_context else ""
-
-        # Buscar info de contato no JSON
-        contact_info = personal_contacts.get(clean_jid) or personal_contacts.get(phone_number)
-
-        # Verificar se precisa de classificação em tempo real
-        needs_live_classify = False
-        target_key = clean_jid
-        live_classify_threshold_seconds = config.whatsapp_live_classify_cooldown
-        if contact_info:
-            old_defaults = ["Conversa inicial.", "Conversa muito curta.", "Conversa inicial de suporte/atendimento.", "Pendente de classificação."]
-            has_old_default_summary = contact_info.get("summary") in old_defaults
-            if has_old_default_summary or not contact_info.get("summary") or not contact_info.get("intent") or not contact_info.get("frequency"):
-                needs_live_classify = True
-                if phone_number in personal_contacts:
-                    target_key = phone_number
-            else:
-                last_interaction_ts = contact_info.get("last_interaction", 0)
-                if last_interaction_ts and (time.time() - last_interaction_ts) > live_classify_threshold_seconds:
-                    needs_live_classify = True
-                    logger.info(f"Re-classificando {phone_number}: última interação há {int((time.time() - last_interaction_ts) / 60)} min.")
-                    if phone_number in personal_contacts:
-                        target_key = phone_number
-        else:
-            needs_live_classify = True
-            target_key = clean_jid
-
-        if needs_live_classify:
-            try:
-                import sqlite3
-                import datetime
-                min_msg_threshold = config.whatsapp_sync_min_messages
-                bridge_db_path = Path("/opt/data/.hermes/whatsapp_messages.db")
-                state_db_path = Path("/opt/data/.hermes/state.db")
-                msg_count = 0
-                min_ts = None
-                max_ts = None
-                db_name = None
-                chat_history_lines = []
-                conn = None
-
-                if bridge_db_path.exists():
-                    conn = sqlite3.connect(str(bridge_db_path))
-                    cursor = conn.cursor()
-                    cursor.execute("""
-                        SELECT COUNT(*), MIN(timestamp), MAX(timestamp), MAX(sender_name)
-                        FROM messages
-                        WHERE chat_id = ?
-                    """, (db_query_jid,))
-                    row = cursor.fetchone()
-                    if row and row[0]:
-                        msg_count, min_ts, max_ts, db_name = row
-                    if (not msg_count or msg_count == 0) and phone_number:
-                        cursor.execute("""
-                            SELECT COUNT(*), MIN(timestamp), MAX(timestamp), MAX(sender_name)
-                            FROM messages
-                            WHERE chat_id LIKE ?
-                        """, (f"{phone_number}%",))
-                        fetched = cursor.fetchone()
-                        if fetched and fetched[0]:
-                            msg_count, min_ts, max_ts, db_name = fetched
-                    if not msg_count or msg_count == 0:
-                        cursor.execute("""
-                            SELECT from_me, sender_name, body FROM messages
-                            WHERE chat_id = ? AND body IS NOT NULL AND body != ''
-                            ORDER BY timestamp DESC LIMIT 15
-                        """, (db_query_jid,))
-                        rows_msgs = cursor.fetchall()
-                        rows_msgs.reverse()
-                        for f_me, s_name, msg_body in rows_msgs:
-                            sender_lbl = "André" if f_me else (s_name or "Contato")
-                            chat_history_lines.append(f"[{sender_lbl}]: {msg_body}")
-
-                if (not msg_count or msg_count == 0) and state_db_path.exists():
-                    try:
-                        state_conn = sqlite3.connect(str(state_db_path))
-                        sc = state_conn.cursor()
-                        sc.execute("""
-                            SELECT COUNT(*), MAX(started_at) FROM sessions
-                            WHERE source = 'whatsapp' AND user_id = ?
-                        """, (db_query_jid,))
-                        row = sc.fetchone()
-                        if row and row[0]:
-                            msg_count = row[0]
-                            max_ts = row[1] or max_ts
-                        sc.execute("""
-                            SELECT m.role, m.content FROM messages m
-                            JOIN sessions s ON m.session_id = s.id
-                            WHERE s.user_id = ? AND s.source = 'whatsapp' AND m.content IS NOT NULL
-                            ORDER BY m.timestamp DESC LIMIT 15
-                        """, (db_query_jid,))
-                        rows_msgs = sc.fetchall()
-                        rows_msgs.reverse()
-                        for role, content in rows_msgs:
-                            sender_lbl = "André" if role == "assistant" else (db_name or "Contato")
-                            chat_history_lines.append(f"[{sender_lbl}]: {(content or '')[:300]}")
-                        state_conn.close()
-                    except Exception as state_err:
-                        logger.warning(f"live sync: erro lendo state.db: {state_err}")
-
-                if msg_count:
-                    stats_info = f"Total messages: {msg_count}."
-                    if min_ts and max_ts:
-                        try:
-                            first_date = datetime.datetime.fromtimestamp(min_ts).strftime('%Y-%m-%d')
-                            last_date = datetime.datetime.fromtimestamp(max_ts).strftime('%Y-%m-%d')
-                            stats_info += f" First message date: {first_date}. Last message date: {last_date}."
-                        except (ValueError, OSError):
-                            pass
-
-                    name = (contact_info.get("name") if contact_info else None) or db_name or f"Contato {phone_number}"
-
-                    if msg_count < min_msg_threshold:
-                        prev_rel = contact_info.get("relationship") if contact_info else None
-                        if prev_rel and prev_rel not in ["Cliente", "Vendedor", "Pendente de classificação"]:
-                            classification = {
-                                "relationship": prev_rel,
-                                "tone": contact_info.get("tone", "informal e amigável"),
-                                "nickname": contact_info.get("nickname"),
-                                "pet_name": contact_info.get("pet_name"),
-                                "frequent_greeting": contact_info.get("frequent_greeting"),
-                                "summary": contact_info.get("summary", "Conversa muito curta."),
-                                "intent": "Contato inicial.",
-                                "frequency": contact_info.get("frequency", "esporádica"),
-                                "guidelines": contact_info.get("guidelines", "Responda como André.")
-                            }
-                        else:
-                            classification = {
-                                "relationship": "Cliente",
-                                "tone": "polido e profissional",
-                                "nickname": None, "pet_name": None,
-                                "frequent_greeting": None,
-                                "summary": "Conversa muito curta.",
-                                "intent": "Contato inicial.",
-                                "frequency": "esporádica",
-                                "guidelines": "Responda de forma prestativa."
-                            }
-                    else:
-                        if conn:
-                            cursor.execute("""
-                                SELECT from_me, sender_name, body FROM messages
-                                WHERE chat_id = ? AND body IS NOT NULL AND body != ''
-                                ORDER BY timestamp DESC LIMIT 15
-                            """, (db_query_jid,))
-                            rows_msgs = cursor.fetchall()
-                            rows_msgs.reverse()
-                            history_lines = []
-                            for f_me, s_name, msg_body in rows_msgs:
-                                sender_lbl = "André" if f_me else (s_name or name or "Contato")
-                                history_lines.append(f"[{sender_lbl}]: {msg_body}")
-                            chat_history = "\n".join(history_lines)
-                        else:
-                            chat_history = "\n".join(chat_history_lines)
-                        classification = _classify_contact_via_llm(name, chat_history, stats_info)
-
-                    if conn is not None:
-                        conn.close()
-
-                    man_rel = (contact_info.get("manual_relationship") if contact_info else None)
-                    if not man_rel and contact_info and contact_info.get("relationship") in ["Vendedor", "Amigo", "AmigoProximo", "Parente", "Filho"]:
-                        man_rel = contact_info.get("relationship")
-
-                    new_data = {
-                        "name": name,
-                        "relationship": man_rel or classification.get("relationship", "Cliente"),
-                        "manual_relationship": man_rel,
-                        "notes": contact_info.get("notes") if contact_info else None,
-                        "product": (contact_info.get("product") if contact_info else None) or classification.get("product"),
-                        "tone": classification.get("tone", "polido e profissional"),
-                        "nickname": classification.get("nickname"),
-                        "pet_name": classification.get("pet_name"),
-                        "frequent_greeting": classification.get("frequent_greeting"),
-                        "summary": classification.get("summary", "Conversa inicial."),
-                        "intent": classification.get("intent", "Suporte/Atendimento."),
-                        "frequency": classification.get("frequency", "esporádica"),
-                        "guidelines": classification.get("guidelines", "Responda de forma prestativa."),
-                        "last_interaction": time.time()
-                    }
-
-                    personal_contacts[target_key] = new_data
-                    contact_info = new_data
-
-                    try:
-                        with open("/opt/data/personal_contacts.json", "w", encoding="utf-8") as f:
-                            json.dump(personal_contacts, f, indent=2, ensure_ascii=False)
-                    except OSError as write_err:
-                        logger.error(f"Erro ao gravar personal_contacts.json no live sync: {write_err}")
-
-                    def push_contacts_to_github_bg():
-                        try:
-                            config_repo = config.config_repo
-                            config_token = config.config_github_token
-                            setup_user = config.hermes_setup_github_user
-                            dev_user = config.dev_github_user
-                            if config_repo and config_token:
-                                if "/" in config_repo:
-                                    repo_user, repo_name = config_repo.split("/")
-                                else:
-                                    repo_user = setup_user or dev_user or "empreendedorserial"
-                                    repo_name = config_repo
-                                with open("/opt/data/personal_contacts.json", "rb") as f:
-                                    content_bytes = f.read()
-                                content_b64 = base64.b64encode(content_bytes).decode("utf-8")
-                                get_url = f"https://api.github.com/repos/{repo_user}/{repo_name}/contents/personal_contacts.json"
-                                req_get = urllib.request.Request(get_url)
-                                req_get.add_header("Authorization", f"token {config_token}")
-                                req_get.add_header("Accept", "application/vnd.github+json")
-                                req_get.add_header("User-Agent", "Hermes-Agent-Plugin")
-                                sha = None
-                                try:
-                                    with urllib.request.urlopen(req_get, timeout=5) as resp:
-                                        sha = json.loads(resp.read().decode("utf-8")).get("sha")
-                                except (urllib.error.URLError, urllib.error.HTTPError, json.JSONDecodeError):
-                                    pass
-                                put_data = {
-                                    "message": f"Live update personal_contacts.json for {name}",
-                                    "content": content_b64, "branch": "main"
-                                }
-                                if sha:
-                                    put_data["sha"] = sha
-                                req_put = urllib.request.Request(get_url, data=json.dumps(put_data).encode("utf-8"), method="PUT")
-                                req_put.add_header("Authorization", f"token {config_token}")
-                                req_put.add_header("Accept", "application/vnd.github+json")
-                                req_put.add_header("User-Agent", "Hermes-Agent-Plugin")
-                                req_put.add_header("Content-Type", "application/json")
-                                with urllib.request.urlopen(req_put, timeout=10) as resp:
-                                    pass
-                        except Exception as push_err:
-                            logger.error(f"Erro no push do live sync para o GitHub: {push_err}")
-
-                    import threading
-                    threading.Thread(target=push_contacts_to_github_bg, daemon=True).start()
-            except Exception as live_err:
-                logger.error(f"Erro na classificação em tempo real do contato: {live_err}")
-
-        relationship = "Cliente"
-        if contact_info:
-            relationship = contact_info.get("manual_relationship") or contact_info.get("relationship") or "Cliente"
-
-        if contact_info and relationship != "Cliente":
-            return _build_personal_prompt(contact_info, relationship, history_section)
-
-        return _build_support_prompt(whatsapp_soul, rules_content, history_section)
+    # pre_llm_call local removido (usando a versão global do módulo)
 
     ctx.register_hook("pre_gateway_dispatch", pre_gateway_dispatch)
     ctx.register_hook("pre_llm_call", pre_llm_call)
@@ -2498,75 +2654,7 @@ def register(ctx):
     except Exception as boot_sync_err:
         logger.error(f"Falha na sincronização de contatos no boot: {boot_sync_err}")
 
-    # Agendador periódico de sincronização de contatos e código (executa a cada 1 hora em segundo plano)
-    def _run_periodic_sync():
-        import time
-        from pathlib import Path
-        pc_path = Path("/opt/data/personal_contacts.json")
-        
-        last_code_check = time.time()
-        last_contact_sync = time.time()
-        last_git_pull = time.time()
-        
-        last_pc_mtime = 0.0
-        if pc_path.exists():
-            try:
-                last_pc_mtime = os.path.getmtime(pc_path)
-            except Exception:
-                pass
-
-        # Aguarda 60 segundos após o boot antes de iniciar as verificações em loop
-        time.sleep(60)
-        
-        while True:
-            # 1. Verificar se personal_contacts.json foi modificado localmente (ex: pelo agente via ferramenta write_file)
-            if pc_path.exists():
-                try:
-                    current_mtime = os.path.getmtime(pc_path)
-                    if current_mtime > last_pc_mtime:
-                        logger.info(f"Modificação local detectada em {pc_path}. Sincronizando com o GitHub...")
-                        if _push_personal_contacts_to_github():
-                            last_pc_mtime = current_mtime
-                        else:
-                            last_pc_mtime = current_mtime
-                except Exception as e:
-                    logger.error(f"Erro ao monitorar modificações locais de contatos: {e}")
-
-            # 2. Puxar configurações do GitHub (a cada 1 hora / 3600 segundos)
-            if time.time() - last_git_pull >= 3600:
-                last_git_pull = time.time()
-                try:
-                    logger.info("Iniciando puxada periódica de configurações do GitHub...")
-                    _pull_and_merge_configurations()
-                    if pc_path.exists():
-                        last_pc_mtime = os.path.getmtime(pc_path)
-                except Exception as e:
-                    logger.error(f"Erro na puxada periódica de configurações: {e}")
-
-            # 3. Sincronizar contatos (executa apenas a cada 24 horas)
-            if time.time() - last_contact_sync >= 86400:
-                last_contact_sync = time.time()
-                try:
-                    logger.info("Iniciando sincronização periódica automática de contatos...")
-                    res = _sync_contacts_from_db_internal(force=False)
-                    logger.info(f"Sincronização periódica concluída: {res}")
-                    if pc_path.exists():
-                        last_pc_mtime = os.path.getmtime(pc_path)
-                except Exception as e:
-                    logger.error(f"Erro na sincronização periódica: {e}")
-
-            # 4. Verificar atualizações de código a cada 24 horas (86400 segundos)
-            if time.time() - last_code_check >= 86400:
-                last_code_check = time.time()
-                try:
-                    logger.info("Verificando atualizações de código do plugin...")
-                    if _self_update_plugin_code():
-                        logger.info("Código do plugin atualizado! Reiniciando container...")
-                        os._exit(0)
-                except Exception as e:
-                    logger.error(f"Erro ao checar auto-update de código: {e}")
-
-            time.sleep(60)
+    # Agendador periódico local removido (usando a versão global do módulo)
 
     try:
         import threading

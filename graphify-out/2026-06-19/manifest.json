@@ -10,8 +10,8 @@
     "semantic_hash": "46f22482b70b68ddc5af31babf855131"
   },
   "bridge.js": {
-    "mtime": 1781900843.1621163,
-    "ast_hash": "8e3602efd45ec628e8d0dc9cbdc8bc8a",
+    "mtime": 1781899997.1704073,
+    "ast_hash": "00e4f0e960869c7a1871edbe3347a439",
     "semantic_hash": ""
   },
   "deploy/docs/bridge-artifacts/bridge.js": {
@@ -80,8 +80,8 @@
     "semantic_hash": ""
   },
   "tests/plugin_test.py": {
-    "mtime": 1781901018.7307196,
-    "ast_hash": "f753d701f401d57865a72ba8412e8fd1",
+    "mtime": 1781900534.8676853,
+    "ast_hash": "7d3fa0ddc18a1008b72c5238ac61dba3",
     "semantic_hash": ""
   },
   "tests/test_gemini_classification.py": {

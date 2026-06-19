@@ -199,6 +199,19 @@ const REPLY_PREFIX = process.env.WHATSAPP_REPLY_PREFIX === undefined
   : process.env.WHATSAPP_REPLY_PREFIX.replace(/\\n/g, '\n');
 const MAX_MESSAGE_LENGTH = parseInt(process.env.WHATSAPP_MAX_MESSAGE_LENGTH || '4096', 10);
 const CHUNK_DELAY_MS = parseInt(process.env.WHATSAPP_CHUNK_DELAY_MS || '300', 10);
+// ── Debounce Progressivo ─────────────────────────────────────────────────────
+// Acumula fragmentos de texto de um mesmo contato antes de processar.
+// O timer começa longo (INITIAL) e decai exponencialmente a cada fragmento novo,
+// convergindo para MIN. Isso acomoda tanto digitadores lentos quanto rápidos.
+//
+// Fórmula: nextTimer = max(MIN_MS, INITIAL_MS × DECAY^(parts-1))
+// Ex (defaults): 1 frag→15s, 2→9s, 3→5.4s, 4→3.2s, 5+→2s
+//
+// Para desabilitar: WHATSAPP_DEBOUNCE_INITIAL_MS=0
+const WHATSAPP_DEBOUNCE_INITIAL_MS = parseInt(process.env.WHATSAPP_DEBOUNCE_INITIAL_MS || '15000', 10);
+const WHATSAPP_DEBOUNCE_MIN_MS     = parseInt(process.env.WHATSAPP_DEBOUNCE_MIN_MS     || '2000',  10);
+const WHATSAPP_DEBOUNCE_DECAY      = parseFloat(process.env.WHATSAPP_DEBOUNCE_DECAY    || '0.6');
+// ─────────────────────────────────────────────────────────────────────────────
 // Per-call timeout for sock.sendMessage(). Baileys occasionally hangs forever
 // when uploading media to WhatsApp servers (and, less often, on text sends),
 // which pins the bridge's HTTP handler until the upstream aiohttp timeout
@@ -341,6 +354,55 @@ const MAX_QUEUE_SIZE = 100;
 const recentlySentIds = new Set();
 const MAX_RECENT_IDS = 50;
 
+const recentlyProcessedIds = new Set();
+const MAX_RECENT_PROCESSED_IDS = 500;
+
+// ── Debounce buffer ──────────────────────────────────────────────────────────
+// Acumula fragmentos de mensagens de texto puro por chatId antes de enfileirar.
+// Estrutura: chatId -> { event, bodyParts: string[], debounceIds: string[], timer }
+const debounceBuffer = new Map();
+
+/**
+ * Calcula o próximo timer de debounce com decay exponencial.
+ * @param {number} parts - Nº de fragmentos já acumulados (incluindo o atual)
+ * @returns {number} Delay em ms
+ *
+ * Tabela com defaults (INITIAL=15000, MIN=2000, DECAY=0.6):
+ *   parts=1 → 15000ms | parts=2 → 9000ms | parts=3 → 5400ms
+ *   parts=4 → 3240ms  | parts=5+ → 2000ms (floor)
+ */
+function calcDebounceDelay(parts) {
+  if (WHATSAPP_DEBOUNCE_INITIAL_MS <= 0) return 0;
+  const raw = WHATSAPP_DEBOUNCE_INITIAL_MS * Math.pow(WHATSAPP_DEBOUNCE_DECAY, parts - 1);
+  return Math.max(WHATSAPP_DEBOUNCE_MIN_MS, Math.round(raw));
+}
+
+/**
+ * Consolida o buffer pendente de um chatId e empurra UM único evento na fila.
+ * Chamado pelo setTimeout do debounce ou por flush antecipado (ex: chegou mídia).
+ */
+function flushDebounceBuffer(chatId) {
+  const pending = debounceBuffer.get(chatId);
+  if (!pending) return;
+  debounceBuffer.delete(chatId);
+
+  const consolidated = {
+    ...pending.event,
+    body: pending.bodyParts.join('\n'),
+    debounceIds: pending.debounceIds, // IDs de todos os fragmentos (para rastreabilidade)
+  };
+
+  messageQueue.push(consolidated);
+  if (messageQueue.length > MAX_QUEUE_SIZE) messageQueue.shift();
+  activityCounters.messagesEnqueued++;
+  activityCounters.messagesReceived++;
+
+  if (WHATSAPP_DEBUG) {
+    console.log(`[debounce] flush chatId=${chatId} parts=${pending.bodyParts.length} body="${consolidated.body.slice(0, 80)}"`);
+  }
+}
+// ─────────────────────────────────────────────────────────────────────────────
+
 let sock = null;
 let connectionState = 'disconnected';
 let currentQr = '';
@@ -370,7 +432,8 @@ async function resolveContactName(jid) {
     }
 
     // 2) onWhatsApp: retorna presence/numero, nao o nome, mas confirma existencia
-    if (!name) {
+    // LIDs (@lid) nao sao suportados pelo onWhatsApp do Baileys — pular
+    if (!name && !jid.endsWith('@lid')) {
       try {
         const result = await sock.onWhatsApp(jid);
         if (Array.isArray(result) && result[0] && result[0].exists) {
@@ -430,6 +493,20 @@ let onMessagesUpsert = async ({ messages, type }) => {
   for (const msg of messages) {
     if (!msg.message) continue;
 
+    const messageId = msg.key.id;
+    if (messageId) {
+      if (recentlyProcessedIds.has(messageId)) {
+        if (WHATSAPP_DEBUG) {
+          console.log(`[bridge] Ignorando mensagem duplicada/já processada: ${messageId}`);
+        }
+        continue;
+      }
+      recentlyProcessedIds.add(messageId);
+      if (recentlyProcessedIds.size > MAX_RECENT_PROCESSED_IDS) {
+        recentlyProcessedIds.delete(recentlyProcessedIds.values().next().value);
+      }
+    }
+
     let chatId = msg.key.remoteJid;
     if (chatId === 'status@broadcast' || (chatId && chatId.includes('status'))) {
       continue;
@@ -447,56 +524,23 @@ let onMessagesUpsert = async ({ messages, type }) => {
     let senderId = msg.key.participant || chatId;
 
     // Resolve LID to phone JID if necessary
+    // onWhatsApp() nao suporta LIDs — usar apenas o mapa local (lidToPhone)
     if (senderId && senderId.endsWith('@lid')) {
       const cleanLid = senderId.split(':')[0].split('@')[0];
       if (lidToPhone[cleanLid]) {
         senderId = `${lidToPhone[cleanLid]}@s.whatsapp.net`;
-      } else {
-        try {
-          const res = await sock.onWhatsApp(senderId);
-          if (Array.isArray(res) && res[0] && res[0].exists) {
-            const phoneJid = res[0].jid;
-            const phone = phoneJid.split('@')[0];
-            lidToPhone[cleanLid] = phone;
-            senderId = phoneJid;
-            console.log(`[bridge] Dinamicamente mapeado LID ${cleanLid} para telefone ${phone}`);
-            try {
-              writeFileSync(
-                path.join(SESSION_DIR, `lid-mapping-${phone}.json`),
-                JSON.stringify(cleanLid)
-              );
-            } catch (err) {}
-          }
-        } catch (err) {
-          console.error(`[bridge] Falha ao resolver LID ${senderId}:`, err.message);
-        }
+        console.log(`[bridge] LID ${cleanLid} resolvido via cache para ${senderId}`);
       }
+      // Se nao temos no cache, mantemos o LID — whatsapp_manager.py resolve via _resolve_phone_from_jid
     }
 
     if (chatId && chatId.endsWith('@lid')) {
       const cleanLid = chatId.split(':')[0].split('@')[0];
       if (lidToPhone[cleanLid]) {
         chatId = `${lidToPhone[cleanLid]}@s.whatsapp.net`;
-      } else {
-        try {
-          const res = await sock.onWhatsApp(chatId);
-          if (Array.isArray(res) && res[0] && res[0].exists) {
-            const phoneJid = res[0].jid;
-            const phone = phoneJid.split('@')[0];
-            lidToPhone[cleanLid] = phone;
-            chatId = phoneJid;
-            console.log(`[bridge] Dinamicamente mapeado LID ${cleanLid} para telefone ${phone}`);
-            try {
-              writeFileSync(
-                path.join(SESSION_DIR, `lid-mapping-${phone}.json`),
-                JSON.stringify(cleanLid)
-              );
-            } catch (err) {}
-          }
-        } catch (err) {
-          console.error(`[bridge] Falha ao resolver LID ${chatId}:`, err.message);
-        }
+        console.log(`[bridge] LID chatId ${cleanLid} resolvido via cache para ${chatId}`);
       }
+      // Se nao temos no cache, mantemos o LID — whatsapp_manager.py resolve via _resolve_phone_from_jid
     }
 
     const isGroup = chatId.endsWith('@g.us');
@@ -754,18 +798,150 @@ let onMessagesUpsert = async ({ messages, type }) => {
       timestamp: msg.messageTimestamp,
     };
 
-    messageQueue.push(event);
-    if (messageQueue.length > MAX_QUEUE_SIZE) {
-      messageQueue.shift();
-    }
-    activityCounters.messagesEnqueued++;
-    if (event && event.fromMe) {
-      activityCounters.messagesSent++;
+    // ── DEBOUNCE PROGRESSIVO: apenas mensagens de texto puro ─────────────────
+    if (!hasMedia && WHATSAPP_DEBOUNCE_INITIAL_MS > 0) {
+      const pending = debounceBuffer.get(chatId);
+      if (pending) {
+        // Já existe buffer para este chat: acumular fragmento e reduzir o timer
+        clearTimeout(pending.timer);
+        pending.bodyParts.push(body);
+        pending.debounceIds.push(event.messageId);
+        const delay = calcDebounceDelay(pending.bodyParts.length);
+        pending.timer = setTimeout(() => flushDebounceBuffer(chatId), delay);
+        if (WHATSAPP_DEBUG) {
+          console.log(`[debounce] acumulado chatId=${chatId} parts=${pending.bodyParts.length} nextTimer=${delay}ms body="${body.slice(0, 40)}"`);
+        }
+      } else {
+        // Primeira mensagem: iniciar buffer com timer máximo (INITIAL)
+        const delay = calcDebounceDelay(1); // = WHATSAPP_DEBOUNCE_INITIAL_MS
+        debounceBuffer.set(chatId, {
+          event,                            // snapshot dos metadados do 1º fragmento
+          bodyParts: [body],
+          debounceIds: [event.messageId],
+          timer: setTimeout(() => flushDebounceBuffer(chatId), delay),
+        });
+        if (WHATSAPP_DEBUG) {
+          console.log(`[debounce] iniciado chatId=${chatId} nextTimer=${delay}ms body="${body.slice(0, 40)}"`);
+        }
+      }
     } else {
-      activityCounters.messagesReceived++;
+      // Mídia ou debounce desabilitado: enfileirar imediatamente.
+      // Se havia buffer de texto pendente para este chat, dar flush antes
+      // para preservar a ordem cronológica (texto antes da mídia).
+      if (debounceBuffer.has(chatId)) {
+        clearTimeout(debounceBuffer.get(chatId).timer);
+        flushDebounceBuffer(chatId);
+      }
+      messageQueue.push(event);
+      if (messageQueue.length > MAX_QUEUE_SIZE) messageQueue.shift();
+      activityCounters.messagesEnqueued++;
+      if (event && event.fromMe) {
+        activityCounters.messagesSent++;
+      } else {
+        activityCounters.messagesReceived++;
+      }
     }
+    // ─────────────────────────────────────────────────────────────────────────
   }
 };
+
+function handleContactsSet({ contacts }) {
+  if (contacts) {
+    for (const contact of contacts) {
+      if (!contact.id) continue;
+      const cleanJid = String(contact.id).split(':')[0].split('@')[0];
+      sock.contacts[contact.id] = contact;
+      sock.contacts[cleanJid + '@s.whatsapp.net'] = contact;
+    }
+  }
+}
+
+function handleContactsUpsert(contacts) {
+  if (contacts) {
+    for (const contact of contacts) {
+      if (!contact.id) continue;
+      const cleanJid = String(contact.id).split(':')[0].split('@')[0];
+      sock.contacts[contact.id] = contact;
+      sock.contacts[cleanJid + '@s.whatsapp.net'] = contact;
+    }
+  }
+}
+
+function handleContactsUpdate(updates) {
+  if (updates) {
+    for (const update of updates) {
+      if (!update.id) continue;
+      const cleanJid = String(update.id).split(':')[0].split('@')[0];
+      const current = sock.contacts[update.id] || {};
+      const merged = { ...current, ...update };
+      sock.contacts[update.id] = merged;
+      sock.contacts[cleanJid + '@s.whatsapp.net'] = merged;
+    }
+  }
+}
+
+function handleMessagingHistorySet({ contacts }) {
+  if (contacts) {
+    for (const contact of contacts) {
+      if (!contact.id) continue;
+      const cleanJid = String(contact.id).split(':')[0].split('@')[0];
+      sock.contacts[contact.id] = contact;
+      sock.contacts[cleanJid + '@s.whatsapp.net'] = contact;
+    }
+  }
+}
+
+function handleConnectionUpdate(update) {
+  const { connection, lastDisconnect, qr } = update;
+
+  if (qr) {
+    currentQr = qr;
+    currentQrAt = new Date().toISOString();
+    console.log('\n📱 Scan this QR code with WhatsApp on your phone:\n');
+    qrcodeTerminal.generate(qr, { small: true });
+    console.log('\nWaiting for scan...\n');
+  }
+  if (connection === 'open') {
+    currentQr = '';
+    currentQrAt = null;
+  }
+
+  if (connection === 'close') {
+    const reason = new Boom(lastDisconnect?.error)?.output?.statusCode;
+    connectionState = 'disconnected';
+
+    if (reason === DisconnectReason.loggedOut) {
+      errorCounters.auth_revoked++;
+      console.log('❌ Logged out. Delete session and restart to re-authenticate.');
+      try {
+        if (existsSync(SESSION_DIR)) {
+          rmSync(SESSION_DIR, { recursive: true, force: true });
+          mkdirSync(SESSION_DIR, { recursive: true });
+          console.log('🧹 Session directory cleaned automatically.');
+        }
+      } catch (err) {
+        console.error('⚠️ Failed to clean session directory:', err.message);
+      }
+      process.exit(1);
+    } else {
+      if (reason === 515) {
+        console.log('↻ WhatsApp requested restart (code 515). Reconnecting...');
+      } else {
+        console.log(`⚠️  Connection closed (reason: ${reason}). Reconnecting in 3s...`);
+      }
+      setTimeout(startSocket, reason === 515 ? 1000 : 3000);
+    }
+  } else if (connection === 'open') {
+    connectionState = 'connected';
+    diagnosticsCache = null;
+    diagnosticsCacheTime = 0;
+    console.log('✅ WhatsApp connected!');
+    if (PAIR_ONLY) {
+      console.log('✅ Pairing complete. Credentials saved.');
+      setTimeout(() => process.exit(0), 2000);
+    }
+  }
+}
 
 async function startSocket() {
   const { state, saveCreds } = await useMultiFileAuthState(SESSION_DIR);
@@ -779,126 +955,30 @@ async function startSocket() {
     browser: [WHATSAPP_CONNECTION_NAME, 'Chrome', '120.0'],
     syncFullHistory: false,
     markOnlineOnConnect: false,
-    // Required for Baileys 7.x: without this, incoming messages that need
-    // E2EE session re-establishment are silently dropped (msg.message === null)
     getMessage: async (key) => {
-      // We don't maintain a message store, so return a placeholder.
-      // This is enough for Baileys to complete the retry handshake.
       return { conversation: '' };
     },
   });
 
   sock.contacts = {};
 
-  sock.ev.on('contacts.set', ({ contacts }) => {
-    if (contacts) {
-      for (const contact of contacts) {
-        if (!contact.id) continue;
-        const cleanJid = String(contact.id).split(':')[0].split('@')[0];
-        sock.contacts[contact.id] = contact;
-        sock.contacts[cleanJid + '@s.whatsapp.net'] = contact;
-      }
-    }
-  });
-
-  sock.ev.on('contacts.upsert', (contacts) => {
-    if (contacts) {
-      for (const contact of contacts) {
-        if (!contact.id) continue;
-        const cleanJid = String(contact.id).split(':')[0].split('@')[0];
-        sock.contacts[contact.id] = contact;
-        sock.contacts[cleanJid + '@s.whatsapp.net'] = contact;
-      }
-    }
-  });
-
-  sock.ev.on('contacts.update', (updates) => {
-    if (updates) {
-      for (const update of updates) {
-        if (!update.id) continue;
-        const cleanJid = String(update.id).split(':')[0].split('@')[0];
-        const current = sock.contacts[update.id] || {};
-        const merged = { ...current, ...update };
-        sock.contacts[update.id] = merged;
-        sock.contacts[cleanJid + '@s.whatsapp.net'] = merged;
-      }
-    }
-  });
-
-  sock.ev.on('messaging-history.set', ({ contacts }) => {
-    if (contacts) {
-      for (const contact of contacts) {
-        if (!contact.id) continue;
-        const cleanJid = String(contact.id).split(':')[0].split('@')[0];
-        sock.contacts[contact.id] = contact;
-        sock.contacts[cleanJid + '@s.whatsapp.net'] = contact;
-      }
-    }
-  });
-
+  sock.ev.on('contacts.set', handleContactsSet);
+  sock.ev.on('contacts.upsert', handleContactsUpsert);
+  sock.ev.on('contacts.update', handleContactsUpdate);
+  sock.ev.on('messaging-history.set', handleMessagingHistorySet);
   sock.ev.on('creds.update', () => { saveCreds(); lidToPhone = buildLidMap(); });
-
-
   sock.ev.on('chats.update', onChatsUpdate);
-
-  sock.ev.on('connection.update', (update) => {
-    const { connection, lastDisconnect, qr } = update;
-
-    if (qr) {
-      currentQr = qr;
-      currentQrAt = new Date().toISOString();
-      console.log('\n📱 Scan this QR code with WhatsApp on your phone:\n');
-      qrcodeTerminal.generate(qr, { small: true });
-      console.log('\nWaiting for scan...\n');
-    }
-    if (connection === 'open') {
-      currentQr = '';
-      currentQrAt = null;
-    }
-
-    if (connection === 'close') {
-      const reason = new Boom(lastDisconnect?.error)?.output?.statusCode;
-      connectionState = 'disconnected';
-
-      if (reason === DisconnectReason.loggedOut) {
-        errorCounters.auth_revoked++;
-        console.log('❌ Logged out. Delete session and restart to re-authenticate.');
-        try {
-          if (existsSync(SESSION_DIR)) {
-            rmSync(SESSION_DIR, { recursive: true, force: true });
-            mkdirSync(SESSION_DIR, { recursive: true });
-            console.log('🧹 Session directory cleaned automatically.');
-          }
-        } catch (err) {
-          console.error('⚠️ Failed to clean session directory:', err.message);
-        }
-        process.exit(1);
-      } else {
-        // 515 = restart requested (common after pairing). Always reconnect.
-        if (reason === 515) {
-          console.log('↻ WhatsApp requested restart (code 515). Reconnecting...');
-        } else {
-          console.log(`⚠️  Connection closed (reason: ${reason}). Reconnecting in 3s...`);
-        }
-        setTimeout(startSocket, reason === 515 ? 1000 : 3000);
-      }
-    } else if (connection === 'open') {
-      connectionState = 'connected';
-      console.log('✅ WhatsApp connected!');
-      if (PAIR_ONLY) {
-        console.log('✅ Pairing complete. Credentials saved.');
-        // Give Baileys a moment to flush creds, then exit cleanly
-        setTimeout(() => process.exit(0), 2000);
-      }
-    }
-  });
-
+  sock.ev.on('connection.update', handleConnectionUpdate);
   sock.ev.on('messages.upsert', onMessagesUpsert);
 }
 
 // HTTP server
 const app = express();
 app.use(express.json());
+
+const adminRouter = express.Router();
+const messagingRouter = express.Router();
+const diagnosticsRouter = express.Router();
 
 // Host-header validation — defends against DNS rebinding.
 // The bridge binds publicly behind Traefik in some deployments, so we
@@ -937,7 +1017,7 @@ app.use((req, res, next) => {
   next();
 });
 
-app.get('/bot-status', (req, res) => {
+adminRouter.get('/bot-status', (req, res) => {
   res.json({
     botPaused,
     lidToPhone,
@@ -945,7 +1025,7 @@ app.get('/bot-status', (req, res) => {
   });
 });
 
-app.get('/chat-status/:chatId', (req, res) => {
+adminRouter.get('/chat-status/:chatId', (req, res) => {
   const chatId = normalizeWhatsAppId(req.params.chatId);
   const silencedUntil = silencedChats[chatId] || 0;
   const isSilenced = silencedUntil > Date.now();
@@ -957,7 +1037,7 @@ app.get('/chat-status/:chatId', (req, res) => {
   });
 });
 
-app.post('/chat-unsilence', (req, res) => {
+adminRouter.post('/chat-unsilence', (req, res) => {
   const { chatId } = req.body;
   if (!chatId) {
     return res.status(400).json({ error: 'chatId is required' });
@@ -969,12 +1049,12 @@ app.post('/chat-unsilence', (req, res) => {
 });
 
 // Poll for new messages (long-poll style)
-app.get('/messages', (req, res) => {
+messagingRouter.get('/messages', (req, res) => {
   const msgs = messageQueue.splice(0, messageQueue.length);
   res.json(msgs);
 });
 
-app.get('/whatsapp/qr', async (req, res) => {
+diagnosticsRouter.get('/whatsapp/qr', async (req, res) => {
   if (!currentQr) {
     return res.status(404).json({
       error: 'QR not available',
@@ -1013,7 +1093,7 @@ app.get('/whatsapp/qr', async (req, res) => {
   });
 });
 
-app.get('/whatsapp/status', (req, res) => {
+diagnosticsRouter.get('/whatsapp/status', (req, res) => {
   res.json({
     status: connectionState,
     qrAvailable: !!currentQr,
@@ -1094,7 +1174,7 @@ async function runSelfDiagnostics() {
   return checklist;
 }
 
-app.get('/whatsapp/debug', async (req, res) => {
+diagnosticsRouter.get('/whatsapp/debug', async (req, res) => {
   const credsExists = existsSync(path.join(SESSION_DIR, 'creds.json'));
   let sessionFilesCount = 0;
   try {
@@ -1281,7 +1361,7 @@ function isSystemError(message) {
 }
 
 // Send a message
-app.post('/send', async (req, res) => {
+messagingRouter.post('/send', async (req, res) => {
   if (!sock || connectionState !== 'connected') {
     return res.status(503).json({ error: 'Not connected to WhatsApp' });
   }
@@ -1346,7 +1426,7 @@ app.post('/send', async (req, res) => {
 });
 
 // Edit a previously sent message
-app.post('/edit', async (req, res) => {
+messagingRouter.post('/edit', async (req, res) => {
   if (!sock || connectionState !== 'connected') {
     return res.status(503).json({ error: 'Not connected to WhatsApp' });
   }
@@ -1403,7 +1483,7 @@ function inferMediaType(ext) {
 }
 
 // Send media (image, video, document) natively
-app.post('/send-media', async (req, res) => {
+messagingRouter.post('/send-media', async (req, res) => {
   if (!sock || connectionState !== 'connected') {
     return res.status(503).json({ error: 'Not connected to WhatsApp' });
   }
@@ -1480,7 +1560,7 @@ app.post('/send-media', async (req, res) => {
 });
 
 // Typing indicator
-app.post('/typing', async (req, res) => {
+messagingRouter.post('/typing', async (req, res) => {
   if (!sock || connectionState !== 'connected') {
     return res.status(503).json({ error: 'Not connected' });
   }
@@ -1497,7 +1577,7 @@ app.post('/typing', async (req, res) => {
 });
 
 // Chat info
-app.get('/chat/:id', async (req, res) => {
+adminRouter.get('/chat/:id', async (req, res) => {
   const chatId = req.params.id;
   const isGroup = chatId.endsWith('@g.us');  if (isGroup && sock) {
     try {
@@ -1520,7 +1600,7 @@ app.get('/chat/:id', async (req, res) => {
 });
 
 // Resolver nome de contato via WhatsApp (consulta sock.contacts)
-app.get('/contact/:jid', async (req, res) => {
+adminRouter.get('/contact/:jid', async (req, res) => {
   const jid = req.params.jid;
   if (!jid) {
     return res.status(400).json({ error: 'jid required' });
@@ -1537,13 +1617,18 @@ app.get('/contact/:jid', async (req, res) => {
 });
 
 // Health check
-app.get('/health', (req, res) => {
+diagnosticsRouter.get('/health', (req, res) => {
   res.json({
     status: connectionState,
     queueLength: messageQueue.length,
     uptime: process.uptime(),
   });
 });
+
+// Mount domain-specific routers
+app.use(adminRouter);
+app.use(messagingRouter);
+app.use(diagnosticsRouter);
 
 // Start
 if (isMain) {
@@ -1588,7 +1673,8 @@ export {
   getRecentLogs,
   resolveContactName,
   loadEnv,
-  runSelfDiagnostics
+  runSelfDiagnostics,
+  clearRecentlyProcessedIds
 };
 
 function getBotPaused() { return botPaused; }
@@ -1599,3 +1685,4 @@ function getRecentlySentIds() { return recentlySentIds; }
 function getMessageQueue() { return messageQueue; }
 function setSock(s) { sock = s; }
 function getRecentLogs() { return recentLogs; }
+function clearRecentlyProcessedIds() { recentlyProcessedIds.clear(); }
