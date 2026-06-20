@@ -703,12 +703,13 @@ def _update_full_summary(name: str, existing_full_summary: str, new_session_text
 
     previous = f"Resumo anterior:\n{existing_full_summary}\n\n" if existing_full_summary else ""
     prompt = (
+        f"Contato: {name}\n\n"
         f"{previous}"
-        f"Nova conversa ({session_date}):\n{new_session_text}\n\n"
-        "Atualize o resumo cumulativo deste contato incorporando a nova conversa. "
-        "Formato: uma linha por período relevante, ex: 'Jun/25: pediu orçamento de X. Jul/25: comprou, elogiou atendimento.'\n"
-        "Seja factual e conciso. Mantenha o histórico anterior intacto e adicione o novo período ao final. "
-        "Retorne APENAS o texto do resumo atualizado, sem títulos ou explicações."
+        f"Mensagens do contato em {session_date}:\n{new_session_text}\n\n"
+        f"Com base APENAS nas mensagens acima, adicione ao resumo o que {name} disse, pediu ou demonstrou nesta conversa. "
+        "Use o formato: '<Mês/Ano>: <fatos reais da conversa>'. "
+        "Mantenha o histórico anterior intacto. Não invente informações. "
+        "Retorne APENAS o texto do resumo completo atualizado, sem títulos ou explicações."
     )
 
     text_content = None
@@ -751,10 +752,9 @@ def _compress_full_summary(name: str, full_summary: str) -> str | None:
     classify_model = config.whatsapp_contact_classifier_model
 
     prompt = (
-        f"Resuma o histórico de relacionamento abaixo com {name} em no máximo 2 frases, "
-        "destacando o perfil, interesses principais e tom preferido:\n\n"
-        f"{full_summary}\n\n"
-        "Retorne APENAS o resumo comprimido, sem títulos."
+        f"Histórico de conversas com {name}:\n{full_summary}\n\n"
+        f"Resuma em no máximo 2 frases o que {name} costuma buscar, seu perfil e tom preferido. "
+        "Use apenas fatos do histórico acima. Retorne APENAS o resumo, sem títulos."
     )
 
     text_content = None
@@ -845,10 +845,15 @@ def _sync_full_summaries(personal_contacts: dict, state_db_path, max_contacts: i
                     if not msgs:
                         continue
 
+                    # role="user" = contato falando; role="assistant" = bot respondendo
+                    # Para o resumo, incluir apenas mensagens do contato (user)
+                    # para não poluir com respostas do bot
                     lines = []
                     for role, content in msgs:
-                        speaker = "André" if role == "assistant" else contact_name
-                        lines.append(f"{speaker}: {content[:400]}")
+                        if role == "user":
+                            lines.append(content[:400])
+                    if not lines:
+                        continue
                     session_text = "\n".join(lines)
 
                     try:
@@ -1063,6 +1068,20 @@ def _sync_contacts_from_db_internal(force: bool = True) -> str:
         for k in owner_keys:
             del personal_contacts[k]
             logger.info(f"[sync] Removida entrada do owner: {k}")
+
+    # Limpar full_summary gerados com dados incorretos (exemplo do prompt ou respostas do bot)
+    _bad_summary_markers = ("pediu orçamento de X", "comprou, elogiou atendimento", "André:")
+    cleaned_summaries = 0
+    for k, v in personal_contacts.items():
+        if not isinstance(v, dict):
+            continue
+        fs = v.get("full_summary") or ""
+        if any(marker in fs for marker in _bad_summary_markers):
+            v.pop("full_summary", None)
+            v.pop("last_summarized_at", None)
+            cleaned_summaries += 1
+    if cleaned_summaries:
+        logger.info(f"[sync] {cleaned_summaries} full_summary(s) inválidos removidos para reprocessamento")
 
     # 2. Ler contatos únicos do SQLite com agregação de estatísticas para performance
     if not db_path.exists() and not state_db_path.exists():
