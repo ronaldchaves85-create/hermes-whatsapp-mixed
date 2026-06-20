@@ -627,6 +627,66 @@ def _call_llm_api(url: str, headers: dict, payload: dict, extract_fn, timeout: i
         return None
 
 
+def _extract_contact_name_via_llm(message: str) -> str | None:
+    """Usa a LLM para extrair o nome do contato de uma mensagem em linguagem natural.
+    Retorna apenas o nome/apelido, ou None se não encontrado."""
+    google_key = config.google_api_key
+    openai_key = config.openai_api_key
+    openrouter_key = config.openrouter_api_key
+    classify_model = config.whatsapp_contact_classifier_model
+
+    prompt = (
+        "Da mensagem abaixo, extraia APENAS o nome ou apelido do contato que deve ser atualizado. "
+        "Responda somente com o nome, sem explicações, aspas ou pontuação. "
+        "Se não houver nome claro, responda: NONE\n\n"
+        f"Mensagem: {message}"
+    )
+
+    text_content = None
+
+    if google_key:
+        model_to_use = classify_model if (classify_model and "gemini" in classify_model.lower()) else "gemini-3.1-flash-lite"
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_to_use}:generateContent?key={google_key}"
+        text_content = _call_llm_api(
+            url,
+            headers={"Content-Type": "application/json"},
+            payload={
+                "contents": [{"parts": [{"text": prompt}]}],
+                "generationConfig": {"maxOutputTokens": 64},
+            },
+            extract_fn=lambda r: r["candidates"][0]["content"]["parts"][0]["text"],
+            timeout=15,
+        )
+
+    if not text_content and openai_key:
+        model_to_use = classify_model if (classify_model and any(p in classify_model.lower() for p in ["gpt", "o1-", "o3-"])) else "gpt-4o-mini"
+        text_content = _call_llm_api(
+            "https://api.openai.com/v1/chat/completions",
+            headers={"Content-Type": "application/json", "Authorization": f"Bearer {openai_key}"},
+            payload={"model": model_to_use, "messages": [{"role": "user", "content": prompt}]},
+            extract_fn=lambda r: r["choices"][0]["message"]["content"],
+            timeout=15,
+        )
+
+    if not text_content and openrouter_key:
+        model_to_use = classify_model or "google/gemini-flash-1.5-8b"
+        text_content = _call_llm_api(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers={"Content-Type": "application/json", "Authorization": f"Bearer {openrouter_key}"},
+            payload={"model": model_to_use, "messages": [{"role": "user", "content": prompt}]},
+            extract_fn=lambda r: r["choices"][0]["message"]["content"],
+            timeout=15,
+        )
+
+    if not text_content:
+        return None
+
+    name = text_content.strip().strip('"\'').strip()
+    if not name or name.upper() == "NONE" or len(name) > 60:
+        return None
+    return name
+
+
 def _classify_contact_via_llm(name: str, chat_history: str, stats_info: str) -> dict:
     """Classifica contatos usando a API do LLM (Gemini, OpenAI ou OpenRouter) com base no histórico e estatísticas."""
     google_key = config.google_api_key
@@ -2538,79 +2598,11 @@ def pre_gateway_dispatch(*args, **kwargs):
     if is_owner and is_self_chat:
         nl_contact_name = None
         if _UPDATE_NL_TRIGGERS.search(msg_text):
-            # Remover os verbos gatilho e artigos/preposições da lista de palavras candidatas
-            def _extract_name_tokens(text: str) -> list[str]:
-                """Extrai sequências de palavras capitalizadas, cortando em stopwords."""
-                tokens = text.split()
-                results = []
-                current: list[str] = []
-                for tok in tokens:
-                    clean_tok = re.sub(r"[^\w]", "", tok)
-                    if re.match(r"^[A-ZÀ-Ú]", tok) and _normalize_text(clean_tok) not in _CONTACT_QUERY_STOPWORDS:
-                        current.append(clean_tok)
-                        if len(current) >= 3:  # máx 3 palavras por nome
-                            results.append(" ".join(current))
-                    else:
-                        if current:
-                            results.append(" ".join(current))
-                            current = []
-                if current:
-                    results.append(" ".join(current))
-                return results
-
-            # Construir conjunto de palavras a ignorar: stopwords + verbos gatilho (palavra inteira) + artigos
-            trigger_words = {_normalize_text(m.group(0)) for m in _UPDATE_NL_TRIGGERS.finditer(msg_text)}
-            extra_skip = {"da", "do", "de", "ao", "os", "as", "um", "uma", "uns", "umas", "se", "eh", "e"}
-            skip_set = _CONTACT_QUERY_STOPWORDS | trigger_words | extra_skip
-
-            # Gerar candidatos: sequências de 1-3 palavras não-stopword da mensagem
-            words = re.findall(r"[a-zà-úA-ZÀ-Ú]{2,}", msg_text)
-            valid_words = [w for w in words if _normalize_text(w) not in skip_set]
-
-            # Incluir bigramas e trigramas de palavras válidas consecutivas
-            bigrams = [" ".join(valid_words[i:i+2]) for i in range(len(valid_words)-1)]
-            trigrams = [" ".join(valid_words[i:i+3]) for i in range(len(valid_words)-2)]
-            # Priorizar: trigramas > bigramas > palavras simples (maiores primeiro)
-            all_candidates = trigrams + bigrams + valid_words
-
-            # Prioridade 1: match direto no personal_contacts (nome/apelido/pet_name)
-            for candidate in all_candidates:
-                if _normalize_text(candidate) in skip_set:
-                    continue
-                ck, _ = _search_contact_by_name(candidate)
-                if ck:
-                    nl_contact_name = candidate
-                    logger.info(f"[update-nl] Match em personal_contacts: '{candidate}' → {ck}")
-                    break
-
-            # Prioridade 2: match no sender_name do whatsapp_messages.db
-            if not nl_contact_name:
-                bridge_db = Path("/opt/data/.hermes/whatsapp_messages.db")
-                if bridge_db.exists():
-                    try:
-                        with sqlite3.connect(str(bridge_db)) as conn:
-                            cur = conn.cursor()
-                            cur.execute(
-                                "SELECT DISTINCT sender_name FROM messages "
-                                "WHERE sender_name IS NOT NULL AND sender_name != '' "
-                                "AND chat_id NOT LIKE '%@g.us%'"
-                            )
-                            db_names = [r[0] for r in cur.fetchall() if r[0]]
-                        for candidate in all_candidates:
-                            for db_name in db_names:
-                                if _normalize_text(candidate) in _normalize_text(db_name):
-                                    nl_contact_name = db_name
-                                    logger.info(f"[update-nl] Match em DB sender_name: '{candidate}' → '{db_name}'")
-                                    break
-                            if nl_contact_name:
-                                break
-                    except sqlite3.Error:
-                        pass
-
-            # Fallback: primeira palavra válida da mensagem
-            if not nl_contact_name and valid_words:
-                nl_contact_name = valid_words[0]
-                logger.info(f"[update-nl] Fallback para primeira palavra válida: '{nl_contact_name}'")
+            nl_contact_name = _extract_contact_name_via_llm(msg_text)
+            if nl_contact_name:
+                logger.info(f"[update-nl] Nome extraído pela LLM: '{nl_contact_name}'")
+            else:
+                logger.warning(f"[update-nl] LLM não identificou nome de contato em: '{msg_text}'")
 
         if nl_contact_name:
             chat_id = str(event.source.chat_id) if event.source.chat_id else ""
