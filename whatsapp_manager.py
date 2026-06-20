@@ -2061,6 +2061,11 @@ def _build_owner_context(history_section: str, cross_context: str = "") -> dict:
             "Campos disponíveis: name, relationship, manual_relationship, nickname, pet_name, "
             "frequent_greeting, tone, guidelines, notes, product, summary, intent, frequency\n"
             "Valores de relationship válidos: Amigo, AmigoProximo, Parente, Filho, Cliente, Vendedor\n"
+            "Regras de preenchimento:\n"
+            "- nickname: apelido formal (ex: Bel, Zé)\n"
+            "- pet_name: apelido carinhoso/íntimo (ex: Bebel, Zezinho) — use quando André mencionar apelido carinhoso\n"
+            "- Use NULL apenas para LIMPAR um campo que deve ficar vazio\n"
+            "- Se o campo não foi mencionado, OMITA-O do EXEC (não inclua =NULL)\n"
             "Exemplo: EXEC: update contact Bebel relationship=Filho manual_relationship=Filho pet_name=Bebel name=Isabel\n"
             "IMPORTANTE: Inclua sempre a linha EXEC mesmo que já tenha confirmado verbalmente. "
             "Sem a linha EXEC, nenhuma atualização real acontece no sistema."
@@ -3051,11 +3056,11 @@ _EXEC_PATTERN = re.compile(
 
 def post_llm_call(*args, **kwargs):
     """Intercepta resposta do LLM e executa linhas EXEC: update contact <nome> campo=valor."""
-    # Hermes passa tudo em kwargs: platform, assistant_response, session_id, user_message, etc.
+    # Hermes pode não passar 'platform' no post_llm_call — assumir whatsapp (este é o plugin whatsapp)
     platform = kwargs.get("platform")
     if not platform:
         ctx = next((a for a in args if isinstance(a, dict)), None)
-        platform = (ctx or {}).get("platform")
+        platform = (ctx or {}).get("platform") or "whatsapp"
 
     if platform != "whatsapp":
         return None
@@ -3066,15 +3071,17 @@ def post_llm_call(*args, **kwargs):
     if owner_number and session_id:
         clean_session = "".join(c for c in session_id.split("@")[0].split(":")[0] if c.isdigit())
         clean_owner = "".join(c for c in owner_number.split("@")[0].split(":")[0] if c.isdigit())
-        if _normalize_brazilian_phone(clean_session) != _normalize_brazilian_phone(clean_owner):
+        if clean_session and clean_owner and _normalize_brazilian_phone(clean_session) != _normalize_brazilian_phone(clean_owner):
+            logger.debug(f"[post_llm_call] sessão {session_id!r} não é do owner, pulando")
             return None
 
     response_text = kwargs.get("assistant_response") or ""
     if not response_text:
-        logger.warning(f"[post_llm_call] assistant_response vazio. kwargs keys: {list(kwargs.keys())}")
+        logger.debug(f"[post_llm_call] assistant_response vazio. kwargs keys: {list(kwargs.keys())}")
         return None
 
     matches = _EXEC_PATTERN.findall(response_text)
+    logger.info(f"[post_llm_call] response_text len={len(response_text)}, EXEC matches={len(matches)}, session={session_id!r}")
     if not matches:
         return None
 
