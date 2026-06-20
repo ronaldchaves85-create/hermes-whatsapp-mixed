@@ -2522,6 +2522,91 @@ def pre_gateway_dispatch(*args, **kwargs):
 
         return {"action": "skip", "reason": "update-contact-command"}
 
+    # Pedido de atualização de contato em linguagem natural (owner no self-chat)
+    # Exemplos: "atualiza a Bebel como minha filha", "muda o relacionamento da Isabel para Filho"
+    _UPDATE_NL_PATTERNS = [
+        r"atuali[zs][ae]\w*\s+(?:o\s+|a\s+)?(?:contato\s+)?(?:d[ao]\s+)?([A-ZÀ-Úa-zà-ú]{2,})",
+        r"mud[ae]\w*\s+(?:o\s+|a\s+)?(?:contato\s+)?(?:d[ao]\s+)?([A-ZÀ-Úa-zà-ú]{2,})",
+        r"coloc[ae]\w*\s+(?:a\s+|o\s+)?([A-ZÀ-Úa-zà-ú]{2,})\s+como",
+        r"registr[ae]\w*\s+(?:a\s+|o\s+)?([A-ZÀ-Úa-zà-ú]{2,})\s+como",
+        r"salv[ae]\w*\s+(?:a\s+|o\s+)?([A-ZÀ-Úa-zà-ú]{2,})\s+como",
+        r"marc[ae]\w*\s+(?:a\s+|o\s+)?([A-ZÀ-Úa-zà-ú]{2,})\s+como",
+    ]
+    if is_owner and is_self_chat:
+        nl_contact_name = None
+        for pat in _UPDATE_NL_PATTERNS:
+            m = re.search(pat, msg_text, re.IGNORECASE)
+            if m:
+                candidate = m.group(1).strip()
+                if _normalize_text(candidate) not in _CONTACT_QUERY_STOPWORDS and len(candidate) >= 2:
+                    nl_contact_name = candidate
+                    break
+
+        if nl_contact_name:
+            chat_id = str(event.source.chat_id) if event.source.chat_id else ""
+            logger.info(f"[update-nl] Pedido de atualização detectado para '{nl_contact_name}': '{msg_text}'")
+
+            # Usar LLM de classificação para extrair campos estruturados da mensagem do owner
+            extract_prompt = (
+                f"O usuário pediu para atualizar o contato '{nl_contact_name}' com a seguinte instrução:\n"
+                f"\"{msg_text}\"\n\n"
+                "Extraia os campos a atualizar e retorne um JSON com apenas os campos mencionados. "
+                "Campos possíveis: name, relationship, manual_relationship, nickname, pet_name, "
+                "frequent_greeting, tone, guidelines, notes, product, summary, intent, frequency.\n"
+                "Valores válidos para relationship/manual_relationship: Amigo, AmigoProximo, Parente, Filho, Cliente, Vendedor.\n"
+                "Retorne APENAS o JSON, sem explicações. Exemplo: "
+                "{\"relationship\": \"Filho\", \"manual_relationship\": \"Filho\", \"nickname\": \"Bebel\"}"
+            )
+            try:
+                extracted = _classify_contact_via_llm(
+                    name=nl_contact_name,
+                    chat_history=extract_prompt,
+                    stats_info="",
+                )
+                # _classify_contact_via_llm retorna dict com campos de classificação
+                # Filtrar apenas campos válidos de personal_contacts
+                valid_fields = {
+                    "name", "relationship", "manual_relationship", "nickname", "pet_name",
+                    "frequent_greeting", "tone", "guidelines", "notes", "product",
+                    "summary", "intent", "frequency",
+                }
+                fields_to_update = {k: v for k, v in extracted.items() if k in valid_fields and v is not None}
+
+                # Se não extraiu relacionamento mas a mensagem menciona "filho/filha", inferir
+                rel_keywords = {"filho": "Filho", "filha": "Filho", "parente": "Parente",
+                                "irmão": "Parente", "irmã": "Parente", "amigo": "Amigo",
+                                "amiga": "Amigo", "cliente": "Cliente", "vendedor": "Vendedor"}
+                if "relationship" not in fields_to_update:
+                    for kw, rel in rel_keywords.items():
+                        if kw in msg_text.lower():
+                            fields_to_update["relationship"] = rel
+                            fields_to_update["manual_relationship"] = rel
+                            break
+
+                if fields_to_update:
+                    result = _update_contact_fields(nl_contact_name, fields_to_update)
+                    logger.info(f"[update-nl] Resultado: {result}")
+                    response_msg = result
+                else:
+                    logger.warning(f"[update-nl] Nenhum campo extraído para '{nl_contact_name}'")
+                    response_msg = f"⚠️ Não consegui identificar o que atualizar para '{nl_contact_name}'. Use: `update contact {nl_contact_name} campo=valor`"
+            except Exception as nl_err:
+                logger.error(f"[update-nl] Erro ao extrair campos: {nl_err}")
+                response_msg = f"❌ Erro ao processar atualização de '{nl_contact_name}': {nl_err}"
+
+            if chat_id and response_msg:
+                try:
+                    url = f"{BRIDGE_URL}/send"
+                    payload = json.dumps({"chatId": chat_id, "message": response_msg}).encode("utf-8")
+                    req = urllib.request.Request(url, data=payload, method="POST")
+                    req.add_header("Content-Type", "application/json")
+                    with urllib.request.urlopen(req, timeout=10):
+                        pass
+                except Exception as send_err:
+                    logger.error(f"[update-nl] Erro ao enviar resposta: {send_err}")
+
+            return {"action": "skip", "reason": "update-contact-nl"}
+
     # Se for mensagem manual enviada pelo dono no WhatsApp para outro contato, pulamos a resposta do LLM
     if is_owner and not is_self_chat:
         return {"action": "skip", "reason": "owner-manual-message"}
