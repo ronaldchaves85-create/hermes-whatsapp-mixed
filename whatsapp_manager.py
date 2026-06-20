@@ -1368,8 +1368,62 @@ def _update_contact_fields(identifier: str, fields: dict) -> str:
                     matched_key = key
                     best_score = score
 
+    # 5. Busca por sender_name no whatsapp_messages.db (contatos com nome genérico "Contato XXXX")
     if not matched_key:
-        return f"❌ Contato '{identifier}' não encontrado em personal_contacts.json."
+        bridge_db = Path("/opt/data/.hermes/whatsapp_messages.db")
+        if bridge_db.exists():
+            try:
+                with sqlite3.connect(str(bridge_db)) as conn:
+                    cur = conn.cursor()
+                    cur.execute(
+                        """
+                        SELECT chat_id, MAX(sender_name) as name
+                        FROM messages
+                        WHERE sender_name IS NOT NULL AND sender_name != ''
+                        AND chat_id NOT LIKE '%@g.us%'
+                        GROUP BY chat_id
+                        """,
+                    )
+                    for chat_id_row, sender_name in cur.fetchall():
+                        if not sender_name:
+                            continue
+                        if _is_owner_key(chat_id_row):
+                            continue
+                        if id_norm in _normalize_text(sender_name):
+                            # Encontrou pelo nome real do WhatsApp — mapear para chave do personal_contacts
+                            phone_row = chat_id_row.split("@")[0]
+                            for key in personal_contacts:
+                                if _is_owner_key(key):
+                                    continue
+                                if key.split("@")[0] == phone_row:
+                                    matched_key = key
+                                    break
+                            if not matched_key:
+                                # Contato existe no DB mas não no JSON — criar entrada mínima
+                                matched_key = chat_id_row if "@" in chat_id_row else f"{phone_row}@s.whatsapp.net"
+                                personal_contacts[matched_key] = {
+                                    "name": sender_name,
+                                    "relationship": "Cliente",
+                                    "manual_relationship": None,
+                                    "notes": None,
+                                    "product": None,
+                                    "tone": "polido e profissional",
+                                    "nickname": None,
+                                    "pet_name": None,
+                                    "frequent_greeting": None,
+                                    "summary": "Pendente de classificação.",
+                                    "intent": "Contato inicial.",
+                                    "frequency": "esporádica",
+                                    "guidelines": "Responda de forma prestativa.",
+                                    "last_interaction": time.time(),
+                                }
+                                logger.info(f"[update-contact] Criada entrada para {sender_name} ({matched_key}) via DB lookup")
+                            break
+            except sqlite3.Error as e:
+                logger.warning(f"[update-contact] Erro ao buscar sender_name no DB: {e}")
+
+    if not matched_key:
+        return f"❌ Contato '{identifier}' não encontrado em personal_contacts.json nem no histórico de mensagens."
 
     contact = personal_contacts[matched_key]
     contact_name = contact.get("name") or contact.get("nickname") or matched_key
