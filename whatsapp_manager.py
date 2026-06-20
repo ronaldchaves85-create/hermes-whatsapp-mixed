@@ -1500,6 +1500,30 @@ def _update_contact_fields(identifier: str, fields: dict) -> str:
             except sqlite3.Error as e:
                 logger.warning(f"[update-contact] Erro ao buscar sender_name no DB: {e}")
 
+    # 6. Resolver nomes via bridge /contact/:jid para entradas com nome genérico
+    if not matched_key:
+        bridge_url = "http://localhost:3000"
+        generic_entries = [
+            (key, data) for key, data in personal_contacts.items()
+            if not _is_owner_key(key)
+            and re.match(r"^Contato\s+\d+$", data.get("name") or "")
+        ]
+        logger.info(f"[update-contact] Passo 6: consultando bridge para {len(generic_entries)} entradas genéricas")
+        for key, data in generic_entries:
+            jid = key if "@" in key else f"{key}@s.whatsapp.net"
+            try:
+                with urllib.request.urlopen(f"{bridge_url}/contact/{urllib.parse.quote(jid, safe='')}", timeout=5) as resp:
+                    result = json.loads(resp.read().decode())
+                real_name = result.get("name") or ""
+                if real_name and (id_norm in _normalize_text(real_name) or _normalize_text(real_name) in id_norm):
+                    logger.info(f"[update-contact] Passo 6: bridge resolveu '{real_name}' para {key}")
+                    # Atualizar name na entrada com o nome real encontrado
+                    personal_contacts[key]["name"] = real_name
+                    matched_key = key
+                    break
+            except Exception as e:
+                logger.debug(f"[update-contact] Passo 6: erro ao consultar bridge para {jid}: {e}")
+
     if not matched_key:
         return f"❌ Contato '{identifier}' não encontrado em personal_contacts.json nem no histórico de mensagens."
 
