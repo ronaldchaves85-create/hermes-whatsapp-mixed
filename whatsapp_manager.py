@@ -2799,54 +2799,81 @@ _EXEC_PATTERN = re.compile(
 def post_llm_call(*args, **kwargs):
     """Intercepta resposta do LLM e executa linhas EXEC: update contact <nome> campo=valor."""
     context = kwargs.get("context") or next((a for a in args if isinstance(a, dict)), None)
+    logger.info(f"[post_llm_call] chamado — context keys: {list(context.keys()) if context else 'None'} | kwargs keys: {list(kwargs.keys())}")
+
     if not context:
+        logger.warning("[post_llm_call] context ausente, saindo")
         return None
 
     platform = context.get("platform")
     if platform != "whatsapp":
+        logger.info(f"[post_llm_call] platform={platform}, ignorando")
         return None
 
     sender_id = context.get("sender_id", "")
     owner_number = config.whatsapp_owner_number
     if not owner_number:
+        logger.warning("[post_llm_call] WHATSAPP_OWNER_NUMBER não configurado")
         return None
 
     clean_sender = "".join(c for c in sender_id.split("@")[0].split(":")[0] if c.isdigit())
     clean_owner = "".join(c for c in owner_number.split("@")[0].split(":")[0] if c.isdigit())
     if _normalize_brazilian_phone(clean_sender) != _normalize_brazilian_phone(clean_owner):
+        logger.info(f"[post_llm_call] sender={clean_sender} não é owner={clean_owner}, ignorando")
         return None
 
-    response_text = context.get("response") or context.get("text") or ""
+    # Tentar todas as chaves possíveis onde o Hermes pode colocar o texto da resposta
+    response_text = ""
+    for key in ("response", "text", "content", "message", "reply"):
+        response_text = context.get(key) or ""
+        if response_text:
+            logger.info(f"[post_llm_call] resposta encontrada em context['{key}'] ({len(response_text)} chars)")
+            break
+
     if not response_text:
+        # Tentar também nos kwargs diretos
+        for key in ("response", "text", "content", "message", "reply"):
+            response_text = kwargs.get(key) or ""
+            if response_text:
+                logger.info(f"[post_llm_call] resposta encontrada em kwargs['{key}'] ({len(response_text)} chars)")
+                break
+
+    if not response_text:
+        logger.warning(f"[post_llm_call] texto da resposta não encontrado. context={list(context.keys())} kwargs={list(kwargs.keys())}")
         return None
 
     matches = _EXEC_PATTERN.findall(response_text)
+    logger.info(f"[post_llm_call] EXEC matches encontrados: {len(matches)} — {matches}")
     if not matches:
         return None
 
     exec_results = []
     for match in matches:
         match = match.strip()
-        # Separar identificador dos campos: tudo antes do primeiro campo=valor
         field_pos = re.search(r"\s+\w+=", match)
         if not field_pos:
+            logger.warning(f"[post_llm_call] EXEC sem campos detectados: '{match}'")
             continue
         identifier = match[: field_pos.start()].strip()
         fields_str = match[field_pos.start():].strip()
         fields: dict = {}
         for k, v in re.findall(r"(\w+)=([^\s=]+(?:\s+[^\s=]+)*?)(?=\s+\w+=|$)", fields_str):
-            fields[k.strip()] = v.strip()
+            raw_val = v.strip()
+            # Converter "NULL" e "null" para None
+            fields[k.strip()] = None if raw_val.upper() == "NULL" else raw_val
+        logger.info(f"[post_llm_call] Executando: update contact '{identifier}' campos={fields}")
         if identifier and fields:
             result = _update_contact_fields(identifier, fields)
             exec_results.append(result)
-            logger.info(f"[post_llm_call] EXEC executado: update contact {identifier} → {result}")
+            logger.info(f"[post_llm_call] Resultado: {result}")
+        else:
+            logger.warning(f"[post_llm_call] identifier ou fields vazios — identifier='{identifier}' fields={fields}")
 
     if not exec_results:
+        logger.warning("[post_llm_call] Nenhum EXEC executado com sucesso")
         return None
 
-    # Remove linhas EXEC: da resposta final
     cleaned = _EXEC_PATTERN.sub("", response_text).strip()
-    # Adiciona confirmação real no final (silenciosa se quiser, mas útil para debug)
     return {"response": cleaned}
 
 
