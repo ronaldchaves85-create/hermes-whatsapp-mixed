@@ -991,20 +991,31 @@ def _sync_contacts_from_db_internal(force: bool = True) -> str:
             is_stale = False
             if exists and existing_key:
                 existing_data = personal_contacts[existing_key]
-                old_defaults = ["Conversa inicial.", "Conversa muito curta.", "Conversa inicial de suporte/atendimento.", "Conversa inicial."]
-                has_old_default_summary = existing_data.get("summary") in old_defaults
-                
+                old_defaults = [
+                    "Conversa inicial.", "Conversa muito curta.",
+                    "Conversa inicial de suporte/atendimento.", "Conversa inicial.",
+                    "Pendente de classificação.",
+                ]
+                summary_val = existing_data.get("summary") or ""
+                # Summaries gerados pelo extrator NL (update manual) também são considerados pendentes
+                is_nl_generated_summary = (
+                    summary_val.startswith("André atualiza") or
+                    summary_val.startswith("Atualizar informações") or
+                    summary_val == "Pendente de classificação."
+                )
+                has_old_default_summary = summary_val in old_defaults or is_nl_generated_summary
+
                 # Verifica se houve novas mensagens desde a última classificação
                 has_new_messages = False
                 if "last_interaction" in existing_data:
                     if max_ts and max_ts > existing_data.get("last_interaction", 0):
                         has_new_messages = True
                 else:
-                    # Se não tem last_interaction, trata como stale para forçar re-classificação
-                    # e capturar o perfil atualizado do contato
                     has_new_messages = True
-                
-                if force or has_old_default_summary or has_new_messages or not existing_data.get("summary") or not existing_data.get("intent") or not existing_data.get("frequency"):
+
+                # force=True (sync manual) reclassifica qualquer contato com histórico no DB
+                has_db_history = msg_count > 0
+                if (force and has_db_history) or has_old_default_summary or has_new_messages or not existing_data.get("summary") or not existing_data.get("intent") or not existing_data.get("frequency"):
                     needs_update = True
                     is_stale = True
             
