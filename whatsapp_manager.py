@@ -2523,24 +2523,60 @@ def pre_gateway_dispatch(*args, **kwargs):
         return {"action": "skip", "reason": "update-contact-command"}
 
     # Pedido de atualização de contato em linguagem natural (owner no self-chat)
-    # Exemplos: "atualiza a Bebel como minha filha", "muda o relacionamento da Isabel para Filho"
-    _UPDATE_NL_PATTERNS = [
-        r"atuali[zs][ae]\w*\s+(?:o\s+|a\s+)?(?:contato\s+)?(?:d[ao]\s+)?([A-ZÀ-Úa-zà-ú]{2,})",
-        r"mud[ae]\w*\s+(?:o\s+|a\s+)?(?:contato\s+)?(?:d[ao]\s+)?([A-ZÀ-Úa-zà-ú]{2,})",
-        r"coloc[ae]\w*\s+(?:a\s+|o\s+)?([A-ZÀ-Úa-zà-ú]{2,})\s+como",
-        r"registr[ae]\w*\s+(?:a\s+|o\s+)?([A-ZÀ-Úa-zà-ú]{2,})\s+como",
-        r"salv[ae]\w*\s+(?:a\s+|o\s+)?([A-ZÀ-Úa-zà-ú]{2,})\s+como",
-        r"marc[ae]\w*\s+(?:a\s+|o\s+)?([A-ZÀ-Úa-zà-ú]{2,})\s+como",
-    ]
+    _UPDATE_NL_TRIGGERS = re.compile(
+        r"\b(atuali[zs]|mud[ae]|coloc[ae]|registr[ae]|salv[ae]|marc[ae]|configur[ae]|defin[ae]|inform[ae])\w*\b",
+        re.IGNORECASE,
+    )
     if is_owner and is_self_chat:
         nl_contact_name = None
-        for pat in _UPDATE_NL_PATTERNS:
-            m = re.search(pat, msg_text, re.IGNORECASE)
-            if m:
-                candidate = m.group(1).strip()
-                if _normalize_text(candidate) not in _CONTACT_QUERY_STOPWORDS and len(candidate) >= 2:
+        if _UPDATE_NL_TRIGGERS.search(msg_text):
+            # Buscar nome próprio na mensagem: após "da/do/de/o/a" ou nome capitalizado isolado
+            # Estratégia: extrair todos os tokens capitalizados não-stopword e buscar no personal_contacts
+            def _extract_name_tokens(text: str) -> list[str]:
+                """Extrai sequências de palavras capitalizadas, cortando em stopwords."""
+                tokens = text.split()
+                results = []
+                current: list[str] = []
+                for tok in tokens:
+                    clean_tok = re.sub(r"[^\w]", "", tok)
+                    if re.match(r"^[A-ZÀ-Ú]", tok) and _normalize_text(clean_tok) not in _CONTACT_QUERY_STOPWORDS:
+                        current.append(clean_tok)
+                        if len(current) >= 3:  # máx 3 palavras por nome
+                            results.append(" ".join(current))
+                    else:
+                        if current:
+                            results.append(" ".join(current))
+                            current = []
+                if current:
+                    results.append(" ".join(current))
+                return results
+
+            name_candidates = _extract_name_tokens(msg_text)
+            # Também buscar após "da/do/de" (pode estar em minúsculo)
+            after_prep = re.findall(r"\bd[aoe]\s+([A-ZÀ-Úa-zà-ú]{2,})", msg_text, re.IGNORECASE)
+            all_candidates = name_candidates + after_prep
+
+            # Priorizar candidatos mais longos (nome completo > nome simples)
+            all_candidates.sort(key=len, reverse=True)
+
+            for candidate in all_candidates:
+                candidate = candidate.strip()
+                if _normalize_text(candidate) in _CONTACT_QUERY_STOPWORDS:
+                    continue
+                if len(candidate) < 2:
+                    continue
+                # Verificar se existe no personal_contacts ou no DB antes de aceitar
+                ck, _ = _search_contact_by_name(candidate)
+                if ck:
                     nl_contact_name = candidate
                     break
+            # Se não achou no JSON, usar o primeiro candidato válido mesmo assim
+            if not nl_contact_name and all_candidates:
+                for candidate in all_candidates:
+                    candidate = candidate.strip()
+                    if _normalize_text(candidate) not in _CONTACT_QUERY_STOPWORDS and len(candidate) >= 2:
+                        nl_contact_name = candidate
+                        break
 
         if nl_contact_name:
             chat_id = str(event.source.chat_id) if event.source.chat_id else ""
