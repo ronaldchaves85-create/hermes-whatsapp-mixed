@@ -2804,15 +2804,12 @@ def pre_gateway_dispatch(*args, **kwargs):
     if is_owner and is_sync_cmd:
         logger.info("Comando de sincronização detectado (forçando atualização).")
         chat_id = str(event.source.chat_id) if event.source.chat_id else ""
-        
-        try:
-            result_info = _sync_contacts_from_db_internal(force=True)
-            response_msg = (
-                "👤 *Sincronização de Contatos*\n\n"
-                f"{result_info}"
-            )
-        except Exception as e:
-            response_msg = f"❌ Erro na sincronização interna: {e}"
+
+        if _sync_running.is_set():
+            response_msg = "⏳ Sincronização já em andamento. Aguarde a conclusão."
+        else:
+            _run_sync_in_background(force=True, chat_id=chat_id)
+            response_msg = "⏳ Sincronização iniciada em segundo plano. Você será notificado quando concluir."
         
         # Enviar de volta
         if chat_id:
@@ -3209,15 +3206,48 @@ def pre_llm_call(*args, **kwargs):
     return _build_support_prompt(whatsapp_soul, rules_content, history_section)
 
 
+_sync_running = threading.Event()  # garante que apenas um sync roda por vez
+
+
+def _run_sync_in_background(force: bool, chat_id: str | None = None) -> None:
+    """Executa o sync de contatos em thread daemon, notificando o owner ao terminar."""
+    if _sync_running.is_set():
+        logger.info("[sync-bg] Sync já em andamento, ignorando nova solicitação.")
+        return
+
+    def _worker():
+        _sync_running.set()
+        try:
+            result = _sync_contacts_from_db_internal(force=force)
+            logger.info(f"[sync-bg] Concluído: {result}")
+            if chat_id:
+                try:
+                    payload = json.dumps({"chatId": chat_id, "message": f"👤 *Sincronização concluída*\n\n{result}"}).encode()
+                    req = urllib.request.Request(f"{BRIDGE_URL}/send", data=payload, method="POST")
+                    req.add_header("Content-Type", "application/json")
+                    with urllib.request.urlopen(req, timeout=10):
+                        pass
+                except Exception as e:
+                    logger.warning(f"[sync-bg] Falha ao notificar owner: {e}")
+        finally:
+            _sync_running.clear()
+
+    threading.Thread(target=_worker, daemon=True).start()
+
+
 def _run_periodic_sync():
     import time
     from pathlib import Path
     pc_path = Path("/opt/data/personal_contacts.json")
-    
+
     last_code_check = time.time()
-    last_contact_sync = time.time()
     last_git_pull = time.time()
-    
+    # Sync de contatos: inicializa no passado para não disparar imediatamente no boot
+    # O primeiro sync periódico acontece após WHATSAPP_SYNC_INTERVAL_HOURS horas
+    sync_interval_hours = int(os.getenv("WHATSAPP_SYNC_INTERVAL_HOURS", "24"))
+    sync_interval_s = sync_interval_hours * 3600
+    last_contact_sync = time.time()  # não roda no boot
+
     last_pc_mtime = 0.0
     if pc_path.exists():
         try:
@@ -3227,7 +3257,7 @@ def _run_periodic_sync():
 
     # Aguarda 60 segundos após o boot antes de iniciar as verificações em loop
     time.sleep(60)
-    
+
     while True:
         # 1. Verificar se personal_contacts.json foi modificado localmente
         if pc_path.exists():
@@ -3242,7 +3272,7 @@ def _run_periodic_sync():
             except Exception as e:
                 logger.error(f"Erro ao monitorar modificações locais de contatos: {e}")
 
-        # 2. Puxar configurações do GitHub (a cada 1 hora / 3600 segundos)
+        # 2. Puxar configurações do GitHub (a cada 1 hora)
         if time.time() - last_git_pull >= 3600:
             last_git_pull = time.time()
             try:
@@ -3253,17 +3283,11 @@ def _run_periodic_sync():
             except Exception as e:
                 logger.error(f"Erro na puxada periódica de configurações: {e}")
 
-        # 3. Sincronizar contatos (executa apenas a cada 24 horas)
-        if time.time() - last_contact_sync >= 86400:
+        # 3. Sync periódico de contatos em background (intervalo configurável via env)
+        if time.time() - last_contact_sync >= sync_interval_s:
             last_contact_sync = time.time()
-            try:
-                logger.info("Iniciando sincronização periódica automática de contatos...")
-                res = _sync_contacts_from_db_internal(force=False)
-                logger.info(f"Sincronização periódica concluída: {res}")
-                if pc_path.exists():
-                    last_pc_mtime = os.path.getmtime(pc_path)
-            except Exception as e:
-                logger.error(f"Erro na sincronização periódica: {e}")
+            logger.info(f"[sync-bg] Disparando sync periódico (intervalo={sync_interval_hours}h)...")
+            _run_sync_in_background(force=False, chat_id=None)
 
         # 4. Verificar atualizações de código a cada 24 horas (86400 segundos)
         if time.time() - last_code_check >= 86400:
@@ -3586,15 +3610,7 @@ def register(ctx):
     except Exception as code_err:
         logger.error(f"Falha ao verificar atualizações de código no boot: {code_err}")
 
-    # Sincronização automática no boot (100% transparente)
-    try:
-        logger.info("Iniciando sincronização automática de contatos no boot...")
-        boot_result = _sync_contacts_from_db_internal(force=True)
-        logger.info(f"Resultado da sincronização no boot: {boot_result}")
-    except Exception as boot_sync_err:
-        logger.error(f"Falha na sincronização de contatos no boot: {boot_sync_err}")
-
-    # Agendador periódico local removido (usando a versão global do módulo)
+    # Sync NÃO roda no boot — apenas no intervalo periódico ou sob demanda via chat.
 
     try:
         import threading
