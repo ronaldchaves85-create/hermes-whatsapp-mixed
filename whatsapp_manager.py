@@ -2806,19 +2806,14 @@ def pre_gateway_dispatch(*args, **kwargs):
         )
     except Exception as log_e:
         logger.error(f"Erro ao gravar debug log: {log_e}")
-    sync_commands = [
-        "sync contacts", "sync_contacts",
-        "importar contatos", "importar_contatos",
-        "sync contatos", "sync_contatos",
-        "sincronizar contatos", "sincronizar_contatos"
+    sync_keywords = [
+        "sync contacts", "sync contatos", "sincronizar contatos",
+        "sincronize contatos", "sincronize os contatos", "sincronizar os contatos",
+        "importar contatos", "atualizar contatos", "atualize contatos",
+        "atualize os contatos", "atualizar os contatos",
     ]
-    
-    is_sync_cmd = False
-    for cmd in sync_commands:
-        cmd_norm = cmd.replace("_", " ").replace("-", " ")
-        if normalized_msg.startswith(cmd_norm):
-            is_sync_cmd = True
-            break
+
+    is_sync_cmd = is_owner and any(kw in normalized_msg for kw in sync_keywords)
 
     if is_owner and is_sync_cmd:
         logger.info("Comando de sincronização detectado (forçando atualização).")
@@ -3330,6 +3325,7 @@ _EXEC_PATTERN = re.compile(
 
 def post_llm_call(*args, **kwargs):
     """Intercepta resposta do LLM e executa linhas EXEC: update contact <nome> campo=valor."""
+    logger.info(f"[post_llm_call] chamado — kwargs keys: {list(kwargs.keys())} args count: {len(args)}")
     # Hermes pode não passar 'platform' no post_llm_call — assumir whatsapp (este é o plugin whatsapp)
     platform = kwargs.get("platform")
     if not platform:
