@@ -1035,8 +1035,10 @@ def _sync_contacts_from_db_internal(force: bool = True) -> str:
                 tone_val = "polido e profissional" if is_stale else (existing_data.get("tone") or "polido e profissional")
                 guide_val = "Responda de forma prestativa." if is_stale else (existing_data.get("guidelines") or "Responda de forma prestativa.")
                 
+                existing_saved_name = existing_data.get("name") or ""
+                resolved_name = name if (not existing_saved_name or re.match(r"^Contato\s+\d+$", existing_saved_name)) else existing_saved_name
                 personal_contacts[target_key] = {
-                    "name": existing_data.get("name") or name,
+                    "name": resolved_name,
                     "relationship": rel_val,
                     "manual_relationship": man_rel,
                     "notes": existing_data.get("notes"),
@@ -1058,18 +1060,20 @@ def _sync_contacts_from_db_internal(force: bool = True) -> str:
                 skipped_due_to_limit += 1
                 target_key = existing_key if existing_key else resolved_chat
                 existing_data = personal_contacts.get(target_key, {})
-                
+
                 # Preservação/migração de manual_relationship
                 man_rel = existing_data.get("manual_relationship")
                 if not man_rel and existing_data.get("relationship") in ["Vendedor", "Amigo", "AmigoProximo", "Parente", "Filho"]:
                     man_rel = existing_data.get("relationship")
-                
+
                 rel_val = man_rel or ("Cliente" if is_stale else (existing_data.get("relationship") or "Cliente"))
                 tone_val = "polido e profissional" if is_stale else (existing_data.get("tone") or "polido e profissional")
                 guide_val = "Responda de forma prestativa." if is_stale else (existing_data.get("guidelines") or "Responda de forma prestativa.")
-                
+
+                existing_saved_name = existing_data.get("name") or ""
+                resolved_name = name if (not existing_saved_name or re.match(r"^Contato\s+\d+$", existing_saved_name)) else existing_saved_name
                 personal_contacts[target_key] = {
-                    "name": existing_data.get("name") or name,
+                    "name": resolved_name,
                     "relationship": rel_val,
                     "manual_relationship": man_rel,
                     "notes": existing_data.get("notes"),
@@ -1194,7 +1198,7 @@ def _sync_contacts_from_db_internal(force: bool = True) -> str:
                 man_rel = existing_data.get("relationship")
 
             personal_contacts[target_key] = {
-                "name": existing_data.get("name") or name or f"Contato {phone}",
+                "name": (name if (not existing_data.get("name") or re.match(r"^Contato\s+\d+$", existing_data.get("name") or "")) else existing_data.get("name")) or f"Contato {phone}",
                 "relationship": man_rel or classification.get("relationship", "Cliente"),
                 "manual_relationship": man_rel,
                 "notes": existing_data.get("notes"),
@@ -1216,7 +1220,7 @@ def _sync_contacts_from_db_internal(force: bool = True) -> str:
                 man_rel = existing_data.get("relationship")
 
             personal_contacts[target_key] = {
-                "name": existing_data.get("name") or name or f"Contato {phone}",
+                "name": (name if (not existing_data.get("name") or re.match(r"^Contato\s+\d+$", existing_data.get("name") or "")) else existing_data.get("name")) or f"Contato {phone}",
                 "relationship": man_rel or existing_data.get("relationship") or classification.get("relationship", "Cliente"),
                 "manual_relationship": man_rel,
                 "notes": existing_data.get("notes"),
