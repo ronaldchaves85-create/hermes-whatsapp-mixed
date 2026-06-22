@@ -3154,6 +3154,37 @@ def commit_file_to_repo(repo_user, repo_name, config_token, local_path, github_p
             logger.error(f"Erro ao commitar {github_path}: {put_err}")
 
 
+def _transcribe_outgoing_audio(event, media_info: dict) -> None:
+    """Transcreve áudios enviados pelo André e persiste no banco.
+
+    Permite que o style learning capture mensagens de voz do André como texto.
+    """
+    try:
+        transcription = _process_media_message(event)
+        if not transcription:
+            return
+
+        display_text = f'[Áudio: "{transcription}"]'
+
+        event.text = display_text
+        if hasattr(event, "body"):
+            event.body = display_text
+        for attr in ["raw", "raw_event", "payload", "data"]:
+            if hasattr(event, attr):
+                val = getattr(event, attr)
+                if isinstance(val, dict):
+                    val["body"] = display_text
+                    val["text"] = display_text
+
+        db_path = Path("/opt/data/.hermes/whatsapp_messages.db")
+        if db_path.exists() and media_info.get("message_id"):
+            _persist_transcription_to_db(str(db_path), media_info["message_id"], display_text)
+
+        logger.info(f"[audio-out] Áudio enviado transcrito: {transcription[:80]}...")
+    except Exception as e:
+        logger.warning(f"[audio-out] Erro ao transcrever áudio enviado: {e}")
+
+
 def pre_gateway_dispatch(*args, **kwargs):
     context = kwargs.get("context")
     if not context:
@@ -3223,6 +3254,10 @@ def pre_gateway_dispatch(*args, **kwargs):
 
     clean_owner = "".join(c for c in owner_number.split("@")[0].split(":")[0] if c.isdigit())
     is_owner = (_normalize_brazilian_phone(clean_sender) == _normalize_brazilian_phone(clean_owner))
+
+    # Transcrever áudios ENVIADOS pelo André para enriquecer o style learning
+    if is_owner and media_info["has_media"] and media_info["media_type"] in ["ptt", "audio"]:
+        _transcribe_outgoing_audio(event, media_info)
 
     # Identificar chat
     chat_id = str(event.source.chat_id) if event.source.chat_id else ""
