@@ -397,9 +397,10 @@ class TestLLMContextAndPrompting(BaseWhatsAppManagerTest):
              patch("whatsapp_manager._fetch_chat_history", return_value=""):
             res = pre_llm("pre_llm_call", context)
             self.assertIsNotNone(res)
-            self.assertIn("RESPONDENDO COMO ANDRÉ ALENCAR", res["context"])
-            self.assertIn("Nome do contato: Bruna", res["context"])
-            self.assertIn("Relação com o André: namorada", res["context"])
+            self.assertIn("PERSONA E DIRETRIZES DO SUPORTE WHATSAPP", res["context"])
+            self.assertIn("CONTEXTO DO CONTATO", res["context"])
+            self.assertIn("Nome: Bruna", res["context"])
+            self.assertIn("Relacionamento: namorada", res["context"])
             self.assertIn("Tom de voz recomendado: romantico", res["context"])
             self.assertIn("Diretrizes específicas: Seja fofo", res["context"])
 
@@ -432,14 +433,14 @@ class TestLLMContextAndPrompting(BaseWhatsAppManagerTest):
             res = pre_llm("pre_llm_call", context)
             
         self.assertIsNotNone(res)
-        self.assertIn("RESPONDENDO COMO ANDRÉ ALENCAR", res["context"])
-        self.assertIn("Nome do contato: Marcos (Vendedor)", res["context"])
+        self.assertIn("PERSONA E DIRETRIZES DO SUPORTE WHATSAPP", res["context"])
+        self.assertIn("CONTEXTO DO CONTATO", res["context"])
+        self.assertIn("Nome: Marcos (Vendedor)", res["context"])
         # manual_relationship deve prevalecer
-        self.assertIn("Relação com o André: Vendedor", res["context"])
+        self.assertIn("Relacionamento: Vendedor", res["context"])
         # Notes e Product devem ser injetados
-        self.assertIn("Observação importante sobre o contato: Não tenho interesse no momento", res["context"])
+        self.assertIn("Observação importante: Não tenho interesse no momento", res["context"])
         self.assertIn("Produto/Serviço envolvido: Curso de Inglês", res["context"])
-        self.assertIn("Caso exista uma 'Observação importante sobre o contato' acima, você DEVE seguir essa instrução de comportamento de forma prioritária", res["context"])
 
     def test_sanitize_classification_result_function(self):
         from whatsapp_manager import _sanitize_classification_result
@@ -501,10 +502,10 @@ class TestLLMContextAndPrompting(BaseWhatsAppManagerTest):
             res = pre_llm("pre_llm_call", context)
 
         self.assertIsNotNone(res)
-        self.assertIn("Nome do contato: Filho do André", res["context"])
+        self.assertIn("Nome: Filho do André", res["context"])
         # Ensure 'pai' is not included in the context as nickname or pet_name
-        self.assertNotIn("Apelido do contato: pai", res["context"])
-        self.assertNotIn("Nome carinhoso/Apelido afetivo: pai", res["context"])
+        self.assertNotIn("Apelido: pai", res["context"])
+        self.assertNotIn("Nome carinhoso: pai", res["context"])
 
     def test_build_owner_context_with_history(self):
         """Verifica se _build_owner_context inclui a diretriz e o histórico."""
@@ -775,9 +776,10 @@ class TestContactManagementAndSync(BaseWhatsAppManagerTest):
         # O LLM de classificação foi chamado on-the-fly
         mock_classify.assert_called_once()
         self.assertIsNotNone(res)
-        self.assertIn("RESPONDENDO COMO ANDRÉ ALENCAR", res["context"])
-        self.assertIn("Nome do contato: Live Test Contact", res["context"])
-        self.assertIn("Relação com o André: AmigoProximo", res["context"])
+        self.assertIn("PERSONA E DIRETRIZES DO SUPORTE WHATSAPP", res["context"])
+        self.assertIn("CONTEXTO DO CONTATO", res["context"])
+        self.assertIn("Nome: Live Test Contact", res["context"])
+        self.assertIn("Relacionamento: AmigoProximo", res["context"])
 
     def test_resolve_phone_from_jid_with_lid(self):
         """LID presente no cache deve ser convertido para JID de telefone clássico."""
@@ -2719,6 +2721,324 @@ class TestLiveClassifyContact(BaseWhatsAppManagerTest):
         # Contato deve estar no dict em memória
         self.assertIn("5511444444444@s.whatsapp.net", personal_contacts)
         self.assertEqual(personal_contacts["5511444444444@s.whatsapp.net"]["name"], "Ana")
+
+
+class TestShouldRunStyleLearning(unittest.IsolatedAsyncioTestCase):
+    """Testa a gate function que decide se o aprendizado deve rodar."""
+
+    @patch("whatsapp_manager._SOUL_LEARNING_STATE_PATH")
+    @patch("whatsapp_manager.sqlite3.connect")
+    @patch("pathlib.Path.exists")
+    def test_returns_true_when_no_state_file(self, mock_path_exists, mock_sqlite, mock_state_path):
+        """Sem arquivo de estado → deve retornar True."""
+        mock_state_path.exists.return_value = False
+        # bridge_db existe
+        def path_exists(self_path):
+            return True
+        mock_path_exists.side_effect = lambda: True
+
+        mock_conn = MagicMock()
+        mock_cursor = MagicMock()
+        mock_sqlite.return_value.__enter__ = lambda s: mock_conn
+        mock_sqlite.return_value.__exit__ = MagicMock(return_value=False)
+        mock_conn.cursor.return_value = mock_cursor
+        mock_cursor.fetchone.return_value = (1700000100,)
+
+        with patch("whatsapp_manager.Path") as mock_path_cls:
+            bridge_db_mock = MagicMock()
+            bridge_db_mock.exists.return_value = True
+            state_path_mock = MagicMock()
+            state_path_mock.exists.return_value = False
+
+            def path_factory(p):
+                if "whatsapp_messages.db" in str(p):
+                    return bridge_db_mock
+                return state_path_mock
+
+            mock_path_cls.side_effect = path_factory
+
+            with patch("whatsapp_manager._SOUL_LEARNING_STATE_PATH", state_path_mock), \
+                 patch("whatsapp_manager.sqlite3.connect") as mock_conn2:
+                mock_conn2.return_value.__enter__ = lambda s: mock_conn
+                mock_conn2.return_value.__exit__ = MagicMock(return_value=False)
+                result = whatsapp_manager._should_run_style_learning()
+
+        self.assertTrue(result)
+
+    @patch("whatsapp_manager.sqlite3.connect")
+    def test_returns_false_when_no_db(self, mock_sqlite):
+        """Sem banco de dados → deve retornar False."""
+        with patch("whatsapp_manager.Path") as mock_path_cls:
+            bridge_db_mock = MagicMock()
+            bridge_db_mock.exists.return_value = False
+            mock_path_cls.return_value = bridge_db_mock
+
+            result = whatsapp_manager._should_run_style_learning()
+
+        self.assertFalse(result)
+
+    def test_returns_false_on_exception(self):
+        """Qualquer exceção deve retornar False silenciosamente."""
+        with patch("whatsapp_manager.Path", side_effect=Exception("boom")):
+            result = whatsapp_manager._should_run_style_learning()
+        self.assertFalse(result)
+
+
+class TestCollectAndreMessagesByRelationship(unittest.IsolatedAsyncioTestCase):
+    """Testa coleta de mensagens do André agrupadas por relacionamento."""
+
+    def _make_sqlite_mock(self, chat_ids, messages_by_chat):
+        mock_conn = MagicMock()
+        mock_cursor = MagicMock()
+        mock_conn.cursor.return_value = mock_cursor
+        mock_conn.__enter__ = lambda s: mock_conn
+        mock_conn.__exit__ = MagicMock(return_value=False)
+
+        def fetchall_side_effect():
+            call_count = mock_cursor.fetchall.call_count
+            if call_count == 1:
+                return [(cid,) for cid in chat_ids]
+            # Para as chamadas subsequentes, retorna mensagens do último chat_id executado
+            last_args = mock_cursor.execute.call_args_list[-1]
+            chat_id = last_args[0][1][0] if last_args[0][1] else None
+            return [(m,) for m in messages_by_chat.get(chat_id, [])]
+
+        mock_cursor.fetchall.side_effect = fetchall_side_effect
+        return mock_conn
+
+    def test_groups_messages_by_relationship(self):
+        personal_contacts = {
+            "5511111111111@s.whatsapp.net": {"relationship": "Cliente"},
+            "5511222222222@s.whatsapp.net": {"relationship": "Amigo"},
+        }
+        messages_by_chat = {
+            "5511111111111@s.whatsapp.net": ["oi tudo bem", "pode me enviar o boleto?", "obrigado", "vou verificar", "em breve retorno"],
+            "5511222222222@s.whatsapp.net": ["eae mano", "blz", "vamo sim", "pode mandar", "kkk verdade"],
+        }
+        chat_ids = list(messages_by_chat.keys())
+        mock_conn = self._make_sqlite_mock(chat_ids, messages_by_chat)
+
+        bridge_db = MagicMock()
+        bridge_db.exists.return_value = True
+
+        with patch("whatsapp_manager.Path", return_value=bridge_db), \
+             patch("whatsapp_manager.sqlite3.connect", return_value=mock_conn):
+            result = whatsapp_manager._collect_andre_messages_by_relationship(personal_contacts)
+
+        self.assertIn("Cliente", result)
+        self.assertIn("Amigo", result)
+
+    def test_filters_media_messages(self):
+        personal_contacts = {
+            "5511333333333@s.whatsapp.net": {"relationship": "Parente"},
+        }
+        messages_by_chat = {
+            "5511333333333@s.whatsapp.net": [
+                "<Media omitted>", "oi pai", "tudo bem?",
+                "image omitted", "vou ai amanhã", "beijo",
+            ],
+        }
+        mock_conn = self._make_sqlite_mock(list(messages_by_chat.keys()), messages_by_chat)
+        bridge_db = MagicMock()
+        bridge_db.exists.return_value = True
+
+        with patch("whatsapp_manager.Path", return_value=bridge_db), \
+             patch("whatsapp_manager.sqlite3.connect", return_value=mock_conn):
+            result = whatsapp_manager._collect_andre_messages_by_relationship(personal_contacts)
+
+        if "Parente" in result:
+            for msg in result["Parente"]:
+                self.assertNotIn("omitted", msg.lower())
+
+    def test_returns_empty_when_db_missing(self):
+        bridge_db = MagicMock()
+        bridge_db.exists.return_value = False
+
+        with patch("whatsapp_manager.Path", return_value=bridge_db):
+            result = whatsapp_manager._collect_andre_messages_by_relationship({"any": {}})
+
+        self.assertEqual(result, {})
+
+    def test_returns_empty_on_exception(self):
+        with patch("whatsapp_manager.Path", side_effect=Exception("db error")):
+            result = whatsapp_manager._collect_andre_messages_by_relationship({})
+        self.assertEqual(result, {})
+
+
+class TestExtractStylePatternsViaLlm(unittest.IsolatedAsyncioTestCase):
+    """Testa a chamada ao LLM para extrair padrões de escrita."""
+
+    def test_returns_markdown_on_success(self):
+        messages = {
+            "Cliente": ["oi tudo bem", "pode me mandar o boleto", "obrigado pelo suporte", "vou verificar", "ok entendi"],
+            "Amigo": ["eae mano", "blz sim", "vamo sim", "kkk verdade", "te ligo depois"],
+        }
+        expected_md = "## EXEMPLOS REAIS DE ESCRITA\n> Gerado automaticamente.\n\n### Cliente\n**Padrões:** formal\n"
+
+        with patch("whatsapp_manager._call_llm_api", return_value=expected_md), \
+             patch("whatsapp_manager.config") as mock_config:
+            mock_config.google_api_key = "fake-key"
+            mock_config.openai_api_key = None
+            mock_config.openrouter_api_key = None
+            mock_config.whatsapp_contact_classifier_model = "gemini-2.0-flash-lite"
+
+            result = whatsapp_manager._extract_style_patterns_via_llm(messages)
+
+        self.assertIsNotNone(result)
+        self.assertIn("EXEMPLOS REAIS DE ESCRITA", result)
+
+    def test_falls_back_to_openai_when_gemini_fails(self):
+        messages = {
+            "Amigo": ["eae", "blz", "vamo", "sim", "boa"],
+        }
+        openai_md = "## EXEMPLOS REAIS DE ESCRITA\n### Amigo\n**Padrões:** informal\n"
+
+        call_count = {"n": 0}
+        def fake_call_llm(url, headers, payload, extract_fn, timeout=30):
+            call_count["n"] += 1
+            if "gemini" in url:
+                return None  # Gemini falha
+            return openai_md
+
+        with patch("whatsapp_manager._call_llm_api", side_effect=fake_call_llm), \
+             patch("whatsapp_manager.config") as mock_config:
+            mock_config.google_api_key = "fake-gemini"
+            mock_config.openai_api_key = "fake-openai"
+            mock_config.openrouter_api_key = None
+            mock_config.whatsapp_contact_classifier_model = None
+
+            result = whatsapp_manager._extract_style_patterns_via_llm(messages)
+
+        self.assertIsNotNone(result)
+        self.assertIn("Amigo", result)
+        self.assertEqual(call_count["n"], 2)
+
+    def test_returns_none_when_all_providers_fail(self):
+        messages = {"Cliente": ["oi", "tudo bem", "ok", "sim", "entendi"]}
+
+        with patch("whatsapp_manager._call_llm_api", return_value=None), \
+             patch("whatsapp_manager.config") as mock_config:
+            mock_config.google_api_key = "key"
+            mock_config.openai_api_key = "key"
+            mock_config.openrouter_api_key = "key"
+            mock_config.whatsapp_contact_classifier_model = None
+
+            result = whatsapp_manager._extract_style_patterns_via_llm(messages)
+
+        self.assertIsNone(result)
+
+
+class TestUpdateSoulWhatsappWithExamples(unittest.IsolatedAsyncioTestCase):
+    """Testa a injeção da seção de exemplos no SOUL_WHATSAPP.md."""
+
+    ORIGINAL_SOUL = (
+        "# Persona André Alencar\n\n"
+        "Você é o assistente de WhatsApp do André.\n"
+        "Seja prestativo e profissional.\n"
+    )
+
+    NEW_SECTION = (
+        "### Cliente\n"
+        "**Padrões:** formal, sem abreviações\n"
+        "**Exemplos reais:**\n"
+        '- "Olá, posso ajudar?"\n'
+    )
+
+    def _run_update(self, original_content, style_section, github_ok=True):
+        mock_path = MagicMock()
+        mock_path.exists.return_value = True
+        mock_path.read_text.return_value = original_content
+        written = {}
+
+        def fake_write_text(content, encoding=None):
+            written["content"] = content
+
+        mock_path.write_text.side_effect = fake_write_text
+
+        state_path = MagicMock()
+        state_path.exists.return_value = False
+
+        with patch("whatsapp_manager._SOUL_WHATSAPP_PATH", mock_path), \
+             patch("whatsapp_manager._SOUL_LEARNING_STATE_PATH", state_path), \
+             patch("whatsapp_manager._github_put_file", return_value=github_ok), \
+             patch("whatsapp_manager.sqlite3.connect") as mock_db, \
+             patch("whatsapp_manager.config") as mock_config:
+            mock_config.config_repo = None  # skip GitHub
+            mock_config.config_github_token = None
+            conn = MagicMock()
+            conn.__enter__ = lambda s: conn
+            conn.__exit__ = MagicMock(return_value=False)
+            cur = MagicMock()
+            cur.fetchone.return_value = (1700000000,)
+            conn.cursor.return_value = cur
+            mock_db.return_value = conn
+
+            result = whatsapp_manager._update_soul_whatsapp_with_examples(style_section)
+
+        return result, written.get("content", "")
+
+    def test_appends_section_when_sentinel_absent(self):
+        ok, written = self._run_update(self.ORIGINAL_SOUL, self.NEW_SECTION)
+        self.assertTrue(ok)
+        self.assertIn("## EXEMPLOS REAIS DE ESCRITA", written)
+        self.assertIn("Persona André Alencar", written)  # persona original preservada
+        self.assertIn("Cliente", written)
+
+    def test_replaces_existing_section(self):
+        old_section = "## EXEMPLOS REAIS DE ESCRITA\n### AntiguoGrupo\nExemplo antigo.\n"
+        content_with_existing = self.ORIGINAL_SOUL + "\n\n" + old_section
+        ok, written = self._run_update(content_with_existing, self.NEW_SECTION)
+        self.assertTrue(ok)
+        self.assertNotIn("AntiguoGrupo", written)
+        self.assertNotIn("Exemplo antigo", written)
+        self.assertIn("Cliente", written)
+        self.assertIn("Persona André Alencar", written)  # persona original preservada
+
+    def test_does_not_duplicate_sentinel(self):
+        section_with_sentinel = "## EXEMPLOS REAIS DE ESCRITA\n" + self.NEW_SECTION
+        ok, written = self._run_update(self.ORIGINAL_SOUL, section_with_sentinel)
+        self.assertTrue(ok)
+        self.assertEqual(written.count("## EXEMPLOS REAIS DE ESCRITA"), 1)
+
+    def test_returns_false_when_file_missing(self):
+        mock_path = MagicMock()
+        mock_path.exists.return_value = False
+
+        with patch("whatsapp_manager._SOUL_WHATSAPP_PATH", mock_path):
+            result = whatsapp_manager._update_soul_whatsapp_with_examples("qualquer coisa")
+
+        self.assertFalse(result)
+
+    def test_pushes_to_github_when_configured(self):
+        mock_path = MagicMock()
+        mock_path.exists.return_value = True
+        mock_path.read_text.return_value = self.ORIGINAL_SOUL
+        mock_path.write_text = MagicMock()
+
+        state_path = MagicMock()
+        state_path.exists.return_value = False
+
+        with patch("whatsapp_manager._SOUL_WHATSAPP_PATH", mock_path), \
+             patch("whatsapp_manager._SOUL_LEARNING_STATE_PATH", state_path), \
+             patch("whatsapp_manager._github_put_file", return_value=True) as mock_github, \
+             patch("whatsapp_manager.sqlite3.connect") as mock_db, \
+             patch("whatsapp_manager.config") as mock_config:
+            mock_config.config_repo = "myuser/myrepo"
+            mock_config.config_github_token = "ghp_token"
+            mock_config.hermes_setup_github_user = "myuser"
+            conn = MagicMock()
+            conn.__enter__ = lambda s: conn
+            conn.__exit__ = MagicMock(return_value=False)
+            cur = MagicMock()
+            cur.fetchone.return_value = (1700000000,)
+            conn.cursor.return_value = cur
+            mock_db.return_value = conn
+
+            whatsapp_manager._update_soul_whatsapp_with_examples(self.NEW_SECTION)
+
+        mock_github.assert_called_once()
+        call_kwargs = mock_github.call_args
+        self.assertEqual(call_kwargs.kwargs.get("github_path") or call_kwargs[1].get("github_path") or call_kwargs[0][3], "SOUL_WHATSAPP.md")
 
 
 if __name__ == "__main__":

@@ -1477,6 +1477,35 @@ def _sync_contacts_from_db_internal(force: bool = True) -> str:
         updated = True
         logger.info(f"[sync] full_summary atualizado para {full_summary_updated} contato(s)")
 
+    # Aprendizado de estilo de escrita
+    _style_log = ""
+    try:
+        if _should_run_style_learning():
+            logger.info("[style-learning] Novas mensagens detectadas, iniciando análise de estilo...")
+            _messages_by_rel = _collect_andre_messages_by_relationship(personal_contacts)
+            if _messages_by_rel:
+                groups_info = ", ".join(f"{r}({len(m)})" for r, m in _messages_by_rel.items())
+                logger.info(f"[style-learning] Grupos coletados: {groups_info}")
+                _style_section = _extract_style_patterns_via_llm(_messages_by_rel)
+                if _style_section:
+                    if _update_soul_whatsapp_with_examples(_style_section):
+                        logger.info("[style-learning] SOUL_WHATSAPP.md atualizado com exemplos reais de escrita.")
+                        _style_log = "- 🧠 SOUL_WHATSAPP.md atualizado com padrões de escrita reais."
+                    else:
+                        logger.warning("[style-learning] Falha ao salvar SOUL_WHATSAPP.md.")
+                        _style_log = "- ⚠️ Style learning: falha ao salvar SOUL_WHATSAPP.md."
+                else:
+                    logger.warning("[style-learning] LLM não retornou padrões de escrita.")
+                    _style_log = "- ⚠️ Style learning: LLM não retornou conteúdo."
+            else:
+                logger.warning("[style-learning] Nenhum grupo com mensagens suficientes encontrado.")
+                _style_log = "- ⚠️ Style learning: sem mensagens classificadas suficientes."
+        else:
+            logger.info("[style-learning] Sem mensagens novas desde o último aprendizado, pulando.")
+    except Exception as _sl_err:
+        logger.warning(f"[style-learning] Erro inesperado, ignorando: {_sl_err}")
+        _style_log = f"- ⚠️ Style learning: erro inesperado ({_sl_err})."
+
     # Preservar campos manuais do owner nos resultados classificados
     for target_key, contact_data in personal_contacts.items():
         for preserved_field in ("nickname", "pet_name", "notes", "manual_relationship", "full_summary", "last_summarized_at"):
@@ -1501,11 +1530,15 @@ def _sync_contacts_from_db_internal(force: bool = True) -> str:
                 result_messages.append(f"- {skipped_due_to_limit} contatos adicionados pendentes de classificação (limite de IA atingido).")
             if hit_limit:
                 result_messages.append(f"⚠️ Limite de {max_classifications} chamadas de IA atingido nesta execução. Os contatos restantes foram inseridos como pendentes e serão classificados dinamicamente.")
+            if _style_log:
+                result_messages.append(_style_log)
             result_str = "\n".join(result_messages)
         except Exception as e:
             return f"Erro ao salvar personal_contacts.json localmente: {e}"
     else:
         result_str = "Nenhum contato novo ou pendente encontrado para adicionar."
+        if _style_log:
+            result_str += f"\n{_style_log}"
 
     # 4. Sincronizar com GitHub
     config_repo = config.config_repo
@@ -1542,6 +1575,344 @@ def _sync_contacts_from_db_internal(force: bool = True) -> str:
 
     return result_str
 
+
+# ── Style Learning ─────────────────────────────────────────────────────────────
+
+_SOUL_LEARNING_STATE_PATH = Path("/opt/data/.hermes/soul_learning_state.json")
+_SOUL_WHATSAPP_PATH = Path("/opt/data/SOUL_WHATSAPP.md")
+_STYLE_SENTINEL = "## EXEMPLOS REAIS DE ESCRITA"
+_MEDIA_FILTER_PREFIXES = ("<Media omitted>", "image omitted", "video omitted", "audio omitted", "sticker omitted")
+
+
+def _should_run_style_learning() -> bool:
+    """Retorna True se há mensagens novas do André desde o último aprendizado."""
+    try:
+        bridge_db = Path("/opt/data/.hermes/whatsapp_messages.db")
+        state_db = Path("/opt/data/.hermes/state.db")
+
+        if not bridge_db.exists() and not state_db.exists():
+            logger.warning("[style-learning] Nenhum banco SQLite encontrado (bridge_db nem state.db), pulando.")
+            return False
+
+        last_run_ts = 0
+        if _SOUL_LEARNING_STATE_PATH.exists():
+            try:
+                state = json.loads(_SOUL_LEARNING_STATE_PATH.read_text(encoding="utf-8"))
+                last_run_ts = state.get("last_run_ts", 0)
+            except Exception:
+                last_run_ts = 0
+
+        # Preferir bridge_db; fallback para state.db
+        db_to_check = bridge_db if bridge_db.exists() else state_db
+        from_me_query = (
+            "SELECT MAX(timestamp) FROM messages WHERE from_me=1"
+            if bridge_db.exists()
+            else "SELECT MAX(timestamp) FROM messages WHERE role='user'"
+        )
+
+        with sqlite3.connect(str(db_to_check)) as conn:
+            cur = conn.cursor()
+            cur.execute(from_me_query)
+            row = cur.fetchone()
+            max_ts = row[0] if row and row[0] else 0
+
+        if not bridge_db.exists():
+            logger.info("[style-learning] whatsapp_messages.db ausente, usando state.db para checar timestamp.")
+
+        should_run = max_ts > last_run_ts
+        logger.info(f"[style-learning] max_ts={max_ts}, last_run_ts={last_run_ts}, vai rodar={should_run}")
+        return should_run
+    except Exception as e:
+        logger.warning(f"[style-learning] Erro em _should_run_style_learning: {e}")
+        return False
+
+
+def _collect_andre_messages_by_relationship(
+    personal_contacts: dict,
+    limit_per_contact: int = 20,
+) -> dict[str, list[str]]:
+    """Coleta mensagens do André (from_me=1) agrupadas por relacionamento.
+
+    Retorna dict vazio se nenhum banco disponível ou nenhum contato classificado.
+    """
+    try:
+        bridge_db = Path("/opt/data/.hermes/whatsapp_messages.db")
+        state_db = Path("/opt/data/.hermes/state.db")
+
+        use_bridge = bridge_db.exists()
+        use_state = not use_bridge and state_db.exists()
+
+        if not use_bridge and not use_state:
+            logger.warning("[style-learning] Nenhum banco disponível para coletar mensagens.")
+            return {}
+
+        # Reverse lookup: phone_norm → relationship
+        phone_to_rel: dict[str, str] = {}
+        for key, data in personal_contacts.items():
+            rel = data.get("manual_relationship") or data.get("relationship") or "Cliente"
+            phone = key.split("@")[0]
+            phone_norm = _normalize_brazilian_phone("".join(c for c in phone if c.isdigit()))
+            phone_to_rel[phone_norm] = rel
+
+        result: dict[str, list[str]] = {}
+
+        if use_bridge:
+            with sqlite3.connect(str(bridge_db)) as conn:
+                cur = conn.cursor()
+                cur.execute(
+                    "SELECT DISTINCT chat_id FROM messages WHERE from_me=1 AND chat_id NOT LIKE '%@g.us%'"
+                )
+                chat_ids = [row[0] for row in cur.fetchall()]
+
+                for chat_id in chat_ids:
+                    phone = chat_id.split("@")[0].split(":")[0]
+                    phone_norm = _normalize_brazilian_phone("".join(c for c in phone if c.isdigit()))
+                    rel = phone_to_rel.get(phone_norm)
+                    if not rel:
+                        continue
+
+                    cur.execute(
+                        """
+                        SELECT body FROM messages
+                        WHERE from_me=1 AND chat_id=? AND body IS NOT NULL AND length(trim(body)) > 3
+                        ORDER BY timestamp DESC LIMIT ?
+                        """,
+                        (chat_id, limit_per_contact),
+                    )
+                    msgs = [
+                        row[0] for row in cur.fetchall()
+                        if not any(row[0].lower().startswith(p.lower()) for p in _MEDIA_FILTER_PREFIXES)
+                    ]
+                    if msgs:
+                        result.setdefault(rel, []).extend(msgs)
+
+        elif use_state:
+            # Fallback: state.db — role='assistant' = André, role='user' = contato
+            logger.info("[style-learning] Usando state.db como fallback para coletar mensagens do André.")
+            with sqlite3.connect(str(state_db)) as conn:
+                cur = conn.cursor()
+                # Buscar sessões WhatsApp com user_id mapeável
+                cur.execute(
+                    """
+                    SELECT DISTINCT s.user_id FROM sessions s
+                    JOIN messages m ON m.session_id = s.id
+                    WHERE s.source = 'whatsapp' AND m.role = 'assistant'
+                    AND s.user_id NOT LIKE '%@g.us%'
+                    """
+                )
+                user_ids = [row[0] for row in cur.fetchall()]
+
+                for user_id in user_ids:
+                    phone = user_id.split("@")[0].split(":")[0]
+                    phone_norm = _normalize_brazilian_phone("".join(c for c in phone if c.isdigit()))
+                    rel = phone_to_rel.get(phone_norm)
+                    if not rel:
+                        continue
+
+                    cur.execute(
+                        """
+                        SELECT m.content FROM messages m
+                        JOIN sessions s ON m.session_id = s.id
+                        WHERE s.user_id = ? AND m.role = 'assistant'
+                        AND m.content IS NOT NULL AND length(trim(m.content)) > 3
+                        ORDER BY m.timestamp DESC LIMIT ?
+                        """,
+                        (user_id, limit_per_contact),
+                    )
+                    msgs = [
+                        row[0] for row in cur.fetchall()
+                        if not any(row[0].lower().startswith(p.lower()) for p in _MEDIA_FILTER_PREFIXES)
+                    ]
+                    if msgs:
+                        result.setdefault(rel, []).extend(msgs)
+
+        # Cap de 50 por grupo (sample aleatório)
+        import random
+        for rel in result:
+            if len(result[rel]) > 50:
+                result[rel] = random.sample(result[rel], 50)
+
+        # Remover grupos com menos de 5 mensagens (sinal insuficiente)
+        return {rel: msgs for rel, msgs in result.items() if len(msgs) >= 5}
+
+    except Exception as e:
+        logger.warning(f"[style-learning] Erro em _collect_andre_messages_by_relationship: {e}")
+        return {}
+
+
+def _extract_style_patterns_via_llm(messages_by_relationship: dict) -> str | None:
+    """Chama o LLM para extrair padrões de escrita e exemplos reais por relacionamento.
+
+    Retorna seção markdown pronta para inserção no SOUL_WHATSAPP.md, ou None em falha.
+    """
+    from datetime import datetime
+
+    hoje = datetime.now().strftime("%d/%m/%Y")
+
+    sections = []
+    for rel, msgs in messages_by_relationship.items():
+        sample = "\n".join(f'- "{m}"' for m in msgs[:30])
+        sections.append(f"### {rel} ({len(msgs)} mensagens)\n{sample}")
+
+    mensagens_block = "\n\n".join(sections)
+
+    prompt = (
+        "Você é um analista de estilo de escrita do WhatsApp.\n\n"
+        "Abaixo estão mensagens REAIS enviadas por André Alencar, separadas por tipo de relacionamento.\n"
+        "Analise e extraia para CADA grupo:\n"
+        "1. Padrões de escrita (abreviações, gírias, emojis, pontuação, nível de formalidade, comprimento típico)\n"
+        "2. De 3 a 5 exemplos reais representativos do jeito dele escrever\n\n"
+        "REGRAS IMPORTANTES:\n"
+        "- Use APENAS as mensagens fornecidas. Não invente exemplos.\n"
+        "- Os exemplos devem ser mensagens reais, não resumos.\n"
+        "- Ignore grupos com poucas mensagens ou mensagens muito curtas demais para análise.\n"
+        "- Escreva em português brasileiro.\n\n"
+        "Formato de saída EXATO (markdown, sem explicações extras antes ou depois):\n\n"
+        f"{_STYLE_SENTINEL}\n"
+        f"> Gerado automaticamente em {hoje}. Não edite esta seção manualmente.\n\n"
+        "### [Nome do relacionamento]\n"
+        "**Padrões identificados:**\n"
+        "- ...\n\n"
+        "**Exemplos reais:**\n"
+        '- "..."\n'
+        '- "..."\n\n'
+        "[repita para cada grupo]\n\n"
+        "---\n\n"
+        "MENSAGENS POR RELACIONAMENTO:\n\n"
+        f"{mensagens_block}"
+    )
+
+    google_key = config.google_api_key
+    openai_key = config.openai_api_key
+    openrouter_key = config.openrouter_api_key
+    classify_model = config.whatsapp_contact_classifier_model
+
+    extract_fn = lambda r: r["candidates"][0]["content"]["parts"][0]["text"]
+    extract_fn_chat = lambda r: r["choices"][0]["message"]["content"]
+
+    # 1. Gemini (texto livre, sem forçar JSON)
+    if google_key:
+        model_to_use = classify_model if (classify_model and "gemini" in classify_model.lower()) else "gemini-2.0-flash-lite"
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_to_use}:generateContent?key={google_key}"
+        result = _call_llm_api(
+            url,
+            headers={"Content-Type": "application/json"},
+            payload={
+                "contents": [{"parts": [{"text": prompt}]}],
+                "generationConfig": {"maxOutputTokens": 2048},
+            },
+            extract_fn=extract_fn,
+            timeout=25,
+        )
+        if result:
+            return result.strip()
+
+    # 2. OpenAI
+    if openai_key:
+        model_to_use = classify_model if (classify_model and any(p in classify_model.lower() for p in ["gpt", "o1-", "o3-"])) else "gpt-4o-mini"
+        result = _call_llm_api(
+            "https://api.openai.com/v1/chat/completions",
+            headers={"Content-Type": "application/json", "Authorization": f"Bearer {openai_key}"},
+            payload={"model": model_to_use, "messages": [{"role": "user", "content": prompt}], "max_tokens": 2048},
+            extract_fn=extract_fn_chat,
+            timeout=25,
+        )
+        if result:
+            return result.strip()
+
+    # 3. OpenRouter
+    if openrouter_key:
+        model_to_use = classify_model if (classify_model and "/" in classify_model) else "google/gemini-2.0-flash-lite"
+        result = _call_llm_api(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers={"Content-Type": "application/json", "Authorization": f"Bearer {openrouter_key}"},
+            payload={"model": model_to_use, "messages": [{"role": "user", "content": prompt}], "max_tokens": 2048},
+            extract_fn=extract_fn_chat,
+            timeout=25,
+        )
+        if result:
+            return result.strip()
+
+    return None
+
+
+def _update_soul_whatsapp_with_examples(style_section: str) -> bool:
+    """Injeta a seção de exemplos no SOUL_WHATSAPP.md e faz push para o GitHub.
+
+    Preserva o conteúdo original da persona — só substitui/adiciona a seção sentinel.
+    Retorna True se o arquivo local foi salvo com sucesso.
+    """
+    try:
+        if not _SOUL_WHATSAPP_PATH.exists():
+            logger.warning("[style-learning] SOUL_WHATSAPP.md não encontrado, abortando update.")
+            return False
+
+        original = _SOUL_WHATSAPP_PATH.read_text(encoding="utf-8")
+
+        # Garantir que a seção não começa com o sentinel duplicado
+        section_body = style_section
+        if section_body.startswith(_STYLE_SENTINEL):
+            section_body = section_body[len(_STYLE_SENTINEL):].lstrip("\n")
+
+        # Splice: substituir se existir, senão adicionar ao final
+        sentinel_pos = original.find(_STYLE_SENTINEL)
+        if sentinel_pos != -1:
+            base = original[:sentinel_pos].rstrip()
+        else:
+            base = original.rstrip()
+
+        updated = f"{base}\n\n{_STYLE_SENTINEL}\n{section_body}"
+        _SOUL_WHATSAPP_PATH.write_text(updated, encoding="utf-8")
+
+        # Atualizar arquivo de estado
+        try:
+            bridge_db = Path("/opt/data/.hermes/whatsapp_messages.db")
+            max_ts = 0
+            if bridge_db.exists():
+                with sqlite3.connect(str(bridge_db)) as conn:
+                    cur = conn.cursor()
+                    cur.execute("SELECT MAX(timestamp) FROM messages WHERE from_me=1")
+                    row = cur.fetchone()
+                    max_ts = row[0] if row and row[0] else 0
+            _SOUL_LEARNING_STATE_PATH.write_text(
+                json.dumps({"last_run_ts": int(time.time()), "last_message_ts": max_ts}, indent=2),
+                encoding="utf-8",
+            )
+        except Exception as e:
+            logger.warning(f"[style-learning] Falha ao salvar estado: {e}")
+
+        # Push para GitHub
+        config_repo = config.config_repo
+        config_token = config.config_github_token
+        if config_repo and config_token:
+            if "/" in config_repo:
+                repo_parts = config_repo.split("/")
+                repo_user, repo_name = repo_parts[0], repo_parts[1]
+            else:
+                repo_user = config.hermes_setup_github_user or "empreendedorserial"
+                repo_name = config_repo
+
+            from datetime import datetime
+            commit_date = datetime.now().strftime("%Y-%m-%d")
+            try:
+                ok = _github_put_file(
+                    repo_user=repo_user,
+                    repo_name=repo_name,
+                    token=config_token,
+                    github_path="SOUL_WHATSAPP.md",
+                    content=updated.encode("utf-8"),
+                    commit_msg=f"[auto] Update SOUL_WHATSAPP.md style examples - {commit_date}",
+                )
+                if not ok:
+                    logger.warning("[style-learning] Falha ao fazer push de SOUL_WHATSAPP.md para o GitHub.")
+            except Exception as e:
+                logger.warning(f"[style-learning] Erro no push do GitHub: {e}")
+
+        return True
+
+    except Exception as e:
+        logger.warning(f"[style-learning] Erro em _update_soul_whatsapp_with_examples: {e}")
+        return False
 
 
 def _github_put_file(
@@ -2421,11 +2792,66 @@ def _build_personal_prompt(contact_info: dict, relationship: str, history_sectio
     }
 
 
-def _build_support_prompt(whatsapp_soul: str, rules_content: str, history_section: str) -> dict:
-    """Constrói o payload de contexto para o modo suporte a clientes.
+def _build_support_prompt(
+    whatsapp_soul: str,
+    rules_content: str,
+    history_section: str,
+    contact_info: dict | None = None,
+) -> dict:
+    """Constrói o payload de contexto para todos os contatos externos.
+
+    Usa SOUL_WHATSAPP.md como base para clientes, amigos e parentes.
+    Quando contact_info é fornecido, injeta uma seção de contexto do contato
+    para que o LLM adapte o tom conforme o relacionamento.
 
     Retorna {"context": "..."}.
     """
+    contact_block = ""
+    if contact_info:
+        name = contact_info.get("name", "")
+        relationship = contact_info.get("manual_relationship") or contact_info.get("relationship") or "Cliente"
+        tone = contact_info.get("tone", "")
+        nickname = contact_info.get("nickname", "")
+        pet_name = contact_info.get("pet_name", "")
+        frequent_greeting = contact_info.get("frequent_greeting", "")
+        summary = contact_info.get("summary", "")
+        intent = contact_info.get("intent", "")
+        frequency = contact_info.get("frequency", "")
+        notes = contact_info.get("notes", "")
+        guidelines = contact_info.get("guidelines", "")
+        product = contact_info.get("product", "")
+
+        lines = ["### CONTEXTO DO CONTATO ###"]
+        if name:
+            lines.append(f"Nome: {name}")
+        lines.append(f"Relacionamento: {relationship}")
+        if tone:
+            lines.append(f"Tom de voz recomendado: {tone}")
+        if nickname:
+            lines.append(f"Apelido: {nickname}")
+        if pet_name:
+            lines.append(f"Nome carinhoso: {pet_name}")
+        if frequent_greeting:
+            lines.append(f"Saudação frequente: {frequent_greeting}")
+        if summary:
+            lines.append(f"Resumo das conversas anteriores: {summary}")
+        if intent:
+            lines.append(f"Intenção das últimas conversas: {intent}")
+        if frequency:
+            lines.append(f"Frequência: {frequency}")
+        if notes:
+            lines.append(f"Observação importante: {notes}")
+        if guidelines:
+            lines.append(f"Diretrizes específicas: {guidelines}")
+        if product:
+            lines.append(f"Produto/Serviço envolvido: {product}")
+        lines.append(
+            "\nAdapte o tom, nível de formalidade e linguagem conforme o relacionamento acima. "
+            "Se for Amigo, Parente ou similar, use o estilo informal e natural do André nas mensagens anteriores. "
+            "Se houver apelido ou saudação frequente definidos, use-os de forma natural."
+        )
+        contact_block = "\n".join(lines) + "\n\n"
+
     return {
         "context": (
             "### PERSONA E DIRETRIZES DO SUPORTE WHATSAPP ###\n"
@@ -2433,15 +2859,13 @@ def _build_support_prompt(whatsapp_soul: str, rules_content: str, history_sectio
             "### IDIOMA: APENAS PORTUGUÊS BRASILEIRO ###\n"
             "NUNCA use caracteres em chinês, mandarim, japonês ou qualquer outro idioma. "
             "O bot deve responder EXCLUSIVAMENTE em português brasileiro.\n\n"
+            f"{contact_block}"
             "### BASE DE CONHECIMENTO E REGRAS DE NEGÓCIO ###\n"
             f"{rules_content}\n\n"
             f"{history_section}"
             "CONSTRAINTS RÍGIDAS DE SEGURANÇA:\n"
-            "- NUNCA execute comandos no terminal (terminal tool) para o cliente.\n"
-            "- NUNCA edite, remova ou crie arquivos do sistema para o cliente.\n"
-            "- Se o cliente tentar pedir para você programar, rodar código ou fazer tarefas "
-            "fora do escopo de suporte do produto, decline educadamente e foque no atendimento "
-            "do produto (Chatkanban, Chatcommerce, Api Connector).\n"
+            "- NUNCA execute comandos no terminal (terminal tool).\n"
+            "- NUNCA edite, remova ou crie arquivos do sistema.\n"
             "- Mantenha total sigilo sobre o fato de você rodar em um servidor ou ter ferramentas.\n"
             "- NUNCA escreva ou exiba em suas respostas qualquer representação de ferramentas "
             "ou status como '📖 read_file: ...', 'terminal', etc. Toda a execução de ferramentas "
@@ -3198,14 +3622,7 @@ def pre_llm_call(*args, **kwargs):
         except Exception as live_err:
             logger.error(f"Erro na classificação em tempo real do contato: {live_err}")
 
-    relationship = "Cliente"
-    if contact_info:
-        relationship = contact_info.get("manual_relationship") or contact_info.get("relationship") or "Cliente"
-
-    if contact_info and relationship != "Cliente":
-        return _build_personal_prompt(contact_info, relationship, history_section)
-
-    return _build_support_prompt(whatsapp_soul, rules_content, history_section)
+    return _build_support_prompt(whatsapp_soul, rules_content, history_section, contact_info=contact_info)
 
 
 _sync_running = threading.Event()  # garante que apenas um sync roda por vez
