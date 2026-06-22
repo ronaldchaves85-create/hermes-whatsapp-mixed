@@ -1661,15 +1661,25 @@ def _collect_andre_messages_by_relationship(
             # sender_name='Bot' = mensagens automáticas do bot.
             # sender_name='André Alencar' ou LID = mensagens digitadas manualmente pelo André.
             # Coleta de TODOS os chats (não só os classificados) para maximizar o volume.
+            owner_phone = _normalize_brazilian_phone(
+                "".join(c for c in (config.whatsapp_owner_number or "").split("@")[0] if c.isdigit())
+            )
+
             with sqlite3.connect(str(bridge_db)) as conn:
                 cur = conn.cursor()
                 cur.execute(
                     """
                     SELECT DISTINCT chat_id FROM messages
-                    WHERE from_me=1 AND sender_name != 'Bot' AND chat_id NOT LIKE '%@g.us%'
+                    WHERE from_me=1 AND sender_name != 'Bot'
+                    AND chat_id NOT LIKE '%@g.us%'
+                    AND chat_id NOT LIKE '%@lid%'
                     """
                 )
-                chat_ids = [row[0] for row in cur.fetchall()]
+                # Excluir self-chat (mensagens para si mesmo / comandos ao bot)
+                chat_ids = [
+                    row[0] for row in cur.fetchall()
+                    if _normalize_brazilian_phone("".join(c for c in row[0].split("@")[0].split(":")[0] if c.isdigit())) != owner_phone
+                ]
 
                 cutoff_ts = int(time.time()) - 90 * 24 * 3600  # últimos 90 dias
                 total_manual = 0
