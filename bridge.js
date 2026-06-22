@@ -1399,7 +1399,7 @@ messagingRouter.post('/send', async (req, res) => {
     }
 
     // Strip EXEC: lines before sending — they are system commands, never user-visible
-    const cleanedMessage = message.replace(/^EXEC:\s*\S+.*$/gim, '').replace(/\n{3,}/g, '\n\n').trim();
+    const cleanedMessage = stripExecLines(message);
     if (cleanedMessage !== message) {
       console.log(`[bridge] EXEC: lines stripped from outgoing message to ${chatId}`);
     }
@@ -1714,7 +1714,8 @@ export {
   resolveContactName,
   loadEnv,
   runSelfDiagnostics,
-  clearRecentlyProcessedIds
+  clearRecentlyProcessedIds,
+  stripExecLines,
 };
 
 function getBotPaused() { return botPaused; }
@@ -1726,3 +1727,6 @@ function getMessageQueue() { return messageQueue; }
 function setSock(s) { sock = s; }
 function getRecentLogs() { return recentLogs; }
 function clearRecentlyProcessedIds() { recentlyProcessedIds.clear(); }
+function stripExecLines(text) {
+  return (text || '').replace(/^EXEC:\s*\S+.*$/gim, '').replace(/\n{3,}/g, '\n\n').trim();
+}

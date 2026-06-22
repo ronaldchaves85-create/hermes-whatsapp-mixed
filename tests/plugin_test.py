@@ -3,6 +3,7 @@
 import os
 import json
 import sqlite3
+import urllib.error
 import unittest
 import sys
 from unittest.mock import patch, MagicMock
@@ -1826,6 +1827,448 @@ class TestExtractContactNameViaLLM(BaseWhatsAppManagerTest):
         from whatsapp_manager import _extract_contact_name_via_llm
         result = _extract_contact_name_via_llm("atualize o Carlos")
         self.assertIsNone(result)
+
+
+class TestNormalizeAndTextUtils(BaseWhatsAppManagerTest):
+    """Testes para _normalize_brazilian_phone e _normalize_text."""
+
+    def test_normalize_brazilian_phone_removes_9_digit(self):
+        """Número com 9 extra deve ser normalizado para 8 dígitos locais."""
+        from whatsapp_manager import _normalize_brazilian_phone
+        # 55 + DDD 11 + 9 (extra) + 8 dígitos = 13 dígitos → remove o 9
+        self.assertEqual(_normalize_brazilian_phone("5511987654321"), "551187654321")
+
+    def test_normalize_brazilian_phone_without_extra_9(self):
+        """Número sem 9 extra não deve ser alterado."""
+        from whatsapp_manager import _normalize_brazilian_phone
+        self.assertEqual(_normalize_brazilian_phone("551187654321"), "551187654321")
+
+    def test_normalize_brazilian_phone_strips_non_digits(self):
+        """Deve ignorar espaços, parênteses, hifens."""
+        from whatsapp_manager import _normalize_brazilian_phone
+        self.assertEqual(_normalize_brazilian_phone("+55 (11) 98765-4321"), "551187654321")
+
+    def test_normalize_brazilian_phone_international_no_brazil(self):
+        """Número não-brasileiro não deve ser alterado."""
+        from whatsapp_manager import _normalize_brazilian_phone
+        # Número com código de país diferente (Argentina = 54)
+        self.assertEqual(_normalize_brazilian_phone("541198765432"), "541198765432")
+
+    def test_normalize_text_removes_accents_and_lowercases(self):
+        """Deve remover acentos e converter para minúsculas."""
+        from whatsapp_manager import _normalize_text
+        self.assertEqual(_normalize_text("Isabel"), "isabel")
+        self.assertEqual(_normalize_text("Ação"), "acao")
+        self.assertEqual(_normalize_text("JOÃO"), "joao")
+        self.assertEqual(_normalize_text("ñoño"), "nono")
+
+    def test_normalize_text_empty_string(self):
+        from whatsapp_manager import _normalize_text
+        self.assertEqual(_normalize_text(""), "")
+
+    def test_normalize_text_already_clean(self):
+        from whatsapp_manager import _normalize_text
+        self.assertEqual(_normalize_text("carlos"), "carlos")
+
+
+class TestExtractJsonFromText(BaseWhatsAppManagerTest):
+    """Testes para _extract_json_from_text."""
+
+    def test_plain_json(self):
+        from whatsapp_manager import _extract_json_from_text
+        result = _extract_json_from_text('{"relationship": "Filho", "nickname": "Bel"}')
+        self.assertEqual(result["relationship"], "Filho")
+        self.assertEqual(result["nickname"], "Bel")
+
+    def test_json_inside_markdown_block(self):
+        from whatsapp_manager import _extract_json_from_text
+        text = '```json\n{"relationship": "Cliente", "tone": "formal"}\n```'
+        result = _extract_json_from_text(text)
+        self.assertEqual(result["relationship"], "Cliente")
+
+    def test_json_with_surrounding_text(self):
+        from whatsapp_manager import _extract_json_from_text
+        text = 'Aqui está a classificação:\n{"relationship": "Amigo"}\nEspero que ajude.'
+        result = _extract_json_from_text(text)
+        self.assertEqual(result["relationship"], "Amigo")
+
+    def test_json_with_nested_object(self):
+        from whatsapp_manager import _extract_json_from_text
+        result = _extract_json_from_text('{"a": {"b": 1}, "c": "valor"}')
+        self.assertEqual(result["a"]["b"], 1)
+        self.assertEqual(result["c"], "valor")
+
+    def test_no_json_raises(self):
+        from whatsapp_manager import _extract_json_from_text
+        with self.assertRaises((ValueError, json.JSONDecodeError)):
+            _extract_json_from_text("Não há JSON aqui, apenas texto.")
+
+    def test_json_with_null_values(self):
+        from whatsapp_manager import _extract_json_from_text
+        result = _extract_json_from_text('{"nickname": null, "pet_name": null}')
+        self.assertIsNone(result["nickname"])
+        self.assertIsNone(result["pet_name"])
+
+
+class TestDetectContactQuery(BaseWhatsAppManagerTest):
+    """Testes para _detect_contact_query."""
+
+    def test_detects_conversa_com(self):
+        from whatsapp_manager import _detect_contact_query
+        # Padrão: "conversa com <Nome>" — sem artigo entre "com" e o nome
+        self.assertEqual(_detect_contact_query("consegue ver a conversa com Isabel?"), "Isabel")
+
+    def test_detects_o_que_disse(self):
+        from whatsapp_manager import _detect_contact_query
+        self.assertEqual(_detect_contact_query("o que Vivi disse ontem?"), "Vivi")
+
+    def test_detects_historico_de(self):
+        from whatsapp_manager import _detect_contact_query
+        # Padrão: "histórico de <Nome>" — "do" corresponde a d[eo]
+        self.assertEqual(_detect_contact_query("me mostra o histórico do Carlos"), "Carlos")
+
+    def test_detects_mensagens_de(self):
+        from whatsapp_manager import _detect_contact_query
+        # Padrão: "mensagens de <Nome>" — "de" corresponde a d[eo]
+        self.assertEqual(_detect_contact_query("quais as mensagens de Bruna?"), "Bruna")
+
+    def test_ignores_stopwords(self):
+        from whatsapp_manager import _detect_contact_query
+        # "ela" é stopword
+        self.assertIsNone(_detect_contact_query("o que ela disse?"))
+
+    def test_returns_none_for_unrelated_message(self):
+        from whatsapp_manager import _detect_contact_query
+        self.assertIsNone(_detect_contact_query("bom dia, tudo bem?"))
+        self.assertIsNone(_detect_contact_query("quero pedir uma pizza"))
+
+    def test_case_insensitive(self):
+        from whatsapp_manager import _detect_contact_query
+        # Padrão sem artigo: "CONVERSA COM PEDRO" deve funcionar case-insensitive
+        result = _detect_contact_query("CONVERSA COM PEDRO")
+        self.assertIsNotNone(result)
+        self.assertIn("Pedro", result.title())
+
+
+class TestSearchContactByName(BaseWhatsAppManagerTest):
+    """Testes para _search_contact_by_name."""
+
+    def _patch_contacts(self, contacts: dict):
+        return patch("whatsapp_manager._load_personal_contacts", return_value=contacts)
+
+    def test_exact_name_match(self):
+        from whatsapp_manager import _search_contact_by_name
+        contacts = {
+            "5511777@s.whatsapp.net": {"name": "Isabel Alencar", "nickname": None, "pet_name": None},
+        }
+        with self._patch_contacts(contacts):
+            key, data = _search_contact_by_name("Isabel Alencar")
+        self.assertEqual(key, "5511777@s.whatsapp.net")
+        self.assertEqual(data["name"], "Isabel Alencar")
+
+    def test_substring_name_match(self):
+        from whatsapp_manager import _search_contact_by_name
+        contacts = {
+            "5511777@s.whatsapp.net": {"name": "Isabel Alencar", "nickname": None, "pet_name": None},
+        }
+        with self._patch_contacts(contacts):
+            key, data = _search_contact_by_name("Isabel")
+        self.assertIsNotNone(key)
+
+    def test_nickname_match(self):
+        from whatsapp_manager import _search_contact_by_name
+        contacts = {
+            "5511777@s.whatsapp.net": {"name": "Isabel Alencar", "nickname": "Bel", "pet_name": None},
+        }
+        with self._patch_contacts(contacts):
+            key, data = _search_contact_by_name("Bel")
+        self.assertEqual(key, "5511777@s.whatsapp.net")
+
+    def test_no_match_returns_none(self):
+        from whatsapp_manager import _search_contact_by_name
+        contacts = {
+            "5511777@s.whatsapp.net": {"name": "Carlos Silva", "nickname": None, "pet_name": None},
+        }
+        with self._patch_contacts(contacts):
+            key, data = _search_contact_by_name("Desconhecido")
+        self.assertIsNone(key)
+        self.assertIsNone(data)
+
+    def test_accent_insensitive(self):
+        from whatsapp_manager import _search_contact_by_name
+        contacts = {
+            "5511777@s.whatsapp.net": {"name": "João Vítor", "nickname": None, "pet_name": None},
+        }
+        with self._patch_contacts(contacts):
+            key, data = _search_contact_by_name("joao vitor")
+        self.assertIsNotNone(key)
+
+
+class TestFetchCrossSessionHistory(BaseWhatsAppManagerTest):
+    """Testes para _fetch_cross_session_history."""
+
+    @patch("sqlite3.connect")
+    @patch("pathlib.Path.exists", return_value=True)
+    def test_returns_formatted_history_from_bridge_db(self, mock_exists, mock_connect):
+        mock_conn = MagicMock()
+        mock_cursor = MagicMock()
+        mock_connect.return_value = mock_conn
+        mock_conn.cursor.return_value = mock_cursor
+        mock_conn.__enter__ = lambda s: mock_conn
+        mock_conn.__exit__ = MagicMock(return_value=False)
+        mock_cursor.fetchall.return_value = [
+            (0, "Isabel", "oi André, tudo bem?", 1750000001),
+            (1, "André", "tudo sim!", 1750000002),
+        ]
+
+        from whatsapp_manager import _fetch_cross_session_history
+        result = _fetch_cross_session_history("5511777777777")
+
+        self.assertIn("Isabel: oi André, tudo bem?", result)
+        self.assertIn("André: tudo sim!", result)
+
+    @patch("pathlib.Path.exists", return_value=False)
+    def test_returns_empty_when_no_db(self, mock_exists):
+        from whatsapp_manager import _fetch_cross_session_history
+        result = _fetch_cross_session_history("5511777777777")
+        self.assertEqual(result, "")
+
+    @patch("sqlite3.connect")
+    @patch("pathlib.Path.exists")
+    def test_falls_back_to_state_db(self, mock_exists, mock_connect):
+        """Quando bridge_db não tem resultados, usa state.db."""
+        # bridge_db existe, state_db existe
+        mock_exists.side_effect = [True, True]
+
+        mock_conn = MagicMock()
+        mock_cursor = MagicMock()
+        mock_connect.return_value = mock_conn
+        mock_conn.cursor.return_value = mock_cursor
+        mock_conn.__enter__ = lambda s: mock_conn
+        mock_conn.__exit__ = MagicMock(return_value=False)
+        # Primeira chamada (bridge_db) retorna vazio; segunda (state.db) retorna dados
+        mock_cursor.fetchall.side_effect = [
+            [],
+            [("user", None, "mensagem do contato", 1750000001)],
+        ]
+
+        from whatsapp_manager import _fetch_cross_session_history
+        result = _fetch_cross_session_history("5511777777777")
+        self.assertIn("mensagem do contato", result)
+
+    @patch("sqlite3.connect")
+    @patch("pathlib.Path.exists", return_value=True)
+    def test_labels_messages_correctly(self, mock_exists, mock_connect):
+        """from_me=1 deve aparecer como 'André'; from_me=0 como sender_name ou 'Contato'."""
+        mock_conn = MagicMock()
+        mock_cursor = MagicMock()
+        mock_connect.return_value = mock_conn
+        mock_conn.cursor.return_value = mock_cursor
+        mock_conn.__enter__ = lambda s: mock_conn
+        mock_conn.__exit__ = MagicMock(return_value=False)
+        mock_cursor.fetchall.return_value = [
+            (1, None, "resposta do bot", 1750000001),
+            (0, None, "mensagem do contato", 1750000002),
+        ]
+
+        from whatsapp_manager import _fetch_cross_session_history
+        result = _fetch_cross_session_history("5511777777777")
+        self.assertIn("André: resposta do bot", result)
+        self.assertIn("Contato: mensagem do contato", result)
+
+
+class TestBestContactName(BaseWhatsAppManagerTest):
+    """Testes para _best_contact_name."""
+
+    def test_prefers_bridge_name_over_db(self):
+        from whatsapp_manager import _best_contact_name
+        name, source = _best_contact_name("5511@s", "Isabel", "Contato 7777", "5511")
+        self.assertEqual(name, "Isabel")
+        self.assertEqual(source, "bridge")
+
+    def test_uses_db_name_when_bridge_generic(self):
+        from whatsapp_manager import _best_contact_name
+        name, source = _best_contact_name("5511@s", None, "Carlos Silva", "5511")
+        self.assertEqual(name, "Carlos Silva")
+        self.assertEqual(source, "log")
+
+    def test_fallback_when_both_generic(self):
+        from whatsapp_manager import _best_contact_name
+        name, source = _best_contact_name("5511@s", None, None, "5511777")
+        self.assertEqual(name, "Contato 5511777")
+        self.assertEqual(source, "fallback")
+
+    def test_rejects_numeric_bridge_name(self):
+        """Nome que é só número não deve ser aceito como nome real."""
+        from whatsapp_manager import _best_contact_name
+        name, source = _best_contact_name("5511@s", "5511777777777", "Pedro", "5511")
+        self.assertEqual(name, "Pedro")
+        self.assertEqual(source, "log")
+
+    def test_rejects_jid_as_name(self):
+        from whatsapp_manager import _best_contact_name
+        name, source = _best_contact_name("5511@s", "5511@s.whatsapp.net", None, "5511")
+        self.assertEqual(source, "fallback")
+
+
+class TestCallLlmApi(BaseWhatsAppManagerTest):
+    """Testes para _call_llm_api."""
+
+    @patch("urllib.request.urlopen")
+    def test_returns_extracted_text(self, mock_urlopen):
+        from whatsapp_manager import _call_llm_api
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = json.dumps({"text": "resultado"}).encode()
+        mock_urlopen.return_value.__enter__.return_value = mock_resp
+
+        result = _call_llm_api(
+            url="http://fake/api",
+            headers={"Content-Type": "application/json"},
+            payload={"prompt": "teste"},
+            extract_fn=lambda r: r["text"],
+        )
+        self.assertEqual(result, "resultado")
+
+    @patch("urllib.request.urlopen", side_effect=urllib.error.URLError("timeout"))
+    def test_returns_none_on_http_error(self, mock_urlopen):
+        from whatsapp_manager import _call_llm_api
+        result = _call_llm_api(
+            url="http://fake/api",
+            headers={},
+            payload={},
+            extract_fn=lambda r: r["text"],
+        )
+        self.assertIsNone(result)
+
+    @patch("urllib.request.urlopen")
+    def test_returns_none_on_malformed_json_response(self, mock_urlopen):
+        from whatsapp_manager import _call_llm_api
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = b"NOT JSON"
+        mock_urlopen.return_value.__enter__.return_value = mock_resp
+
+        result = _call_llm_api(
+            url="http://fake/api",
+            headers={},
+            payload={},
+            extract_fn=lambda r: r["text"],
+        )
+        self.assertIsNone(result)
+
+    @patch("urllib.request.urlopen")
+    def test_returns_none_when_extract_fn_raises_key_error(self, mock_urlopen):
+        from whatsapp_manager import _call_llm_api
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = json.dumps({"other": "field"}).encode()
+        mock_urlopen.return_value.__enter__.return_value = mock_resp
+
+        result = _call_llm_api(
+            url="http://fake/api",
+            headers={},
+            payload={},
+            extract_fn=lambda r: r["missing_key"],
+        )
+        self.assertIsNone(result)
+
+
+class TestCheckChatSilenced(BaseWhatsAppManagerTest):
+    """Testes para _check_chat_silenced."""
+
+    def setUp(self):
+        super().setUp()
+        import whatsapp_manager
+        whatsapp_manager._chat_status_cache.clear()
+
+    @patch("urllib.request.urlopen")
+    def test_returns_true_when_silenced(self, mock_urlopen):
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = json.dumps({"isSilenced": True}).encode()
+        mock_urlopen.return_value.__enter__.return_value = mock_resp
+
+        from whatsapp_manager import _check_chat_silenced
+        result = _check_chat_silenced("5511888888888@s.whatsapp.net")
+        self.assertTrue(result)
+
+    @patch("urllib.request.urlopen")
+    def test_returns_false_when_not_silenced(self, mock_urlopen):
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = json.dumps({"isSilenced": False}).encode()
+        mock_urlopen.return_value.__enter__.return_value = mock_resp
+
+        from whatsapp_manager import _check_chat_silenced
+        result = _check_chat_silenced("5511888888888@s.whatsapp.net")
+        self.assertFalse(result)
+
+    @patch("urllib.request.urlopen", side_effect=OSError("bridge offline"))
+    def test_returns_false_when_bridge_offline(self, mock_urlopen):
+        from whatsapp_manager import _check_chat_silenced
+        result = _check_chat_silenced("5511888888888@s.whatsapp.net")
+        self.assertFalse(result)
+
+    @patch("urllib.request.urlopen")
+    def test_uses_cache_on_second_call(self, mock_urlopen):
+        """Segunda chamada dentro do TTL não deve fazer HTTP."""
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = json.dumps({"isSilenced": True}).encode()
+        mock_urlopen.return_value.__enter__.return_value = mock_resp
+
+        from whatsapp_manager import _check_chat_silenced
+        _check_chat_silenced("5511111@s.whatsapp.net")
+        _check_chat_silenced("5511111@s.whatsapp.net")
+
+        self.assertEqual(mock_urlopen.call_count, 1)
+
+
+class TestNLUpdateOwnerFieldsRestriction(BaseWhatsAppManagerTest):
+    """Garante que atualização NL não sobrescreve tone/summary/guidelines."""
+
+    @patch("whatsapp_manager._update_contact_fields", return_value="✅ Contato Carlos atualizado.")
+    @patch("whatsapp_manager._extract_contact_name_via_llm", return_value="Carlos")
+    @patch("whatsapp_manager._classify_contact_via_llm", return_value={
+        "relationship": "Cliente",
+        "manual_relationship": "Cliente",
+        "name": "Carlos",
+        "nickname": None,
+        "pet_name": None,
+        "notes": "cliente frequente",
+        "product": None,
+        "frequent_greeting": None,
+        # Campos que NÃO devem ser aplicados
+        "tone": "polido e profissional",
+        "summary": "inventado pelo LLM",
+        "guidelines": "inventado também",
+        "intent": "comprar",
+        "frequency": "semanal",
+    })
+    @patch("urllib.request.urlopen")
+    def test_restricted_fields_not_passed_to_update(
+        self, mock_urlopen, mock_classify, mock_extract, mock_update
+    ):
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = b""
+        mock_urlopen.return_value.__enter__.return_value = mock_resp
+
+        pre_dispatch = self.ctx.hooks.get("pre_gateway_dispatch")
+        event = MagicMock()
+        event.source.platform = "whatsapp"
+        event.source.user_id = "5511999999999@s.whatsapp.net"
+        event.source.chat_id = "5511999999999@s.whatsapp.net"
+        event.text = "atualize o Carlos, ele é cliente"
+        event.has_media = False
+
+        gateway = MagicMock()
+        gateway._session_key_for_source.return_value = "sess_nl"
+        gateway._session_model_overrides = {}
+
+        pre_dispatch("pre_gateway_dispatch", {"event": event, "gateway": gateway})
+
+        if mock_update.called:
+            _, fields_passed = mock_update.call_args[0]
+            self.assertNotIn("tone", fields_passed)
+            self.assertNotIn("summary", fields_passed)
+            self.assertNotIn("guidelines", fields_passed)
+            self.assertNotIn("intent", fields_passed)
+            self.assertNotIn("frequency", fields_passed)
 
 
 if __name__ == "__main__":
