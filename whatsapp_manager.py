@@ -1486,7 +1486,11 @@ def _sync_contacts_from_db_internal(force: bool = True) -> str:
             if _messages_by_rel:
                 groups_info = ", ".join(f"{r}({len(m)})" for r, m in _messages_by_rel.items())
                 logger.info(f"[style-learning] Grupos coletados: {groups_info}")
-                _style_section = _extract_style_patterns_via_llm(_messages_by_rel)
+                # Sempre gera a seção com os exemplos literais; LLM enriquece com padrões
+                _style_section = _build_style_section_directly(_messages_by_rel)
+                _llm_section = _extract_style_patterns_via_llm(_messages_by_rel)
+                if _llm_section:
+                    _style_section = _llm_section  # LLM já inclui os exemplos + padrões
                 if _style_section:
                     if _update_soul_whatsapp_with_examples(_style_section):
                         logger.info("[style-learning] SOUL_WHATSAPP.md atualizado com exemplos reais de escrita.")
@@ -1494,9 +1498,6 @@ def _sync_contacts_from_db_internal(force: bool = True) -> str:
                     else:
                         logger.warning("[style-learning] Falha ao salvar SOUL_WHATSAPP.md.")
                         _style_log = "- ⚠️ Style learning: falha ao salvar SOUL_WHATSAPP.md."
-                else:
-                    logger.warning("[style-learning] LLM não retornou padrões de escrita.")
-                    _style_log = "- ⚠️ Style learning: LLM não retornou conteúdo."
             else:
                 logger.warning("[style-learning] Nenhum grupo com mensagens suficientes encontrado.")
                 _style_log = "- ⚠️ Style learning: sem mensagens classificadas suficientes."
@@ -1719,6 +1720,29 @@ def _collect_andre_messages_by_relationship(
         return {}
 
 
+def _build_style_section_directly(messages_by_relationship: dict) -> str:
+    """Gera a seção de exemplos reais diretamente, sem LLM.
+
+    Inclui todas as mensagens coletadas como exemplos literais.
+    Usado como fallback quando o LLM falha ou como complemento garantido.
+    """
+    from datetime import datetime
+    hoje = datetime.now().strftime("%d/%m/%Y")
+
+    lines = [
+        _STYLE_SENTINEL,
+        f"> Gerado automaticamente em {hoje}.\n",
+    ]
+    for rel, msgs in messages_by_relationship.items():
+        lines.append(f"### {rel}")
+        lines.append("**Exemplos reais de mensagens do André:**")
+        for msg in msgs:
+            lines.append(f'- "{msg}"')
+        lines.append("")
+
+    return "\n".join(lines)
+
+
 def _extract_style_patterns_via_llm(messages_by_relationship: dict) -> str | None:
     """Chama o LLM para extrair padrões de escrita e exemplos reais por relacionamento.
 
@@ -1738,22 +1762,24 @@ def _extract_style_patterns_via_llm(messages_by_relationship: dict) -> str | Non
     prompt = (
         "Você é um analista de estilo de escrita do WhatsApp.\n\n"
         "Abaixo estão mensagens REAIS enviadas por André Alencar, separadas por tipo de relacionamento.\n"
-        "Analise e extraia para CADA grupo:\n"
-        "1. Padrões de escrita (abreviações, gírias, emojis, pontuação, nível de formalidade, comprimento típico)\n"
-        "2. De 3 a 5 exemplos reais representativos do jeito dele escrever\n\n"
-        "REGRAS IMPORTANTES:\n"
-        "- Use APENAS as mensagens fornecidas. Não invente exemplos.\n"
-        "- Os exemplos devem ser mensagens reais, não resumos.\n"
-        "- Ignore grupos com poucas mensagens ou mensagens muito curtas demais para análise.\n"
-        "- Escreva em português brasileiro.\n\n"
-        "Formato de saída EXATO (markdown, sem explicações extras antes ou depois):\n\n"
+        "Sua tarefa é:\n"
+        "1. Identificar padrões de escrita (abreviações, gírias, emojis, pontuação, formalidade, comprimento)\n"
+        "2. LISTAR TODAS as mensagens fornecidas como exemplos reais — não selecione, não resuma, copie todas\n\n"
+        "REGRAS CRÍTICAS:\n"
+        "- COPIE LITERALMENTE todas as mensagens fornecidas na seção 'Exemplos reais'. Não omita nenhuma.\n"
+        "- Não invente, não reescreva, não resuma. Copie o texto exato de cada mensagem.\n"
+        "- Se uma mensagem for curta ('ok', 'sim', 'blz'), inclua assim mesmo — faz parte do estilo.\n"
+        "- Escreva os padrões em português brasileiro.\n\n"
+        "Formato de saída EXATO (markdown, sem texto antes ou depois):\n\n"
         f"{_STYLE_SENTINEL}\n"
-        f"> Gerado automaticamente em {hoje}. Não edite esta seção manualmente.\n\n"
+        f"> Gerado automaticamente em {hoje}.\n\n"
         "### [Nome do relacionamento]\n"
         "**Padrões identificados:**\n"
-        "- ...\n\n"
-        "**Exemplos reais:**\n"
-        '- "..."\n'
+        "- [padrão 1]\n"
+        "- [padrão 2]\n\n"
+        "**Exemplos reais (TODAS as mensagens fornecidas, copiadas literalmente):**\n"
+        '- "mensagem 1"\n'
+        '- "mensagem 2"\n'
         '- "..."\n\n'
         "[repita para cada grupo]\n\n"
         "---\n\n"
