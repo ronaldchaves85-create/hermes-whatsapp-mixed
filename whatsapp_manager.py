@@ -1657,7 +1657,9 @@ def _collect_andre_messages_by_relationship(
         result: dict[str, list[str]] = {}
 
         if use_bridge:
-            # Carregar conteúdos gerados pelo bot (role='assistant' no state.db) para exclusão
+            # Carregar conteúdos gerados pelo bot (role='assistant' no state.db) para exclusão.
+            # Só excluir mensagens longas (>15 chars) para não descartar respostas curtas manuais
+            # como "ok", "sim", "blz" que podem coincidir com respostas curtas do bot.
             bot_contents: set[str] = set()
             if state_db.exists():
                 try:
@@ -1668,11 +1670,11 @@ def _collect_andre_messages_by_relationship(
                             SELECT m.content FROM messages m
                             JOIN sessions s ON m.session_id = s.id
                             WHERE s.source = 'whatsapp' AND m.role = 'assistant'
-                            AND m.content IS NOT NULL
+                            AND m.content IS NOT NULL AND length(trim(m.content)) > 15
                             """
                         )
                         bot_contents = {row[0].strip() for row in scur.fetchall()}
-                    logger.info(f"[style-learning] {len(bot_contents)} respostas do bot carregadas para exclusão.")
+                    logger.info(f"[style-learning] {len(bot_contents)} respostas longas do bot carregadas para exclusão.")
                 except Exception as e:
                     logger.warning(f"[style-learning] Falha ao carregar respostas do bot do state.db: {e}")
 
@@ -1683,6 +1685,7 @@ def _collect_andre_messages_by_relationship(
                 )
                 chat_ids = [row[0] for row in cur.fetchall()]
 
+                total_raw, total_filtered = 0, 0
                 for chat_id in chat_ids:
                     phone = chat_id.split("@")[0].split(":")[0]
                     phone_norm = _normalize_brazilian_phone("".join(c for c in phone if c.isdigit()))
@@ -1693,23 +1696,26 @@ def _collect_andre_messages_by_relationship(
                     cur.execute(
                         """
                         SELECT body FROM messages
-                        WHERE from_me=1 AND chat_id=? AND body IS NOT NULL AND length(trim(body)) > 3
+                        WHERE from_me=1 AND chat_id=? AND body IS NOT NULL AND length(trim(body)) > 1
                         ORDER BY timestamp DESC LIMIT ?
                         """,
-                        (chat_id, limit_per_contact * 3),  # buscar mais para compensar o filtro
+                        (chat_id, limit_per_contact * 5),
                     )
+                    raw = cur.fetchall()
+                    total_raw += len(raw)
                     msgs = [
-                        row[0] for row in cur.fetchall()
+                        row[0] for row in raw
                         if row[0].strip() not in bot_contents
                         and not any(row[0].lower().startswith(p.lower()) for p in _MEDIA_FILTER_PREFIXES)
                     ][:limit_per_contact]
+                    total_filtered += len(msgs)
                     if msgs:
                         result.setdefault(rel, []).extend(msgs)
 
+                logger.info(f"[style-learning] Mensagens: {total_raw} brutas → {total_filtered} após filtro bot. Grupos: {dict((r, len(m)) for r, m in result.items())}")
+
         elif use_state:
-            # Fallback: state.db — role='user' = mensagens DO contato, role='assistant' = bot
-            # Não há acesso às mensagens manuais do André neste fallback
-            logger.warning("[style-learning] whatsapp_messages.db ausente — impossível distinguir mensagens manuais do André das respostas do bot via state.db. Style learning ignorado.")
+            logger.warning("[style-learning] whatsapp_messages.db ausente — impossível distinguir mensagens manuais do André. Style learning ignorado.")
             return {}
 
         # Cap de 50 por grupo (sample aleatório)
@@ -1718,8 +1724,12 @@ def _collect_andre_messages_by_relationship(
             if len(result[rel]) > 50:
                 result[rel] = random.sample(result[rel], 50)
 
-        # Remover grupos com menos de 5 mensagens (sinal insuficiente)
-        return {rel: msgs for rel, msgs in result.items() if len(msgs) >= 5}
+        # Remover grupos com menos de 3 mensagens (sinal insuficiente)
+        filtered = {rel: msgs for rel, msgs in result.items() if len(msgs) >= 3}
+        if len(filtered) < len(result):
+            dropped = [r for r in result if r not in filtered]
+            logger.info(f"[style-learning] Grupos descartados por ter < 3 mensagens: {dropped}")
+        return filtered
 
     except Exception as e:
         logger.warning(f"[style-learning] Erro em _collect_andre_messages_by_relationship: {e}")
