@@ -634,10 +634,11 @@ let onMessagesUpsert = async ({ messages, type }) => {
       // Self-chat mode or self-chat in bot mode: only allow messages in the user's own self-chat
       if (!isSelfChat) {
         const isBotReply = recentlySentIds.has(msg.key.id) || (REPLY_PREFIX && getMessageContent(msg).conversation?.startsWith(REPLY_PREFIX));
-        if (isBotReply || WHATSAPP_MODE === 'bot') {
+        if (isBotReply) {
           continue;
         }
-        // Manual message sent by owner on their phone: let it flow to queue so it can be saved in SQLite history.
+        // Manual message sent by owner on their phone: enqueue for SQLite history.
+        // In bot mode, the Python plugin skips LLM response for owner messages (pre_llm_call: owner-manual-message).
       }
     }
 
