@@ -1657,8 +1657,9 @@ def _collect_andre_messages_by_relationship(
         result: dict[str, list[str]] = {}
 
         if use_bridge:
-            # sender_name='Bot' identifica mensagens enviadas pelo bot automaticamente.
-            # Todas as outras (sender_name='André Alencar' ou LID) são mensagens manuais do André.
+            # sender_name='Bot' = mensagens automáticas do bot.
+            # sender_name='André Alencar' ou LID = mensagens digitadas manualmente pelo André.
+            # Coleta de TODOS os chats (não só os classificados) para maximizar o volume.
             with sqlite3.connect(str(bridge_db)) as conn:
                 cur = conn.cursor()
                 cur.execute(
@@ -1669,13 +1670,12 @@ def _collect_andre_messages_by_relationship(
                 )
                 chat_ids = [row[0] for row in cur.fetchall()]
 
-                total_raw, total_manual = 0, 0
+                total_manual = 0
                 for chat_id in chat_ids:
                     phone = chat_id.split("@")[0].split(":")[0]
                     phone_norm = _normalize_brazilian_phone("".join(c for c in phone if c.isdigit()))
-                    rel = phone_to_rel.get(phone_norm)
-                    if not rel:
-                        continue
+                    # Relacionamento conhecido → agrupa por tipo; desconhecido → grupo "Geral"
+                    rel = phone_to_rel.get(phone_norm, "Geral")
 
                     cur.execute(
                         """
@@ -1691,12 +1691,11 @@ def _collect_andre_messages_by_relationship(
                         row[0] for row in cur.fetchall()
                         if not any(row[0].lower().startswith(p.lower()) for p in _MEDIA_FILTER_PREFIXES)
                     ]
-                    total_raw += len(msgs)
                     if msgs:
                         total_manual += len(msgs)
                         result.setdefault(rel, []).extend(msgs)
 
-                logger.info(f"[style-learning] {total_manual} mensagens manuais do André coletadas. Grupos: {dict((r, len(m)) for r, m in result.items())}")
+                logger.info(f"[style-learning] {total_manual} mensagens manuais coletadas de {len(chat_ids)} chats. Grupos: {dict((r, len(m)) for r, m in result.items())}")
 
         elif use_state:
             logger.warning("[style-learning] whatsapp_messages.db ausente — impossível distinguir mensagens manuais do André. Style learning ignorado.")
