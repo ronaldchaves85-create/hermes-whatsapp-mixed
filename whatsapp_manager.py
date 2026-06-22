@@ -1669,10 +1669,12 @@ def _collect_andre_messages_by_relationship(
                 cur = conn.cursor()
                 cur.execute(
                     """
-                    SELECT DISTINCT chat_id FROM messages
+                    SELECT chat_id, MAX(timestamp) as last_ts FROM messages
                     WHERE from_me=1 AND sender_name != 'Bot'
                     AND chat_id NOT LIKE '%@g.us%'
                     AND chat_id NOT LIKE '%@lid%'
+                    GROUP BY chat_id
+                    ORDER BY last_ts DESC
                     """
                 )
                 # Excluir self-chat (mensagens para si mesmo / comandos ao bot)
