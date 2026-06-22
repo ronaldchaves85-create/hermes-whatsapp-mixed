@@ -1686,7 +1686,7 @@ def _collect_andre_messages_by_relationship(
                         AND body NOT LIKE '<Media omitted>%'
                         ORDER BY timestamp DESC LIMIT ?
                         """,
-                        (chat_id, limit_per_contact),
+                        (chat_id, 100),
                     )
                     msgs = [
                         row[0] for row in cur.fetchall()
@@ -1702,11 +1702,11 @@ def _collect_andre_messages_by_relationship(
             logger.warning("[style-learning] whatsapp_messages.db ausente — impossível distinguir mensagens manuais do André. Style learning ignorado.")
             return {}
 
-        # Cap de 50 por grupo (sample aleatório)
+        # Cap de 100 por grupo (sample aleatório)
         import random
         for rel in result:
-            if len(result[rel]) > 50:
-                result[rel] = random.sample(result[rel], 50)
+            if len(result[rel]) > 100:
+                result[rel] = random.sample(result[rel], 100)
 
         # Remover grupos com menos de 3 mensagens (sinal insuficiente)
         filtered = {rel: msgs for rel, msgs in result.items() if len(msgs) >= 3}
