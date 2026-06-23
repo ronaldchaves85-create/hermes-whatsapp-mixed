@@ -2008,6 +2008,10 @@ def _extract_style_patterns_via_llm(messages_by_relationship: dict) -> str | Non
         '- André: "mensagem sem contexto anterior"\n\n'
         "[repita para cada grupo]\n\n"
         "---\n\n"
+        "ATENÇÃO AO FORMATO DOS EXEMPLOS:\n"
+        "- O remetente da resposta é SEMPRE escrito como 'André:' (sem seta, sem '→', sem nome do contato depois)\n"
+        "- NUNCA escreva 'André → NomeContato:' — use apenas 'André:'\n"
+        "- NUNCA escreva 'André → Amigo:', 'André → Cliente:' ou qualquer variação com seta\n\n"
         "MENSAGENS POR RELACIONAMENTO:\n\n"
         f"{mensagens_block}"
     )
