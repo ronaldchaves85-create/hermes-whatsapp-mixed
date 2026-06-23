@@ -784,6 +784,15 @@ let onMessagesUpsert = async ({ messages, type }) => {
       }
     }
 
+    // Capturar pushName de mensagens recebidas e salvar em sock.contacts
+    if (!msg.key.fromMe && msg.pushName && sock && sock.contacts) {
+      const _existingContact = sock.contacts[chatId] || {};
+      if (!_existingContact.name && !_existingContact.notify) {
+        sock.contacts[chatId] = { ..._existingContact, name: msg.pushName, pushName: msg.pushName };
+        sock.contacts[senderId] = { ...(sock.contacts[senderId] || {}), name: msg.pushName, pushName: msg.pushName };
+      }
+    }
+
     // Ignore Hermes' own reply messages in self-chat mode to avoid loops.
     if (msg.key.fromMe && ((REPLY_PREFIX && body.startsWith(REPLY_PREFIX)) || recentlySentIds.has(msg.key.id))) {
       if (WHATSAPP_DEBUG) {
