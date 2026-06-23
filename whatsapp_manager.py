@@ -1849,18 +1849,6 @@ def _collect_andre_messages_by_relationship(
                     if contact_name is None:
                         contact_name = phone_to_name.get(phone_norm, rel)
 
-                    # Fallback: usar sender_name do banco quando personal_contacts não tem nome
-                    if not contact_name or contact_name == rel:
-                        cur.execute(
-                            "SELECT MAX(sender_name) FROM messages WHERE chat_id=? AND from_me=0 AND sender_name IS NOT NULL",
-                            (chat_id,),
-                        )
-                        _db_name_row = cur.fetchone()
-                        _db_name = (_db_name_row[0] or "") if _db_name_row else ""
-                        _db_name_norm = _normalize_text(_db_name)
-                        if _db_name and _db_name_norm not in {"andre alencar", "andré alencar", "andre", "andré"}:
-                            contact_name = _db_name
-
                     # Buscar diálogos: mensagem do contato + resposta do André
                     cur.execute(
                         """

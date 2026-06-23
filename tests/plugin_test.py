@@ -2808,8 +2808,6 @@ class TestCollectAndreMessagesByRelationship(unittest.IsolatedAsyncioTestCase):
             return [(m, 1700000000, None) for m in messages_by_chat.get(chat_id, [])]
 
         mock_cursor.fetchall.side_effect = fetchall_side_effect
-        # fetchone usado para buscar sender_name fallback — retorna None (sem nome no banco)
-        mock_cursor.fetchone.return_value = (None,)
         return mock_conn
 
     def _path_factory(self, bridge_exists=True, state_exists=False):
