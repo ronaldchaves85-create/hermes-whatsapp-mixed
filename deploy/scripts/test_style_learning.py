@@ -37,6 +37,32 @@ def normalize_text(s: str) -> str:
     )
 
 
+def sanitize(text: str) -> str | None:
+    import re
+    if not text:
+        return None
+    patterns = [
+        r"\b\d{4,6}\b.*senha|senha.*\b\d{4,6}\b",
+        r"senha|password|pin\b",
+        r"\b\d{3}\.\d{3}\.\d{3}-\d{2}\b",
+        r"\b\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}\b",
+        r"ag[eê]ncia\s*:?\s*\d{3,6}",
+        r"conta\s*:?\s*\d{4,}",
+        r"cart[aã]o\s*:?\s*[\d\s]{13,19}",
+        r"\b\d{13,19}\b",
+        r"cvv|cvc\s*:?\s*\d{3}",
+        r"saldo.*R\$\s*[\d.,]+",
+        r"R\$\s*[\d.,]{4,}",
+        r"chave\s+pix.*@|@.*chave\s+pix",
+        r"token|código de verificação|código de acesso",
+    ]
+    tl = text.lower()
+    for p in patterns:
+        if re.search(p, tl, re.IGNORECASE):
+            return None
+    return text
+
+
 def main():
     if not DB_PATH.exists():
         print(f"❌ Banco não encontrado: {DB_PATH}")
@@ -131,9 +157,12 @@ def main():
             print(f"📱 {chat_id}")
             print(f"   Relacionamento: {rel} | Label: {contact_name}")
             for body, ts, contact_msg in rows:
+                body_clean = sanitize(body)
+                if not body_clean:
+                    continue
                 if contact_msg:
                     print(f'   {contact_name}: "{contact_msg[:60]}"')
-                print(f'   André → {contact_name}: "{body[:80]}"')
+                print(f'   André → {contact_name}: "{body_clean[:80]}"')
                 print()
             total += len(rows)
 
@@ -167,7 +196,8 @@ def main():
                     ORDER BY m.timestamp DESC LIMIT 5
                 """, (chat_id, chat_id, cutoff))
                 for body, contact_msg in cur.fetchall():
-                    groups.setdefault(rel, []).append((contact_name, body, contact_msg))
+                    if sanitize(body):
+                        groups.setdefault(rel, []).append((contact_name, body, contact_msg))
 
             for rel, items in groups.items():
                 print(f"### {rel}")
