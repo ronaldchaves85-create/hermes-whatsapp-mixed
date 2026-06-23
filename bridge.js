@@ -344,6 +344,35 @@ function buildLidMap() {
 }
 let lidToPhone = buildLidMap();
 
+// Persistência do cache de contatos (pushName) entre restarts
+const CONTACTS_CACHE_PATH = path.join('/opt/data/.hermes', 'contacts_cache.json');
+function loadContactsCache() {
+  try {
+    if (existsSync(CONTACTS_CACHE_PATH)) {
+      return JSON.parse(readFileSync(CONTACTS_CACHE_PATH, 'utf8'));
+    }
+  } catch {}
+  return {};
+}
+let _contactsCacheDirty = false;
+function saveContactsCache(contacts) {
+  try {
+    const toSave = {};
+    for (const [jid, c] of Object.entries(contacts)) {
+      const name = c.name || c.notify || c.pushName || c.verifiedName || '';
+      if (name && !jid.endsWith('@g.us') && !jid.endsWith('@broadcast')) {
+        toSave[jid] = { name };
+      }
+    }
+    writeFileSync(CONTACTS_CACHE_PATH, JSON.stringify(toSave), 'utf8');
+    _contactsCacheDirty = false;
+  } catch (e) {
+    console.log(`[contacts-cache] Erro ao salvar: ${e.message}`);
+  }
+}
+// Salva a cada 60s se houver mudanças
+setInterval(() => { if (_contactsCacheDirty && sock?.contacts) saveContactsCache(sock.contacts); }, 60000);
+
 const logger = pino({ level: 'warn' });
 
 // Message queue for polling
@@ -790,6 +819,7 @@ let onMessagesUpsert = async ({ messages, type }) => {
       if (!_existingContact.name && !_existingContact.notify) {
         sock.contacts[chatId] = { ..._existingContact, name: msg.pushName, pushName: msg.pushName };
         sock.contacts[senderId] = { ...(sock.contacts[senderId] || {}), name: msg.pushName, pushName: msg.pushName };
+        _contactsCacheDirty = true;
       }
     }
 
@@ -889,6 +919,7 @@ function handleContactsSet({ contacts }) {
       sock.contacts[contact.id] = contact;
       sock.contacts[cleanJid + '@s.whatsapp.net'] = contact;
     }
+    _contactsCacheDirty = true;
   }
 }
 
@@ -900,6 +931,7 @@ function handleContactsUpsert(contacts) {
       sock.contacts[contact.id] = contact;
       sock.contacts[cleanJid + '@s.whatsapp.net'] = contact;
     }
+    _contactsCacheDirty = true;
   }
 }
 
@@ -913,6 +945,7 @@ function handleContactsUpdate(updates) {
       sock.contacts[update.id] = merged;
       sock.contacts[cleanJid + '@s.whatsapp.net'] = merged;
     }
+    _contactsCacheDirty = true;
   }
 }
 
@@ -996,7 +1029,8 @@ async function startSocket() {
     },
   });
 
-  sock.contacts = {};
+  sock.contacts = loadContactsCache();
+  console.log(`[contacts-cache] ${Object.keys(sock.contacts).length} contatos carregados do cache`);
 
   sock.ev.on('contacts.set', handleContactsSet);
   sock.ev.on('contacts.upsert', handleContactsUpsert);
