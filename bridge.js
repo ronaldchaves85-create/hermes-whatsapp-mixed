@@ -797,6 +797,7 @@ let onMessagesUpsert = async ({ messages, type }) => {
       hasQuotedMessage,
       botIds,
       timestamp: msg.messageTimestamp,
+      fromMe: !!msg.key.fromMe,
     };
 
     // ── DEBOUNCE PROGRESSIVO: apenas mensagens de texto puro ─────────────────
