@@ -172,11 +172,11 @@ def lookup_contact(chat_id: str, lid_phone_map: dict,
             name = raw_to_name.get(phone_from_lid, phone_to_name.get(palt))
 
     # 3. Para @s.whatsapp.net, tentar via phone→lid (contato pode estar sob @lid no personal_contacts)
-    if rel is None and "@lid" not in chat_id:
+    if (rel is None or name is None) and "@lid" not in chat_id:
         lid_from_phone = phone_to_lid.get(digits) or phone_to_lid.get(pnorm)
         if lid_from_phone:
-            rel = raw_to_rel.get(lid_from_phone)
-            name = raw_to_name.get(lid_from_phone)
+            rel = rel or raw_to_rel.get(lid_from_phone)
+            name = name or raw_to_name.get(lid_from_phone)
 
     # 4. Fallback pelo telefone normalizado
     if rel is None:

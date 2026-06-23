@@ -1814,11 +1814,11 @@ def _collect_andre_messages_by_relationship(
                             rel = raw_to_rel.get(_alt_phone, phone_to_rel.get(_palt))
                             contact_name = raw_to_name.get(_alt_phone, phone_to_name.get(_palt))
                     # Estratégia 3: @s.whatsapp.net chat cujo entry é @lid → via phone_to_lid
-                    if rel is None and "@lid" not in chat_id:
+                    if (rel is None or contact_name is None) and "@lid" not in chat_id:
                         _lid_from_phone = _phone_to_lid.get(digits) or _phone_to_lid.get(phone_norm)
                         if _lid_from_phone:
-                            rel = raw_to_rel.get(_lid_from_phone)
-                            contact_name = raw_to_name.get(_lid_from_phone)
+                            rel = rel or raw_to_rel.get(_lid_from_phone)
+                            contact_name = contact_name or raw_to_name.get(_lid_from_phone)
                     # Estratégia 4: fallback pelo telefone normalizado
                     if rel is None:
                         rel = phone_to_rel.get(phone_norm, "Geral")
