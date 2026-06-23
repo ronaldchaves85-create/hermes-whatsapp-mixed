@@ -361,6 +361,31 @@ def _update_db_message(db_path: str, msg_id: str, new_body: str) -> int:
         return -2
 
 
+def _persist_owner_message_to_db(chat_id: str, message_id: str, body: str, timestamp: int, sender_name: str = "André Alencar") -> None:
+    """Insere mensagem manual do dono no whatsapp_messages.db (Hermes não grava from_me=1)."""
+    if not body:
+        return
+    db_path = Path("/opt/data/.hermes/whatsapp_messages.db")
+    if not db_path.exists():
+        return
+    try:
+        with sqlite3.connect(str(db_path)) as conn:
+            cur = conn.cursor()
+            cur.execute(
+                """
+                INSERT OR IGNORE INTO messages
+                    (chat_id, sender_name, message_id, message_type, body, timestamp, from_me)
+                VALUES (?, ?, ?, 'text', ?, ?, 1)
+                """,
+                (chat_id, sender_name, message_id or f"owner_{int(time.time())}", body, timestamp),
+            )
+            conn.commit()
+            if cur.rowcount:
+                logger.debug(f"[owner-msg] Gravado no SQLite: chat={chat_id} body='{body[:60]}'")
+    except Exception as e:
+        logger.warning(f"[owner-msg] Erro ao gravar mensagem do dono: {e}")
+
+
 def _persist_transcription_to_db(db_path: str, msg_id: str, new_body: str):
     """Executa a persistência da transcrição/descrição tratando eventuais race conditions via thread."""
     # 1. Tentar atualizar imediatamente
@@ -3263,6 +3288,16 @@ def pre_gateway_dispatch(*args, **kwargs):
     resolved_chat = _resolve_phone_from_jid(chat_id)
     clean_chat = "".join(c for c in resolved_chat.split("@")[0].split(":")[0] if c.isdigit())
     is_self_chat = (clean_sender == clean_chat)
+
+    # Persistir mensagens manuais do André no SQLite (Hermes não grava from_me=1 automaticamente)
+    if is_owner and not is_self_chat and chat_id:
+        _persist_owner_message_to_db(
+            chat_id=chat_id,
+            message_id=media_info.get("message_id") or "",
+            body=(event.text or "").strip(),
+            timestamp=int(getattr(event, "timestamp", None) or time.time()),
+            sender_name="André Alencar",
+        )
 
     msg_text = (event.text or "").strip()
 
