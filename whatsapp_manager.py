@@ -1164,34 +1164,6 @@ def _dedup_personal_contacts(personal_contacts: dict, lid_phone_map: dict) -> in
     phone_to_lid = {v: k for k, v in lid_phone_map.items()}
     to_remove: list[str] = []
 
-    # --- Passo 0: enriquecer lid_phone_map por match de nome entre @lid e @s.whatsapp.net ---
-    # Quando session files não estão disponíveis, o lid_phone_map fica vazio.
-    # Fallback: se um @lid e um @s.whatsapp.net têm exatamente o mesmo nome completo,
-    # são o mesmo contato — inferir o mapeamento pelo nome.
-    lid_keys = [k for k in personal_contacts if "@lid" in k and isinstance(personal_contacts.get(k), dict)]
-    phone_keys = [k for k in personal_contacts if "@s.whatsapp.net" in k and isinstance(personal_contacts.get(k), dict)]
-    name_to_phone_key: dict[str, str] = {}
-    for pk in phone_keys:
-        e = personal_contacts[pk]
-        n = (e.get("nickname") or e.get("name") or "").strip().lower()
-        if n and n not in _owner_norms:
-            name_to_phone_key[n] = pk
-    for lk in lid_keys:
-        lid_raw = lk.split("@")[0]
-        if lid_raw in lid_phone_map:
-            continue  # já mapeado via session files / DB
-        e = personal_contacts[lk]
-        n = (e.get("nickname") or e.get("name") or "").strip().lower()
-        if not n or n in _owner_norms:
-            continue
-        matched_phone_key = name_to_phone_key.get(n)
-        if matched_phone_key:
-            phone_digits = matched_phone_key.split("@")[0].split(":")[0]
-            phone_digits = "".join(c for c in phone_digits if c.isdigit())
-            if phone_digits:
-                lid_phone_map[lid_raw] = phone_digits
-                phone_to_lid[phone_digits] = lid_raw
-
     # --- Passo 1: @lid → @s.whatsapp.net ---
     for key in list(personal_contacts.keys()):
         if "@lid" in key or key not in personal_contacts:

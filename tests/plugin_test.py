@@ -3462,20 +3462,6 @@ class TestDedupPersonalContacts(unittest.TestCase):
         self._dedup(pc, lid_map)
         self.assertEqual(pc["5586@s.whatsapp.net"]["manual_relationship"], "Filho")
 
-    def test_dedup_by_name_no_session_files(self):
-        """Sem session files (lid_map vazio), dedup por nome deve mesclar @lid e @s.whatsapp.net.
-        Caso real: Mayra tinha @lid com 'namorada' e @s com 'Amigo' sem lid_map disponível.
-        """
-        pc = self._contacts({
-            "558698412942@s.whatsapp.net": {"name": "Mayra Cecília Barbosa", "manual_relationship": "Amigo"},
-            "5940090822813@lid": {"name": "Mayra Cecília Barbosa", "manual_relationship": "namorada"},
-        })
-        removed = self._dedup(pc, {})  # lid_map vazio — sem session files
-        self.assertEqual(removed, 1)
-        self.assertNotIn("5940090822813@lid", pc)
-        self.assertIn("558698412942@s.whatsapp.net", pc)
-        self.assertEqual(pc["558698412942@s.whatsapp.net"]["manual_relationship"], "namorada")
-
     def test_phone_normalization_dedup(self):
         """Dois @s.whatsapp.net com mesmo telefone (com/sem 9º dígito) devem ser mesclados.
         Formato BR: 55 + DDD (2) + 9 + número (8) = 13 dígitos → normaliza p/ 12 dígitos.
