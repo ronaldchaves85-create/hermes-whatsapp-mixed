@@ -1166,38 +1166,26 @@ def _dedup_personal_contacts(personal_contacts: dict, lid_phone_map: dict) -> in
     Deduplica personal_contacts garantindo uma entrada por contato real.
 
     Casos tratados:
-    1. @lid + @s.whatsapp.net do mesmo telefone → mescla no @s.whatsapp.net, remove @lid,
-       adiciona campo 'lid' para cross-reference.
+    1. @lid + @s.whatsapp.net coexistem — ambos são mantidos, mas o campo 'lid' é
+       adicionado ao @s.whatsapp.net como cross-reference (sem merge, sem remoção).
     2. @s.whatsapp.net duplicado por normalização de 9º dígito brasileiro
        (ex: 5586994140236 e 558694140236) → mantém o mais recente/completo, remove o outro.
-    3. @lid orphan (sem telefone mapeado) → mantém com campo 'phone' vazio para auditoria.
 
     Retorna o total de entradas removidas.
     """
-    _owner_norms = {"andre alencar", "andré alencar", "andre", "andré"}
     phone_to_lid = {v: k for k, v in lid_phone_map.items()}
     to_remove: list[str] = []
 
-    # --- Passo 1: @lid → @s.whatsapp.net ---
+    # --- Passo 1: registrar campo 'lid' no @s.whatsapp.net (cross-reference apenas) ---
     for key in list(personal_contacts.keys()):
-        if "@lid" in key or key not in personal_contacts:
+        if "@lid" in key or not isinstance(personal_contacts.get(key), dict):
             continue
-        entry = personal_contacts[key]
-        if not isinstance(entry, dict):
-            continue
-
         raw = key.split("@")[0].split(":")[0]
         digits = "".join(c for c in raw if c.isdigit())
         phone_norm = _normalize_brazilian_phone(digits)
-
         lid = phone_to_lid.get(digits) or phone_to_lid.get(phone_norm)
         if lid:
-            lid_key = f"{lid}@lid"
-            entry["lid"] = lid_key  # sempre registrar o lid conhecido
-            lid_entry = personal_contacts.get(lid_key)
-            if isinstance(lid_entry, dict) and lid_key not in to_remove:
-                _merge_contact_entries(primary=entry, secondary=lid_entry)
-                to_remove.append(lid_key)
+            personal_contacts[key]["lid"] = f"{lid}@lid"
 
     # --- Passo 2: @s.whatsapp.net duplicados por normalização de telefone ---
     # Agrupa por telefone normalizado; mantém a entrada com mais campos preenchidos

@@ -3424,41 +3424,38 @@ class TestDedupPersonalContacts(unittest.TestCase):
     def _contacts(self, entries: dict) -> dict:
         return {k: dict(v) for k, v in entries.items()}
 
-    def test_lid_merged_into_whatsapp_entry(self):
-        """@lid deve ser absorvido no @s.whatsapp.net e removido."""
+    def test_lid_and_whatsapp_both_kept(self):
+        """@lid e @s.whatsapp.net devem coexistir — nenhum é removido."""
         pc = self._contacts({
             "5586@s.whatsapp.net": {"relationship": "Amigo"},
             "abc@lid": {"relationship": "Filho", "name": "Pedrinho"},
         })
         lid_map = {"abc": "5586"}
         removed = self._dedup(pc, lid_map)
-        self.assertEqual(removed, 1)
-        self.assertNotIn("abc@lid", pc)
+        self.assertEqual(removed, 0)
+        self.assertIn("abc@lid", pc)
         self.assertIn("5586@s.whatsapp.net", pc)
-        entry = pc["5586@s.whatsapp.net"]
-        self.assertEqual(entry["relationship"], "Filho")
-        self.assertEqual(entry["name"], "Pedrinho")
-        self.assertEqual(entry["lid"], "abc@lid")
 
-    def test_manual_relationship_not_overwritten(self):
-        """manual_relationship no @s.whatsapp.net nunca deve ser sobrescrito."""
-        pc = self._contacts({
-            "5586@s.whatsapp.net": {"manual_relationship": "VIP", "relationship": "Amigo"},
-            "abc@lid": {"manual_relationship": "Filho"},
-        })
-        lid_map = {"abc": "5586"}
-        self._dedup(pc, lid_map)
-        self.assertEqual(pc["5586@s.whatsapp.net"]["manual_relationship"], "VIP")
-
-    def test_lid_manual_relationship_fills_empty(self):
-        """manual_relationship do @lid preenche se @s.whatsapp.net não tem."""
+    def test_lid_cross_reference_added(self):
+        """Campo 'lid' deve ser adicionado ao @s.whatsapp.net como cross-reference."""
         pc = self._contacts({
             "5586@s.whatsapp.net": {"relationship": "Amigo"},
-            "abc@lid": {"manual_relationship": "Filho"},
+            "abc@lid": {"relationship": "Filho"},
         })
         lid_map = {"abc": "5586"}
         self._dedup(pc, lid_map)
-        self.assertEqual(pc["5586@s.whatsapp.net"]["manual_relationship"], "Filho")
+        self.assertEqual(pc["5586@s.whatsapp.net"]["lid"], "abc@lid")
+
+    def test_lid_data_preserved_independently(self):
+        """Dados do @lid não são alterados — cada entrada mantém seus próprios valores."""
+        pc = self._contacts({
+            "5586@s.whatsapp.net": {"manual_relationship": "Amigo"},
+            "abc@lid": {"manual_relationship": "namorada"},
+        })
+        lid_map = {"abc": "5586"}
+        self._dedup(pc, lid_map)
+        self.assertEqual(pc["5586@s.whatsapp.net"]["manual_relationship"], "Amigo")
+        self.assertEqual(pc["abc@lid"]["manual_relationship"], "namorada")
 
     def test_phone_normalization_dedup(self):
         """Dois @s.whatsapp.net com mesmo telefone (com/sem 9º dígito) devem ser mesclados.
@@ -3485,7 +3482,7 @@ class TestDedupPersonalContacts(unittest.TestCase):
         self.assertIn("abc@lid", pc)
 
     def test_lid_field_added_when_lid_entry_absent(self):
-        """Campo 'lid' deve ser adicionado ao @s.whatsapp.net mesmo sem entrada @lid no dict."""
+        """Campo 'lid' é adicionado ao @s.whatsapp.net mesmo sem entrada @lid no dict."""
         pc = self._contacts({
             "5586@s.whatsapp.net": {"relationship": "Cliente"},
         })
