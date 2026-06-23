@@ -1132,6 +1132,7 @@ def _build_lid_phone_map(db_path: "Path | None" = None,
             phone_digits = "".join(c for c in phone_raw if c.isdigit())
             if lid_raw and phone_digits and lid_raw not in lid_phone_map:
                 lid_phone_map[lid_raw] = phone_digits
+    logger.info(f"[lid-map] {len(lid_phone_map)} mapeamentos lid→phone carregados")
     return lid_phone_map
 
 
@@ -1159,6 +1160,8 @@ def _resolve_man_rel(existing_data: dict, personal_contacts: dict) -> "str | Non
             lid_man_rel = lid_entry.get("relationship")
         # @lid vence se tem valor e o atual está vazio ou é genérico
         if lid_man_rel and (not man_rel or man_rel in _non_manual):
+            name_hint = existing_data.get("nickname") or existing_data.get("name") or "?"
+            logger.info(f"[resolve-man-rel] {name_hint}: @lid vence → '{lid_man_rel}' (era '{man_rel}')")
             man_rel = lid_man_rel
     return man_rel
 
@@ -1224,6 +1227,8 @@ def _dedup_personal_contacts(personal_contacts: dict, lid_phone_map: dict) -> in
         lid = phone_to_lid.get(digits) or phone_to_lid.get(phone_norm)
         if lid:
             personal_contacts[key]["lid"] = f"{lid}@lid"
+            name_hint = personal_contacts[key].get("nickname") or personal_contacts[key].get("name") or key
+            logger.info(f"[dedup] campo 'lid' adicionado: {name_hint} → {lid}@lid")
 
     # --- Passo 2: @s.whatsapp.net duplicados por normalização de telefone ---
     # Agrupa por telefone normalizado; mantém a entrada com mais campos preenchidos
