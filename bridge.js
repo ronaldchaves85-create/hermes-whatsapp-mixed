@@ -614,6 +614,7 @@ let onMessagesUpsert = async ({ messages, type }) => {
 
     // Handle fromMe messages based on mode
     if (msg.key.fromMe) {
+      console.log(`[bridge-debug] fromMe msg: chatId=${chatId} isSelfChat=${isSelfChat} isGroup=${isGroup}`);
       if (isGroup || chatId.includes('status')) continue;
 
       if (!isSelfChat && !recentlySentIds.has(msg.key.id)) {
