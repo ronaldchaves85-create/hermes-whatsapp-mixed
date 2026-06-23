@@ -3237,19 +3237,15 @@ def pre_gateway_dispatch(*args, **kwargs):
     if platform_val != "whatsapp":
         return None
 
-    # Log diagnóstico temporário para rastrear eventos from_me
+    # Log diagnóstico temporário para rastrear estrutura do evento
     try:
-        _diag_raw = None
-        for _a in ["raw", "raw_event", "payload", "data"]:
-            _v = getattr(event, _a, None)
-            if isinstance(_v, dict):
-                _diag_raw = _v
-                break
-        _diag_from_me = bool((_diag_raw or {}).get("fromMe") or (_diag_raw or {}).get("from_me"))
         _diag_chat = getattr(event.source, "chat_id", "?")
-        logger.info(f"[owner-msg-diag] fromMe={_diag_from_me} chat={_diag_chat} raw_keys={list((_diag_raw or {}).keys())[:8]}")
-    except Exception:
-        pass
+        _diag_attrs = {a: str(getattr(event, a, None))[:60] for a in dir(event) if not a.startswith("__")}
+        _diag_src_attrs = {a: str(getattr(event.source, a, None))[:60] for a in dir(event.source) if not a.startswith("__")}
+        logger.info(f"[owner-msg-diag] chat={_diag_chat} event_attrs={list(_diag_attrs.keys())} src_attrs={list(_diag_src_attrs.keys())}")
+        logger.info(f"[owner-msg-diag] event_vals={_diag_attrs}")
+    except Exception as _de:
+        logger.info(f"[owner-msg-diag] erro={_de}")
 
     # Processamento de Mídia (Áudio e Imagem) via Gemini
     media_info = _get_media_info(event)
