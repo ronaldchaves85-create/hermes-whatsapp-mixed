@@ -3300,7 +3300,6 @@ def pre_gateway_dispatch(*args, **kwargs):
         except Exception:
             _raw_msg = {}
     _is_from_me = bool(_raw_msg.get("fromMe") or _raw_msg.get("from_me"))
-    logger.info(f"[owner-msg-diag2] is_from_me={_is_from_me} raw_fromMe={_raw_msg.get('fromMe')} raw_keys={list(_raw_msg.keys())[:6]} chat={chat_id}")
 
     # Persistir mensagens manuais do André no SQLite (Hermes não grava from_me=1 automaticamente)
     # Nota: para from_me=1, sender_id==chat_id, então is_self_chat seria True erroneamente.
