@@ -1676,14 +1676,23 @@ def _collect_andre_messages_by_relationship(
         # Reverse lookup: phone_norm → relationship e nome
         phone_to_rel: dict[str, str] = {}
         phone_to_name: dict[str, str] = {}
+        # Mapa extra: raw prefix (LID ou telefone sem @) → rel/nome
+        raw_to_rel: dict[str, str] = {}
+        raw_to_name: dict[str, str] = {}
+        _owner_name_norm = _normalize_text(config.whatsapp_owner_number or "")
         for key, data in personal_contacts.items():
             rel = data.get("manual_relationship") or data.get("relationship") or "Cliente"
-            name = data.get("name") or data.get("nickname") or ""
-            phone = key.split("@")[0]
-            phone_norm = _normalize_brazilian_phone("".join(c for c in phone if c.isdigit()))
+            # Preferir nickname; usar name só se não for o nome do próprio André
+            name = data.get("nickname") or data.get("name") or ""
+            if _normalize_text(name) in ("andre alencar", "andré alencar", "andre", "andré"):
+                name = ""
+            raw_prefix = key.split("@")[0]  # ex: "265231477510271" (lid) ou "5586..." (phone)
+            phone_norm = _normalize_brazilian_phone("".join(c for c in raw_prefix if c.isdigit()))
             phone_to_rel[phone_norm] = rel
+            raw_to_rel[raw_prefix] = rel
             if name:
                 phone_to_name[phone_norm] = name
+                raw_to_name[raw_prefix] = name
 
         result: dict[str, list[str]] = {}
 
@@ -1717,8 +1726,9 @@ def _collect_andre_messages_by_relationship(
                 for chat_id in chat_ids:
                     phone = chat_id.split("@")[0].split(":")[0]
                     phone_norm = _normalize_brazilian_phone("".join(c for c in phone if c.isdigit()))
-                    rel = phone_to_rel.get(phone_norm, "Geral")
-                    contact_name = phone_to_name.get(phone_norm, rel)  # nome ou fallback p/ relacionamento
+                    # Tentar pelo raw prefix (funciona para @lid) e depois pelo telefone normalizado
+                    rel = raw_to_rel.get(phone, phone_to_rel.get(phone_norm, "Geral"))
+                    contact_name = raw_to_name.get(phone, phone_to_name.get(phone_norm, rel))
 
                     # Buscar diálogos: mensagem do contato + resposta do André
                     cur.execute(
