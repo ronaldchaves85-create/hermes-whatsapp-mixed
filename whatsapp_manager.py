@@ -3819,19 +3819,31 @@ def pre_gateway_dispatch(*args, **kwargs):
         # Fallback: bridge pode não setar has_media para from_me=1; detectar pelo texto placeholder
         _raw_text = (getattr(event, "text", "") or "").strip()
         if _raw_text in ("[audio received]", "[ptt received]"):
-            # Checar se há arquivo de áudio no cache
-            _audio_cache = Path("/opt/data/.hermes/audio_cache")
-            if _audio_cache.exists():
-                _audio_files = sorted(_audio_cache.glob("aud_*.ogg"), key=lambda f: f.stat().st_mtime, reverse=True)
-                if _audio_files:
-                    _latest = _audio_files[0]
-                    # Só usar se o arquivo foi modificado nos últimos 30 segundos
-                    if (time.time() - _latest.stat().st_mtime) < 30:
-                        media_info["has_media"] = True
-                        media_info["media_type"] = "ptt"
-                        media_info["media_urls"] = [str(_latest)]
-                        _transcribe_outgoing_audio(event, media_info)
-                        logger.info(f"[audio-out] Transcrição via fallback cache: {_latest.name}")
+            # Tentar obter caminho do áudio direto do evento (raw/payload)
+            _audio_path = None
+            for _attr in ["raw", "raw_event", "payload", "data"]:
+                _raw_val = getattr(event, _attr, None)
+                if isinstance(_raw_val, dict):
+                    _urls = _raw_val.get("mediaUrls") or _raw_val.get("media_urls") or []
+                    if isinstance(_urls, list) and _urls:
+                        _audio_path = _urls[0]
+                        break
+                    elif isinstance(_urls, str) and _urls:
+                        _audio_path = _urls
+                        break
+            # Fallback: arquivo mais recente no cache
+            if not _audio_path:
+                _audio_cache = Path("/opt/data/.hermes/audio_cache")
+                if _audio_cache.exists():
+                    _audio_files = sorted(_audio_cache.glob("aud_*.ogg"), key=lambda f: f.stat().st_mtime, reverse=True)
+                    if _audio_files:
+                        _audio_path = str(_audio_files[0])
+            if _audio_path and Path(_audio_path).exists():
+                media_info["has_media"] = True
+                media_info["media_type"] = "ptt"
+                media_info["media_urls"] = [_audio_path]
+                _transcribe_outgoing_audio(event, media_info)
+                logger.info(f"[audio-out] Transcrição via fallback: {Path(_audio_path).name}")
 
     # Identificar chat
     chat_id = str(event.source.chat_id) if event.source.chat_id else ""
