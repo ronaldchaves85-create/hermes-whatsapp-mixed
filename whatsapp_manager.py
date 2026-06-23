@@ -4030,12 +4030,11 @@ def pre_gateway_dispatch(*args, **kwargs):
                     "namorado": ("AmigoProximo", "Namorado"), "esposa": ("Parente", "Esposa"),
                     "marido": ("Parente", "Marido"), "esposo": ("Parente", "Esposo"),
                 }
-                if "relationship" not in fields_to_update:
-                    for kw, (rel, man_rel) in rel_keywords.items():
-                        if kw in msg_text.lower():
-                            fields_to_update["relationship"] = rel
-                            fields_to_update["manual_relationship"] = man_rel
-                            break
+                for kw, (rel, man_rel) in rel_keywords.items():
+                    if kw in msg_text.lower():
+                        fields_to_update["relationship"] = rel
+                        fields_to_update["manual_relationship"] = man_rel
+                        break
 
                 if fields_to_update:
                     result = _update_contact_fields(nl_contact_name, fields_to_update)
