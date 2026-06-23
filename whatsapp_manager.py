@@ -2024,13 +2024,13 @@ def _collect_andre_messages_by_relationship(
                     cur.execute(
                         """
                         SELECT m.body, m.timestamp,
-                               (SELECT body FROM messages
-                                WHERE chat_id=? AND from_me=0
-                                AND body IS NOT NULL AND length(trim(body)) > 1
-                                AND body NOT LIKE '<Media omitted>%'
-                                AND length(body) <= 300
-                                AND ABS(timestamp - m.timestamp) <= 86400
-                                ORDER BY ABS(timestamp - m.timestamp) ASC LIMIT 1) as contact_msg
+                               (SELECT cm.body FROM messages AS cm
+                                WHERE cm.chat_id=? AND cm.from_me=0
+                                AND cm.body IS NOT NULL AND length(trim(cm.body)) > 1
+                                AND cm.body NOT LIKE '<Media omitted>%'
+                                AND length(cm.body) <= 300
+                                AND ABS(cm.timestamp - m.timestamp) <= 86400
+                                ORDER BY ABS(cm.timestamp - m.timestamp) ASC LIMIT 1) as contact_msg
                         FROM messages m
                         WHERE m.from_me=1 AND (m.sender_name IS NULL OR m.sender_name != 'Bot') AND m.chat_id=?
                         AND m.timestamp >= ?
