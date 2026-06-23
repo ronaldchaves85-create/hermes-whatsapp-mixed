@@ -3336,5 +3336,106 @@ class TestBuildStyleSectionWithPatterns(unittest.TestCase):
         self.assertIn('André: "oi amigo"', result)
 
 
+class TestDedupPersonalContacts(unittest.TestCase):
+    """Testa _dedup_personal_contacts e _merge_contact_entries."""
+
+    def setUp(self):
+        from whatsapp_manager import _dedup_personal_contacts, _merge_contact_entries
+        self._dedup = _dedup_personal_contacts
+        self._merge = _merge_contact_entries
+
+    def _contacts(self, entries: dict) -> dict:
+        return {k: dict(v) for k, v in entries.items()}
+
+    def test_lid_merged_into_whatsapp_entry(self):
+        """@lid deve ser absorvido no @s.whatsapp.net e removido."""
+        pc = self._contacts({
+            "5586@s.whatsapp.net": {"relationship": "Amigo"},
+            "abc@lid": {"relationship": "Filho", "name": "Pedrinho"},
+        })
+        lid_map = {"abc": "5586"}
+        removed = self._dedup(pc, lid_map)
+        self.assertEqual(removed, 1)
+        self.assertNotIn("abc@lid", pc)
+        self.assertIn("5586@s.whatsapp.net", pc)
+        entry = pc["5586@s.whatsapp.net"]
+        self.assertEqual(entry["relationship"], "Filho")
+        self.assertEqual(entry["name"], "Pedrinho")
+        self.assertEqual(entry["lid"], "abc@lid")
+
+    def test_manual_relationship_not_overwritten(self):
+        """manual_relationship no @s.whatsapp.net nunca deve ser sobrescrito."""
+        pc = self._contacts({
+            "5586@s.whatsapp.net": {"manual_relationship": "VIP", "relationship": "Amigo"},
+            "abc@lid": {"manual_relationship": "Filho"},
+        })
+        lid_map = {"abc": "5586"}
+        self._dedup(pc, lid_map)
+        self.assertEqual(pc["5586@s.whatsapp.net"]["manual_relationship"], "VIP")
+
+    def test_lid_manual_relationship_fills_empty(self):
+        """manual_relationship do @lid preenche se @s.whatsapp.net não tem."""
+        pc = self._contacts({
+            "5586@s.whatsapp.net": {"relationship": "Amigo"},
+            "abc@lid": {"manual_relationship": "Filho"},
+        })
+        lid_map = {"abc": "5586"}
+        self._dedup(pc, lid_map)
+        self.assertEqual(pc["5586@s.whatsapp.net"]["manual_relationship"], "Filho")
+
+    def test_phone_normalization_dedup(self):
+        """Dois @s.whatsapp.net com mesmo telefone (com/sem 9º dígito) devem ser mesclados.
+        Formato BR: 55 + DDD (2) + 9 + número (8) = 13 dígitos → normaliza p/ 12 dígitos.
+        """
+        # 5586999970003 (13 dígitos, com 9º) normaliza para 558699970003 (12 dígitos)
+        pc = self._contacts({
+            "5586999970003@s.whatsapp.net": {"relationship": "Cliente", "name": "EmpreendedorSerial"},
+            "558699970003@s.whatsapp.net": {"relationship": "Cliente"},
+        })
+        removed = self._dedup(pc, {})
+        self.assertEqual(removed, 1)
+        self.assertEqual(len(pc), 1)
+        remaining = list(pc.values())[0]
+        self.assertEqual(remaining["name"], "EmpreendedorSerial")
+
+    def test_lid_without_phone_mapping_stays(self):
+        """@lid sem telefone mapeado deve permanecer no dict."""
+        pc = self._contacts({
+            "abc@lid": {"relationship": "Cliente", "name": "X"},
+        })
+        removed = self._dedup(pc, {})
+        self.assertEqual(removed, 0)
+        self.assertIn("abc@lid", pc)
+
+    def test_lid_field_added_when_lid_entry_absent(self):
+        """Campo 'lid' deve ser adicionado ao @s.whatsapp.net mesmo sem entrada @lid no dict."""
+        pc = self._contacts({
+            "5586@s.whatsapp.net": {"relationship": "Cliente"},
+        })
+        lid_map = {"abc": "5586"}
+        self._dedup(pc, lid_map)
+        self.assertEqual(pc["5586@s.whatsapp.net"]["lid"], "abc@lid")
+
+    def test_owner_name_not_propagated(self):
+        """Nome do dono no @lid não deve sobrescrever nome do @s.whatsapp.net."""
+        pc = self._contacts({
+            "5586@s.whatsapp.net": {"name": "Cliente X"},
+            "abc@lid": {"name": "André Alencar"},
+        })
+        lid_map = {"abc": "5586"}
+        self._dedup(pc, lid_map)
+        self.assertEqual(pc["5586@s.whatsapp.net"]["name"], "Cliente X")
+
+    def test_no_duplicate_removal_without_lid_map(self):
+        """Sem lid_phone_map, entradas @s.whatsapp.net distintas não são tocadas."""
+        pc = self._contacts({
+            "5586@s.whatsapp.net": {"relationship": "Cliente"},
+            "5599@s.whatsapp.net": {"relationship": "Amigo"},
+        })
+        removed = self._dedup(pc, {})
+        self.assertEqual(removed, 0)
+        self.assertEqual(len(pc), 2)
+
+
 if __name__ == "__main__":
     unittest.main()

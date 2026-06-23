@@ -1065,6 +1065,164 @@ def _classify_contact_via_llm(name: str, chat_history: str, stats_info: str) -> 
     }
 
 
+def _build_lid_phone_map(db_path: "Path | None" = None) -> dict[str, str]:
+    """Constrói mapa {lid → phone_digits} a partir dos arquivos de sessão e do banco."""
+    import re as _re
+    lid_phone_map: dict[str, str] = {}
+    session_dir = Path("/opt/data/.hermes/platforms/whatsapp/session")
+    if session_dir.exists():
+        try:
+            _files = list(session_dir.iterdir())
+        except Exception:
+            _files = []
+        for f in _files:
+            m = _re.match(r'^lid-mapping-(\d+)\.json$', f.name)
+            if not m:
+                continue
+            try:
+                lid = json.loads(f.read_text()).strip().strip('"')
+                if lid:
+                    lid_phone_map[lid] = m.group(1)
+            except Exception:
+                pass
+    if db_path and Path(db_path).exists():
+        import sqlite3
+        try:
+            with sqlite3.connect(str(db_path)) as conn:
+                cur = conn.cursor()
+                cur.execute("""
+                    SELECT DISTINCT chat_id, sender_id FROM messages
+                    WHERE from_me=0 AND chat_id LIKE '%@lid%'
+                    AND sender_id IS NOT NULL
+                    AND sender_id NOT LIKE '%@lid%'
+                    AND sender_id NOT LIKE '%@g.us%'
+                """)
+                for cid, sid in cur.fetchall():
+                    lid = cid.split("@")[0]
+                    phone = sid.split("@")[0].split(":")[0]
+                    if phone and phone.isdigit() and lid not in lid_phone_map:
+                        lid_phone_map[lid] = phone
+        except Exception:
+            pass
+    return lid_phone_map
+
+
+def _merge_contact_entries(primary: dict, secondary: dict) -> None:
+    """
+    Mescla `secondary` em `primary` in-place.
+    Regras de precedência (ordem decrescente de confiabilidade):
+      1. manual_relationship  — definido pelo usuário, nunca sobrescrever
+      2. Campos do secondary se primary tiver placeholder/vazio
+      3. relationship: secondary vence se primary não tem manual_relationship
+    """
+    _owner_norms = {"andre alencar", "andré alencar", "andre", "andré"}
+
+    # manual_relationship: never overwrite, only fill if missing
+    if secondary.get("manual_relationship") and not primary.get("manual_relationship"):
+        primary["manual_relationship"] = secondary["manual_relationship"]
+
+    # relationship: secondary vence se primary não tem manual_relationship
+    if not primary.get("manual_relationship"):
+        sec_rel = secondary.get("manual_relationship") or secondary.get("relationship")
+        if sec_rel:
+            primary["relationship"] = sec_rel
+
+    # name/nickname: secondary vence se primary está vazio ou é placeholder
+    for field in ("nickname", "name"):
+        sec_val = secondary.get(field) or ""
+        pri_val = primary.get(field) or ""
+        pri_norm = _normalize_text(pri_val)
+        if sec_val and (not pri_val or pri_norm in _owner_norms
+                        or pri_norm.startswith("contato ")
+                        or pri_norm.startswith("usuario ")):
+            primary[field] = sec_val
+
+    # campos manuais: preencher se ausente no primary
+    for field in ("notes", "pet_name", "full_summary", "last_summarized_at"):
+        if secondary.get(field) and not primary.get(field):
+            primary[field] = secondary[field]
+
+
+def _dedup_personal_contacts(personal_contacts: dict, lid_phone_map: dict) -> int:
+    """
+    Deduplica personal_contacts garantindo uma entrada por contato real.
+
+    Casos tratados:
+    1. @lid + @s.whatsapp.net do mesmo telefone → mescla no @s.whatsapp.net, remove @lid,
+       adiciona campo 'lid' para cross-reference.
+    2. @s.whatsapp.net duplicado por normalização de 9º dígito brasileiro
+       (ex: 5586994140236 e 558694140236) → mantém o mais recente/completo, remove o outro.
+    3. @lid orphan (sem telefone mapeado) → mantém com campo 'phone' vazio para auditoria.
+
+    Retorna o total de entradas removidas.
+    """
+    _owner_norms = {"andre alencar", "andré alencar", "andre", "andré"}
+    phone_to_lid = {v: k for k, v in lid_phone_map.items()}
+    to_remove: list[str] = []
+
+    # --- Passo 1: @lid → @s.whatsapp.net ---
+    for key in list(personal_contacts.keys()):
+        if "@lid" in key or key not in personal_contacts:
+            continue
+        entry = personal_contacts[key]
+        if not isinstance(entry, dict):
+            continue
+
+        raw = key.split("@")[0].split(":")[0]
+        digits = "".join(c for c in raw if c.isdigit())
+        phone_norm = _normalize_brazilian_phone(digits)
+
+        lid = phone_to_lid.get(digits) or phone_to_lid.get(phone_norm)
+        if lid:
+            lid_key = f"{lid}@lid"
+            entry["lid"] = lid_key  # sempre registrar o lid conhecido
+            lid_entry = personal_contacts.get(lid_key)
+            if isinstance(lid_entry, dict) and lid_key not in to_remove:
+                _merge_contact_entries(primary=entry, secondary=lid_entry)
+                to_remove.append(lid_key)
+
+    # --- Passo 2: @s.whatsapp.net duplicados por normalização de telefone ---
+    # Agrupa por telefone normalizado; mantém a entrada com mais campos preenchidos
+    phone_norm_to_keys: dict[str, list[str]] = {}
+    for key in list(personal_contacts.keys()):
+        if "@lid" in key or key in to_remove or not isinstance(personal_contacts.get(key), dict):
+            continue
+        raw = key.split("@")[0].split(":")[0]
+        digits = "".join(c for c in raw if c.isdigit())
+        if not digits:
+            continue
+        pnorm = _normalize_brazilian_phone(digits)
+        phone_norm_to_keys.setdefault(pnorm, []).append(key)
+
+    for pnorm, keys in phone_norm_to_keys.items():
+        if len(keys) < 2:
+            continue
+        # Escolher a entrada canonical: prefere a que tem manual_relationship, depois mais campos
+        def _score(k: str) -> int:
+            e = personal_contacts.get(k, {})
+            return (
+                bool(e.get("manual_relationship")) * 100
+                + bool(e.get("nickname")) * 10
+                + bool(e.get("name")) * 5
+                + bool(e.get("full_summary")) * 3
+                + len(e)
+            )
+        keys_sorted = sorted(keys, key=_score, reverse=True)
+        canonical_key = keys_sorted[0]
+        canonical = personal_contacts[canonical_key]
+        for dup_key in keys_sorted[1:]:
+            if dup_key in to_remove:
+                continue
+            dup_entry = personal_contacts[dup_key]
+            _merge_contact_entries(primary=canonical, secondary=dup_entry)
+            to_remove.append(dup_key)
+
+    for key in to_remove:
+        personal_contacts.pop(key, None)
+
+    return len(to_remove)
+
+
 def _sync_contacts_from_db_internal(force: bool = True) -> str:
     """Sincroniza contatos do SQLite local para personal_contacts.json e envia para o GitHub."""
     import sqlite3
@@ -1153,6 +1311,13 @@ def _sync_contacts_from_db_internal(force: bool = True) -> str:
         for k in owner_keys:
             del personal_contacts[k]
             logger.info(f"[sync] Removida entrada do owner: {k}")
+
+    # 1d. Deduplicar: mesclar entradas @lid com @s.whatsapp.net do mesmo contato
+    _lid_phone_map_sync = _build_lid_phone_map(db_path if db_path.exists() else None)
+    _deduped = _dedup_personal_contacts(personal_contacts, _lid_phone_map_sync)
+    if _deduped:
+        logger.info(f"[sync] {_deduped} entrada(s) @lid mescladas e removidas (campo 'lid' adicionado)")
+        metadata_updated = True
 
     # Limpar full_summary gerados com dados incorretos (exemplo do prompt ou respostas do bot)
     _bad_summary_markers = ("pediu orçamento de X", "comprou, elogiou atendimento", "André:")
@@ -1839,11 +2004,16 @@ def _collect_andre_messages_by_relationship(
                             rel = raw_to_rel.get(_alt_phone, phone_to_rel.get(_palt))
                             contact_name = raw_to_name.get(_alt_phone, phone_to_name.get(_palt))
                     # Estratégia 3: @s.whatsapp.net chat cujo entry é @lid → via phone_to_lid
-                    if (rel is None or contact_name is None) and "@lid" not in chat_id:
+                    # @lid entry tem precedência (mais específico e atualizado)
+                    if "@lid" not in chat_id:
                         _lid_from_phone = _phone_to_lid.get(digits) or _phone_to_lid.get(phone_norm)
                         if _lid_from_phone:
-                            rel = rel or raw_to_rel.get(_lid_from_phone)
-                            contact_name = contact_name or raw_to_name.get(_lid_from_phone)
+                            _lid_rel = raw_to_rel.get(_lid_from_phone)
+                            _lid_name = raw_to_name.get(_lid_from_phone)
+                            if _lid_rel:
+                                rel = _lid_rel
+                            if _lid_name:
+                                contact_name = _lid_name
                     # Estratégia 4: fallback pelo telefone normalizado
                     if rel is None:
                         rel = phone_to_rel.get(phone_norm, "Geral")

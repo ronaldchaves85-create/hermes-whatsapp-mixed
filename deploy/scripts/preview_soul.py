@@ -152,11 +152,15 @@ def lookup_contact(chat_id, lid_phone_map, raw_to_rel, raw_to_name, phone_to_rel
             rel = raw_to_rel.get(phone, phone_to_rel.get(palt))
             name = raw_to_name.get(phone, phone_to_name.get(palt))
 
-    if (rel is None or name is None) and "@lid" not in chat_id:
+    if "@lid" not in chat_id:
         lid = phone_to_lid.get(digits) or phone_to_lid.get(pnorm)
         if lid:
-            rel = rel or raw_to_rel.get(lid)
-            name = name or raw_to_name.get(lid)
+            lid_rel = raw_to_rel.get(lid)
+            lid_name = raw_to_name.get(lid)
+            if lid_rel:
+                rel = lid_rel
+            if lid_name:
+                name = lid_name
 
     rel = rel or phone_to_rel.get(pnorm, "Geral")
     name = name or phone_to_name.get(pnorm) or rel
