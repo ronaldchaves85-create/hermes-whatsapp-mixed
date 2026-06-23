@@ -18,6 +18,7 @@ from pathlib import Path
 
 DB_PATH = Path("/opt/data/.hermes/whatsapp_messages.db")
 CONTACTS_PATH = Path("/opt/data/personal_contacts.json")
+CONTACTS_CACHE_PATH = Path("/opt/data/.hermes/contacts_cache.json")
 
 PREVIEW = "--preview" in sys.argv
 DIAG = "--diag" in sys.argv
@@ -75,6 +76,17 @@ def load_contacts():
         return json.load(f)
 
 
+def load_contacts_cache() -> dict:
+    """Carrega contacts_cache.json do bridge (pushNames capturados em tempo real)."""
+    if not CONTACTS_CACHE_PATH.exists():
+        return {}
+    try:
+        with open(CONTACTS_CACHE_PATH) as f:
+            return json.load(f)
+    except Exception:
+        return {}
+
+
 def build_lookups(personal_contacts: dict):
     """
     Retorna:
@@ -83,6 +95,19 @@ def build_lookups(personal_contacts: dict):
     """
     raw_to_rel, raw_to_name = {}, {}
     phone_to_rel, phone_to_name = {}, {}
+
+    # Nomes do cache do bridge (pushName capturado em tempo real)
+    cache = load_contacts_cache()
+    cache_names: dict[str, str] = {}
+    for jid, data in cache.items():
+        cname = data.get("notify") or data.get("name") or data.get("pushName") or ""
+        _cn = norm_text(cname)
+        if _cn and _cn not in ("andre alencar", "andré alencar", "andre", "andré"):
+            raw_c = jid.split("@")[0].split(":")[0]
+            digits_c = "".join(c for c in raw_c if c.isdigit())
+            cache_names[raw_c] = cname
+            if digits_c:
+                cache_names[norm_phone(digits_c)] = cname
 
     for key, data in personal_contacts.items():
         rel = data.get("manual_relationship") or data.get("relationship") or "Cliente"
@@ -96,6 +121,10 @@ def build_lookups(personal_contacts: dict):
         raw = key.split("@")[0]
         digits = "".join(c for c in raw if c.isdigit())
         pnorm = norm_phone(digits)
+
+        # Fallback para nome do cache do bridge
+        if not name:
+            name = cache_names.get(raw) or cache_names.get(pnorm) or ""
 
         raw_to_rel[raw] = rel
         phone_to_rel[pnorm] = rel
