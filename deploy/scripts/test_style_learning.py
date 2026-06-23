@@ -248,12 +248,37 @@ def main():
                 WHERE chat_id NOT LIKE '%@g.us%'
                 GROUP BY chat_id ORDER BY last_ts DESC
             """)
-            rows = cur.fetchall()
-            print(f"Chats no banco: {len(rows)}\n")
-            for chat_id, manual_out, received, last_ts in rows:
-                rel, name = lookup_contact(chat_id, lid_phone_map, raw_to_rel, raw_to_name, phone_to_rel, phone_to_name)
+            raw_rows = cur.fetchall()
+
+            # Agrupa @lid e @s.whatsapp.net do mesmo contato
+            phone_to_lid_rev = {v: k for k, v in lid_phone_map.items()}
+            merged: dict[str, dict] = {}
+            for chat_id, manual_out, received, last_ts in raw_rows:
+                raw = chat_id.split("@")[0]
+                digits = "".join(c for c in raw if c.isdigit())
+                pnorm = norm_phone(digits)
+                # Chave canônica: phone normalizado se disponível, senão raw
+                if "@lid" in chat_id:
+                    phone = lid_phone_map.get(raw, "")
+                    key = norm_phone("".join(c for c in phone if c.isdigit())) if phone else raw
+                else:
+                    key = pnorm or raw
+                if key not in merged:
+                    merged[key] = {"chat_ids": [], "manual_out": 0, "received": 0, "last_ts": 0}
+                merged[key]["chat_ids"].append(chat_id)
+                merged[key]["manual_out"] += manual_out
+                merged[key]["received"] += received
+                merged[key]["last_ts"] = max(merged[key]["last_ts"], last_ts or 0)
+
+            print(f"Chats no banco: {len(raw_rows)} JIDs → {len(merged)} contatos únicos\n")
+            for key, info in sorted(merged.items(), key=lambda x: -x[1]["last_ts"]):
+                primary_id = info["chat_ids"][0]
+                rel, name = lookup_contact(primary_id, lid_phone_map, raw_to_rel, raw_to_name, phone_to_rel, phone_to_name)
+                manual_out = info["manual_out"]
+                received = info["received"]
                 flag = "✅" if manual_out >= MIN_MSGS else ("⚠️" if manual_out > 0 else "❌")
-                print(f"{flag} {chat_id}")
+                jids_str = " + ".join(info["chat_ids"]) if len(info["chat_ids"]) > 1 else primary_id
+                print(f"{flag} {jids_str}")
                 print(f"   msgs_saída={manual_out} recebidas={received} | {rel} / {name}")
             return
 
