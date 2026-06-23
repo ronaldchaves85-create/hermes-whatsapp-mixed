@@ -1749,6 +1749,9 @@ def _collect_andre_messages_by_relationship(
                     if _normalize_brazilian_phone("".join(c for c in row[0].split("@")[0].split(":")[0] if c.isdigit())) != owner_phone
                 ]
 
+                # Mapa reverso: telefone → lid (para contatos @s.whatsapp.net cujo entry é @lid)
+                _phone_to_lid = {v: k for k, v in lid_phone_map.items()}
+
                 cutoff_ts = int(time.time()) - 90 * 24 * 3600
                 total_manual = 0
                 for chat_id in chat_ids:
@@ -1756,15 +1759,23 @@ def _collect_andre_messages_by_relationship(
                     digits = "".join(c for c in raw if c.isdigit())
                     phone_norm = _normalize_brazilian_phone(digits)
 
-                    # Resolver relacionamento: raw → lid_phone_map → phone_norm
+                    # Resolver relacionamento com 4 estratégias
                     rel = raw_to_rel.get(raw)
                     contact_name = raw_to_name.get(raw)
+                    # Estratégia 2: @lid chat → via lid_phone_map
                     if rel is None and "@lid" in chat_id:
                         _alt_phone = lid_phone_map.get(raw, "")
                         if _alt_phone:
                             _palt = _normalize_brazilian_phone("".join(c for c in _alt_phone if c.isdigit()))
                             rel = raw_to_rel.get(_alt_phone, phone_to_rel.get(_palt))
                             contact_name = raw_to_name.get(_alt_phone, phone_to_name.get(_palt))
+                    # Estratégia 3: @s.whatsapp.net chat cujo entry é @lid → via phone_to_lid
+                    if rel is None and "@lid" not in chat_id:
+                        _lid_from_phone = _phone_to_lid.get(digits) or _phone_to_lid.get(phone_norm)
+                        if _lid_from_phone:
+                            rel = raw_to_rel.get(_lid_from_phone)
+                            contact_name = raw_to_name.get(_lid_from_phone)
+                    # Estratégia 4: fallback pelo telefone normalizado
                     if rel is None:
                         rel = phone_to_rel.get(phone_norm, "Geral")
                     if contact_name is None:

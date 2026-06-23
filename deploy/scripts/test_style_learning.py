@@ -147,17 +147,20 @@ def lookup_contact(chat_id: str, lid_phone_map: dict,
                    raw_to_rel, raw_to_name, phone_to_rel, phone_to_name):
     """
     Resolve relacionamento e nome para um chat_id.
-    Tenta: raw prefix → cross-reference lid→phone → phone normalizado.
+    Tenta: raw prefix → reverse lid (phone→lid) → lid→phone → phone normalizado.
     """
+    # Mapa reverso: phone → lid (calculado uma vez seria melhor, mas aqui é simples)
+    phone_to_lid = {v: k for k, v in lid_phone_map.items()}
+
     raw = chat_id.split("@")[0].split(":")[0]
     digits = "".join(c for c in raw if c.isdigit())
     pnorm = norm_phone(digits)
 
-    # 1. Tentativa direta pelo raw prefix
+    # 1. Tentativa direta pelo raw prefix (funciona para @lid entries diretos)
     rel = raw_to_rel.get(raw)
     name = raw_to_name.get(raw)
 
-    # 2. Para @lid, tentar via mapa lid→phone
+    # 2. Para @lid chat, tentar via lid→phone no personal_contacts
     if rel is None and "@lid" in chat_id:
         phone_from_lid = lid_phone_map.get(raw, "")
         if phone_from_lid:
@@ -165,7 +168,14 @@ def lookup_contact(chat_id: str, lid_phone_map: dict,
             rel = raw_to_rel.get(phone_from_lid, phone_to_rel.get(palt))
             name = raw_to_name.get(phone_from_lid, phone_to_name.get(palt))
 
-    # 3. Fallback pelo telefone normalizado
+    # 3. Para @s.whatsapp.net, tentar via phone→lid (contato pode estar sob @lid no personal_contacts)
+    if rel is None and "@lid" not in chat_id:
+        lid_from_phone = phone_to_lid.get(digits) or phone_to_lid.get(pnorm)
+        if lid_from_phone:
+            rel = raw_to_rel.get(lid_from_phone)
+            name = raw_to_name.get(lid_from_phone)
+
+    # 4. Fallback pelo telefone normalizado
     if rel is None:
         rel = phone_to_rel.get(pnorm, "Geral")
     if name is None:
