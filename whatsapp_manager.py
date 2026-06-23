@@ -1106,13 +1106,16 @@ def _sync_contacts_from_db_internal(force: bool = True) -> str:
             if not isinstance(_entry, dict):
                 continue
             _cur_name = _entry.get("name") or ""
-            # Substituir apenas nomes placeholder (Contato XXXX, vazios, etc.)
+            _cur_name_norm = _normalize_text(_cur_name)
+            # Substituir nomes placeholder, vazios, ou com nome do dono (dado incorreto)
+            _owner_norms = {"andre alencar", "andré alencar", "andre", "andré"}
             _is_placeholder = (
                 not _cur_name
-                or _normalize_text(_cur_name).startswith("contato ")
-                or _normalize_text(_cur_name).startswith("usuario ")
+                or _cur_name_norm.startswith("contato ")
+                or _cur_name_norm.startswith("usuario ")
+                or _cur_name_norm in _owner_norms
             )
-            if _is_placeholder and _bname:
+            if _is_placeholder and _bname and _normalize_text(_bname) not in _owner_norms:
                 _entry["name"] = _bname
                 _names_updated += 1
                 metadata_updated = True
@@ -1330,7 +1333,9 @@ def _sync_contacts_from_db_internal(force: bool = True) -> str:
                 guide_val = "Responda de forma prestativa." if is_stale else (existing_data.get("guidelines") or "Responda de forma prestativa.")
                 
                 existing_saved_name = existing_data.get("name") or ""
-                resolved_name = name if (not existing_saved_name or re.match(r"^Contato\s+\d+$", existing_saved_name)) else existing_saved_name
+                _esn_norm = _normalize_text(existing_saved_name)
+                _is_bad_name = (not existing_saved_name or re.match(r"^Contato\s+\d+$", existing_saved_name) or _esn_norm in {"andre alencar", "andré alencar", "andre", "andré"})
+                resolved_name = (name if (_is_bad_name and name) else (None if _is_bad_name else existing_saved_name))
                 personal_contacts[target_key] = {
                     "name": resolved_name,
                     "relationship": rel_val,
@@ -1365,7 +1370,9 @@ def _sync_contacts_from_db_internal(force: bool = True) -> str:
                 guide_val = "Responda de forma prestativa." if is_stale else (existing_data.get("guidelines") or "Responda de forma prestativa.")
 
                 existing_saved_name = existing_data.get("name") or ""
-                resolved_name = name if (not existing_saved_name or re.match(r"^Contato\s+\d+$", existing_saved_name)) else existing_saved_name
+                _esn_norm = _normalize_text(existing_saved_name)
+                _is_bad_name = (not existing_saved_name or re.match(r"^Contato\s+\d+$", existing_saved_name) or _esn_norm in {"andre alencar", "andré alencar", "andre", "andré"})
+                resolved_name = (name if (_is_bad_name and name) else (None if _is_bad_name else existing_saved_name))
                 personal_contacts[target_key] = {
                     "name": resolved_name,
                     "relationship": rel_val,
