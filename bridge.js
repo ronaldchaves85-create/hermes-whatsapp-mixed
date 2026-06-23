@@ -711,6 +711,14 @@ let onMessagesUpsert = async ({ messages, type }) => {
     let mediaType = '';
     const mediaUrls = [];
 
+    // Debug: log message type keys for unknown types
+    const _knownKeys = ['conversation','extendedTextMessage','imageMessage','videoMessage','audioMessage','pttMessage','documentMessage','contactMessage','contactsArrayMessage','stickerMessage','locationMessage','liveLocationMessage','reactionMessage','pollCreationMessage','pollUpdateMessage','ephemeralMessage','viewOnceMessage'];
+    const _msgKeys = Object.keys(messageContent);
+    const _unknownKeys = _msgKeys.filter(k => !_knownKeys.includes(k));
+    if (_msgKeys.length > 0 && !messageContent.conversation && !messageContent.extendedTextMessage) {
+      console.log(`[bridge] message keys: ${_msgKeys.join(', ')}`);
+    }
+
     if (messageContent.conversation) {
       body = messageContent.conversation;
     } else if (messageContent.extendedTextMessage?.text) {
