@@ -381,7 +381,7 @@ def _persist_owner_message_to_db(chat_id: str, message_id: str, body: str, times
             )
             conn.commit()
             if cur.rowcount:
-                logger.debug(f"[owner-msg] Gravado no SQLite: chat={chat_id} body='{body[:60]}'")
+                logger.info(f"[owner-msg] Gravado no SQLite: chat={chat_id} body='{body[:60]}'")
     except Exception as e:
         logger.warning(f"[owner-msg] Erro ao gravar mensagem do dono: {e}")
 
@@ -3299,7 +3299,13 @@ def pre_gateway_dispatch(*args, **kwargs):
     _is_from_me = bool((_raw_event or {}).get("fromMe") or (_raw_event or {}).get("from_me"))
 
     # Persistir mensagens manuais do André no SQLite (Hermes não grava from_me=1 automaticamente)
-    if _is_from_me and not is_self_chat and chat_id:
+    # Nota: para from_me=1, sender_id==chat_id, então is_self_chat seria True erroneamente.
+    # Usamos _is_from_me + verificar que não é self-chat pelo chat_id (@g.us excluído também)
+    _is_group = "@g.us" in chat_id
+    _chat_phone = "".join(c for c in chat_id.split("@")[0].split(":")[0] if c.isdigit())
+    _owner_phone_clean = "".join(c for c in owner_number.split("@")[0].split(":")[0] if c.isdigit())
+    _is_real_self_chat = _normalize_brazilian_phone(_chat_phone) == _normalize_brazilian_phone(_owner_phone_clean)
+    if _is_from_me and not _is_group and not _is_real_self_chat and chat_id:
         _persist_owner_message_to_db(
             chat_id=chat_id,
             message_id=media_info.get("message_id") or "",
