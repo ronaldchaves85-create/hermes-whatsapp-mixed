@@ -3440,15 +3440,17 @@ class TestDedupPersonalContacts(unittest.TestCase):
         self.assertEqual(entry["name"], "Pedrinho")
         self.assertEqual(entry["lid"], "abc@lid")
 
-    def test_manual_relationship_not_overwritten(self):
-        """manual_relationship no @s.whatsapp.net nunca deve ser sobrescrito."""
+    def test_lid_manual_relationship_wins(self):
+        """@lid é mais autoritativo: sua manual_relationship vence sobre @s.whatsapp.net.
+        Caso real: Mayra tinha 'Amigo' no @s e 'namorada' no @lid — @lid deve vencer.
+        """
         pc = self._contacts({
-            "5586@s.whatsapp.net": {"manual_relationship": "VIP", "relationship": "Amigo"},
-            "abc@lid": {"manual_relationship": "Filho"},
+            "5586@s.whatsapp.net": {"manual_relationship": "Amigo", "relationship": "Amigo"},
+            "abc@lid": {"manual_relationship": "namorada"},
         })
         lid_map = {"abc": "5586"}
         self._dedup(pc, lid_map)
-        self.assertEqual(pc["5586@s.whatsapp.net"]["manual_relationship"], "VIP")
+        self.assertEqual(pc["5586@s.whatsapp.net"]["manual_relationship"], "namorada")
 
     def test_lid_manual_relationship_fills_empty(self):
         """manual_relationship do @lid preenche se @s.whatsapp.net não tem."""
@@ -3459,6 +3461,20 @@ class TestDedupPersonalContacts(unittest.TestCase):
         lid_map = {"abc": "5586"}
         self._dedup(pc, lid_map)
         self.assertEqual(pc["5586@s.whatsapp.net"]["manual_relationship"], "Filho")
+
+    def test_dedup_by_name_no_session_files(self):
+        """Sem session files (lid_map vazio), dedup por nome deve mesclar @lid e @s.whatsapp.net.
+        Caso real: Mayra tinha @lid com 'namorada' e @s com 'Amigo' sem lid_map disponível.
+        """
+        pc = self._contacts({
+            "558698412942@s.whatsapp.net": {"name": "Mayra Cecília Barbosa", "manual_relationship": "Amigo"},
+            "5940090822813@lid": {"name": "Mayra Cecília Barbosa", "manual_relationship": "namorada"},
+        })
+        removed = self._dedup(pc, {})  # lid_map vazio — sem session files
+        self.assertEqual(removed, 1)
+        self.assertNotIn("5940090822813@lid", pc)
+        self.assertIn("558698412942@s.whatsapp.net", pc)
+        self.assertEqual(pc["558698412942@s.whatsapp.net"]["manual_relationship"], "namorada")
 
     def test_phone_normalization_dedup(self):
         """Dois @s.whatsapp.net com mesmo telefone (com/sem 9º dígito) devem ser mesclados.
