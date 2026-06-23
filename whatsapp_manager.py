@@ -1939,10 +1939,10 @@ def _build_style_section_directly(messages_by_relationship: dict) -> str:
                 contact_text = _sanitize_sensitive(item.get("contact") or "")
                 label = item.get("contact_name") or rel
                 if contact_text:
-                    lines.append(f'- **{label}:** "{contact_text}"')
-                    lines.append(f'  **André → {label}:** "{andre_text}"')
+                    lines.append(f'- {label}: "{contact_text}"')
+                    lines.append(f'  André: "{andre_text}"')
                 else:
-                    lines.append(f'- **André → {label}:** "{andre_text}"')
+                    lines.append(f'- André: "{andre_text}"')
             else:
                 sanitized = _sanitize_sensitive(item)
                 if sanitized:
@@ -1972,9 +1972,10 @@ def _extract_style_patterns_via_llm(messages_by_relationship: dict) -> str | Non
                 contact_text = _sanitize_sensitive(item.get("contact") or "")
                 label = item.get("contact_name") or rel
                 if contact_text:
-                    lines.append(f'- {label}: "{contact_text}" → André p/ {label}: "{andre_text}"')
+                    lines.append(f'- {label}: "{contact_text}"')
+                    lines.append(f'  André: "{andre_text}"')
                 else:
-                    lines.append(f'- André p/ {label}: "{andre_text}"')
+                    lines.append(f'- André: "{andre_text}"')
             else:
                 sanitized = _sanitize_sensitive(item)
                 if sanitized:
@@ -2002,9 +2003,9 @@ def _extract_style_patterns_via_llm(messages_by_relationship: dict) -> str | Non
         "- [padrão 1]\n"
         "- [padrão 2]\n\n"
         "**Exemplos reais de diálogos (copiados literalmente):**\n"
-        '- **[nome do contato]:** "pergunta do contato"\n'
-        '  **André → [nome do contato]:** "resposta do André"\n'
-        '- **André → [nome do contato]:** "mensagem sem contexto do contato"\n\n'
+        '- [Nome do contato]: "mensagem do contato"\n'
+        '  André: "resposta do André"\n'
+        '- André: "mensagem sem contexto anterior"\n\n'
         "[repita para cada grupo]\n\n"
         "---\n\n"
         "MENSAGENS POR RELACIONAMENTO:\n\n"
