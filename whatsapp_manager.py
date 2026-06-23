@@ -3815,6 +3815,23 @@ def pre_gateway_dispatch(*args, **kwargs):
     # Transcrever áudios ENVIADOS pelo André para enriquecer o style learning
     if is_owner and media_info["has_media"] and media_info["media_type"] in ["ptt", "audio"]:
         _transcribe_outgoing_audio(event, media_info)
+    elif is_owner and not media_info["has_media"]:
+        # Fallback: bridge pode não setar has_media para from_me=1; detectar pelo texto placeholder
+        _raw_text = (getattr(event, "text", "") or "").strip()
+        if _raw_text in ("[audio received]", "[ptt received]"):
+            # Checar se há arquivo de áudio no cache
+            _audio_cache = Path("/opt/data/.hermes/audio_cache")
+            if _audio_cache.exists():
+                _audio_files = sorted(_audio_cache.glob("aud_*.ogg"), key=lambda f: f.stat().st_mtime, reverse=True)
+                if _audio_files:
+                    _latest = _audio_files[0]
+                    # Só usar se o arquivo foi modificado nos últimos 30 segundos
+                    if (time.time() - _latest.stat().st_mtime) < 30:
+                        media_info["has_media"] = True
+                        media_info["media_type"] = "ptt"
+                        media_info["media_urls"] = [str(_latest)]
+                        _transcribe_outgoing_audio(event, media_info)
+                        logger.info(f"[audio-out] Transcrição via fallback cache: {_latest.name}")
 
     # Identificar chat
     chat_id = str(event.source.chat_id) if event.source.chat_id else ""
