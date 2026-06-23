@@ -1081,15 +1081,25 @@ def _build_lid_phone_map(db_path: "Path | None" = None,
         except Exception:
             _files = []
         for f in _files:
+            # Formato 1: lid-mapping-{phone}.json → conteúdo é o LID
             m = _re.match(r'^lid-mapping-(\d+)\.json$', f.name)
-            if not m:
+            if m:
+                try:
+                    lid = json.loads(f.read_text()).strip().strip('"')
+                    if lid:
+                        lid_phone_map[lid] = m.group(1)
+                except Exception:
+                    pass
                 continue
-            try:
-                lid = json.loads(f.read_text()).strip().strip('"')
-                if lid:
-                    lid_phone_map[lid] = m.group(1)
-            except Exception:
-                pass
+            # Formato 2: lid-mapping-{lid}_reverse.json → conteúdo é o phone
+            m2 = _re.match(r'^lid-mapping-(\d+)_reverse\.json$', f.name)
+            if m2:
+                try:
+                    phone = json.loads(f.read_text()).strip().strip('"')
+                    if phone and phone.isdigit():
+                        lid_phone_map[m2.group(1)] = phone
+                except Exception:
+                    pass
     if db_path and Path(db_path).exists():
         import sqlite3
         try:
