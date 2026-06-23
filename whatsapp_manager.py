@@ -4081,8 +4081,33 @@ def pre_gateway_dispatch(*args, **kwargs):
                                 del _pending_contact_card[sender_id]
                                 response_msg = result
                             else:
-                                _pending_contact_update[sender_id] = {"name": nl_contact_name, "fields": fields_to_update}
-                                response_msg = f"Não encontrei '{nl_contact_name}' nem pelo número do cartão. Qual é o número do WhatsApp? (Ex: 5511999998888)"
+                                # Contato não existe — criar nova entrada com número do cartão
+                                pc_path = Path("/opt/data/personal_contacts.json")
+                                try:
+                                    with open(str(pc_path), "r", encoding="utf-8") as _f:
+                                        _pc = json.load(_f)
+                                    new_key = f"{card['phone']}@s.whatsapp.net"
+                                    new_name = fields_to_update.get("name") or card.get("name") or nl_contact_name
+                                    _pc[new_key] = {
+                                        "name": new_name,
+                                        "relationship": fields_to_update.get("relationship", "Cliente"),
+                                        "manual_relationship": fields_to_update.get("manual_relationship", fields_to_update.get("relationship", "Cliente")),
+                                        "nickname": fields_to_update.get("nickname"),
+                                        "notes": None, "product": None, "tone": "polido e profissional",
+                                        "frequent_greeting": None, "summary": "Pendente de classificação.",
+                                        "intent": "Contato inicial.", "frequency": "esporádica",
+                                        "guidelines": "Responda de forma prestativa.",
+                                        "last_interaction": time.time(),
+                                    }
+                                    with open(str(pc_path), "w", encoding="utf-8") as _f:
+                                        json.dump(_pc, _f, ensure_ascii=False, indent=2)
+                                    del _pending_contact_card[sender_id]
+                                    logger.info(f"[update-nl] Novo contato criado via cartão: {new_key} name='{new_name}'")
+                                    response_msg = f"✅ Contato *{new_name}* ({new_key}) criado com sucesso."
+                                except Exception as _ce:
+                                    logger.error(f"[update-nl] Erro ao criar contato via cartão: {_ce}")
+                                    _pending_contact_update[sender_id] = {"name": nl_contact_name, "fields": fields_to_update}
+                                    response_msg = f"Não encontrei '{nl_contact_name}' nem pelo número do cartão. Qual é o número do WhatsApp? (Ex: 5511999998888)"
                         else:
                             _pending_contact_update[sender_id] = {
                                 "name": nl_contact_name,
