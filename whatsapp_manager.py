@@ -3858,7 +3858,7 @@ def pre_gateway_dispatch(*args, **kwargs):
     # Comando para sincronizar e importar contatos do SQLite para personal_contacts.json e GitHub
     normalized_msg = msg_text.strip().lower().replace("_", " ").replace("-", " ")
     try:
-        logger.debug(
+        logger.info(
             f"[debug] sender='{sender_id}' (clean='{clean_sender}', norm='{_normalize_brazilian_phone(clean_sender)}')"
             f" owner='{owner_number}' (clean='{clean_owner}', norm='{_normalize_brazilian_phone(clean_owner)}')"
             f" is_owner={is_owner} msg='{msg_text}' normalized='{normalized_msg}'"
@@ -3945,12 +3945,12 @@ def pre_gateway_dispatch(*args, **kwargs):
 
         return {"action": "skip", "reason": "update-contact-command"}
 
-    # Pedido de atualização de contato em linguagem natural (owner no self-chat)
+    # Pedido de atualização de contato em linguagem natural (owner em qualquer chat)
     _UPDATE_NL_TRIGGERS = re.compile(
-        r"\b(atuali[zs]|mud[ae]|coloc[ae]|registr[ae]|salv[ae]|marc[ae]|configur[ae]|defin[ae]|inform[ae])\w*\b",
+        r"\b(atuali[zs]|mud[ae]|coloc[ae]|coloqu|registr[ae]|salv[ae]|marc[ae]|configur[ae]|defin[ae]|inform[ae])\w*\b",
         re.IGNORECASE,
     )
-    if is_owner and is_self_chat:
+    if is_owner:
         # Verificar se há pendência aguardando número e a mensagem atual é um número
         pending = _pending_contact_update.get(sender_id)
         if pending and re.match(r"^\+?[\d\s\(\)\-]{7,}$", msg_text.strip()):
