@@ -166,6 +166,11 @@ config = PluginConfig()
 # Mapeamento temporário sender_id -> chat_id (usado entre pre_gateway_dispatch e pre_llm_call)
 _sender_to_chat: dict[str, str] = {}
 
+# Contatos já notificados do status ativo: { chat_id -> status_description }
+# Evita reenviar o proativo a cada mensagem enquanto o status está ativo.
+# Limpo automaticamente quando o status muda ou expira.
+_status_notified: dict[str, str] = {}
+
 # Cache do último texto do owner (usado em pre_llm_call para detecção cross-session)
 _last_owner_text: dict[str, str] = {}
 
@@ -829,6 +834,7 @@ def _save_owner_status(description: str, until_iso: str | None, raw: str) -> Non
         "set_at": _dt.now().isoformat(),
     }
     _OWNER_STATUS_PATH.write_text(json.dumps(status, ensure_ascii=False, indent=2), encoding="utf-8")
+    _status_notified.clear()  # novo status → renotificar todos os contatos
     logger.info(f"[owner-status] Status salvo: '{description}' até {until_iso or 'indefinido'}")
 
 
@@ -837,6 +843,7 @@ def _clear_owner_status() -> None:
         data = json.loads(_OWNER_STATUS_PATH.read_text(encoding="utf-8"))
         data["active"] = False
         _OWNER_STATUS_PATH.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    _status_notified.clear()  # status encerrado → limpar cache
     logger.info("[owner-status] Status limpo pelo dono")
 
 
@@ -4894,15 +4901,21 @@ def pre_gateway_dispatch(*args, **kwargs):
                 )
 
                 if is_close:
-                    logger.info(f"[owner-status] Respondendo proativamente para {contact_name or sender_id} (rel={rel_label})")
-                    status_response = _generate_status_response(contact_name, relationship, manual_rel, owner_status)
-                    payload = json.dumps({"chatId": chat_id, "message": status_response}).encode("utf-8")
-                    req = urllib.request.Request(f"{BRIDGE_URL}/send", data=payload, method="POST")
-                    req.add_header("Content-Type", "application/json")
-                    with urllib.request.urlopen(req, timeout=10):
-                        pass
-                    logger.info(f"[owner-status] Resposta de status enviada para {chat_id}")
-                    return {"action": "skip", "reason": "owner-status-proativo"}
+                    current_desc = owner_status.get("description", "")
+                    already_notified = _status_notified.get(chat_id) == current_desc
+                    if not already_notified:
+                        logger.info(f"[owner-status] Notificando proativamente {contact_name or sender_id} (rel={rel_label})")
+                        status_response = _generate_status_response(contact_name, relationship, manual_rel, owner_status)
+                        payload = json.dumps({"chatId": chat_id, "message": status_response}).encode("utf-8")
+                        req = urllib.request.Request(f"{BRIDGE_URL}/send", data=payload, method="POST")
+                        req.add_header("Content-Type", "application/json")
+                        with urllib.request.urlopen(req, timeout=10):
+                            pass
+                        _status_notified[chat_id] = current_desc
+                        logger.info(f"[owner-status] Resposta de status enviada para {chat_id}")
+                        return {"action": "skip", "reason": "owner-status-proativo"}
+                    else:
+                        logger.info(f"[owner-status] {contact_name or sender_id} já notificado — LLM responde normalmente")
                 else:
                     logger.info(f"[owner-status] Status ativo mas contato é cliente/desconhecido — LLM responde normalmente")
             except Exception as e:
