@@ -4902,11 +4902,11 @@ def pre_gateway_dispatch(*args, **kwargs):
                     with urllib.request.urlopen(req, timeout=10):
                         pass
                     logger.info(f"[owner-status] Resposta de status enviada para {chat_id}")
+                    return {"action": "skip", "reason": "owner-status-proativo"}
                 else:
                     logger.info(f"[owner-status] Status ativo mas contato é cliente/desconhecido — LLM responde normalmente")
             except Exception as e:
                 logger.error(f"[owner-status] Erro ao verificar status: {e}")
-            # Mensagem segue para processamento normal (salva no histórico, André vê depois)
     else:
         # Para o dono, salvar chat_id e texto da mensagem atual
         chat_id = str(event.source.chat_id) if event.source.chat_id else ""
