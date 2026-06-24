@@ -4616,6 +4616,13 @@ def pre_gateway_dispatch(*args, **kwargs):
 
         nl_contact_name = (intent_result.get("contact_identifier") or intent_result.get("contact_name")) if intent_result.get("is_update") else None
 
+        # Se o identifier parece número (tem só dígitos, +, espaços, hífens), normalizar para dígitos puros
+        if nl_contact_name:
+            _id_digits_only = re.sub(r"\D", "", nl_contact_name)
+            if len(_id_digits_only) >= 8 and re.match(r"^\+?[\d\s\-\(\)]+$", nl_contact_name):
+                nl_contact_name = _id_digits_only
+                logger.info(f"[update-nl] Identifier normalizado para dígitos: '{nl_contact_name}'")
+
         if nl_contact_name:
             chat_id = str(event.source.chat_id) if event.source.chat_id else ""
             logger.info(f"[update-nl] Pedido de atualização detectado para '{nl_contact_name}': '{msg_text}'")
