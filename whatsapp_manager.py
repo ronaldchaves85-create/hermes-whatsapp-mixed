@@ -751,10 +751,11 @@ def _extract_update_fields_via_llm(contact_name: str, message: str) -> dict:
         "  'apelido é Zé, coloque como cliente' → {\"nickname\": \"Zé\", \"relationship\": \"Cliente\", \"manual_relationship\": \"Cliente\"}\n"
     )
 
+    model_name = classify_model or "gemini-3.1-flash-lite"
     text_content = None
     for key, url, headers, make_payload, extract_fn in [
         (google_key,
-         f"https://generativelanguage.googleapis.com/v1beta/models/{classify_model or 'gemini-3.1-flash-lite'}:generateContent?key={google_key}",
+         f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={google_key}",
          {"Content-Type": "application/json"},
          lambda p: {"contents": [{"parts": [{"text": p}]}], "generationConfig": {"maxOutputTokens": 256}},
          lambda r: r["candidates"][0]["content"]["parts"][0]["text"]),
@@ -771,16 +772,21 @@ def _extract_update_fields_via_llm(contact_name: str, message: str) -> dict:
     ]:
         if not key:
             continue
+        logger.info(f"[extract-fields] Chamando LLM modelo={model_name} contato='{contact_name}'")
         text_content = _call_llm_api(url, headers, make_payload(prompt), extract_fn, timeout=15)
+        logger.info(f"[extract-fields] Resposta bruta: {repr(text_content)[:200] if text_content else 'None'}")
         if text_content:
             break
 
     if not text_content:
+        logger.info(f"[extract-fields] LLM não retornou conteúdo para '{contact_name}'")
         return {}
     try:
         result = _extract_json_from_text(text_content)
+        logger.info(f"[extract-fields] Campos extraídos: {result}")
         return result if isinstance(result, dict) else {}
-    except Exception:
+    except Exception as e:
+        logger.info(f"[extract-fields] Erro ao parsear JSON: {e} — raw: {repr(text_content)[:200]}")
         return {}
 
 
