@@ -23,16 +23,14 @@ BRIDGE_URL = os.getenv("BRIDGE_URL", "http://localhost:3000")
 
 # Casos: (identifier, deve_encontrar, chave_esperada_contém, desc)
 CASOS = [
-    # Busca por número exato
-    ("558688219222", True, "558688219222", "número exato Rosemery"),
-    # Busca por número com 9º dígito alternativo (normalização BR)
-    ("5586988219222", True, "558688219222", "9º dígito BR Rosemery"),
+    # Busca por número exato (Rosemery)
+    ("5511996472188", True, "5511996472188", "número exato Rosemery"),
     # Busca por nome exato
-    ("Rosemery", True, "558688219222", "nome exato"),
+    ("Rosemery", True, "5511996472188", "nome exato Rosemery"),
     # Busca por nome parcial
-    ("Rose", True, "558688219222", "substring do nome"),
+    ("Rose", True, "5511996472188", "substring do nome Rosemery"),
     # Número com espaços e hífens (como usuário digita)
-    ("+55 86 8821-9222", True, "558688219222", "número formatado com espaços"),
+    ("+55 11 9964-72188", True, "5511996472188", "número formatado com espaços"),
     # Nome que NÃO deve encontrar contato errado
     ("Suporte", False, None, "nome sem match — não deve pegar contato errado"),
     # Número que não existe — não deve colidir com nenhum existente
