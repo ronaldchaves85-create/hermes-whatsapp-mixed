@@ -1,30 +1,37 @@
 #!/usr/bin/env python3
-"""Testa a extração de campos de atualização de contato via LLM.
+"""Testa a classificação de intenção e extração de campos NL via LLM.
 
 Uso:
-    python3 test_nl_update.py
-    python3 test_nl_update.py "coloque uma observação no Juan escrito ele prefere WhatsApp"
-    python3 test_nl_update.py "coloque a Mayra como namorada"
+    python3 test_nl_update.py                    # suite completa
+    python3 test_nl_update.py "mensagem aqui"    # teste ad-hoc
 """
 
 import json
 import os
+import re
 import sys
-import base64
 import urllib.request
 from pathlib import Path
 
 HERMES_HOME = os.getenv("HERMES_HOME", "/opt/data/.hermes")
 AUTH_JSON = Path(HERMES_HOME) / "auth.json"
 
-CASOS = [
-    ("Juan", "coloque uma observação no Juan escrito ele prefere WhatsApp"),
-    ("Juan", "coloque como cliente VIP"),
-    ("Mayra", "coloque a Mayra como namorada"),
-    ("Pedro", "coloque o Pedro como filho"),
-    ("Mayra", "o apelido da Mayra é May"),
-    ("Juan", "atualize o nome para Juan Carlos"),
-    ("Pedro", "coloque uma nota: mora em São Paulo e trabalha com TI"),
+# (mensagem, is_update esperado, contact_name esperado, campos esperados)
+CASOS_INTENT = [
+    # Devem ser detectados como update
+    ("coloque a Mayra como namorada",                    True,  "Mayra",  {"relationship": "AmigoProximo", "manual_relationship": "Namorada"}),
+    ("coloque o Pedro como filho",                       True,  "Pedro",  {"relationship": "Filho"}),
+    ("cadastre um apelido para Pedro, o apelido é Pedrinho", True, "Pedro", {"nickname": "Pedrinho"}),
+    ("coloque uma observação no Juan: ele prefere WhatsApp", True, "Juan", {"notes": "ele prefere WhatsApp"}),
+    ("o apelido da Mayra é May",                         True,  "Mayra",  {"nickname": "May"}),
+    ("atualize o nome para Juan Carlos",                 True,  "Juan",   {"name": "Juan Carlos"}),
+    ("coloque uma nota no Pedro: mora em São Paulo",     True,  "Pedro",  {"notes": "mora em São Paulo"}),
+    ("anote que a Vivi Oliveira prefere contato por e-mail", True, "Vivi", {"notes": "prefere contato por e-mail"}),
+    # NÃO devem ser detectados como update
+    ("qual o saldo da conta?",                           False, None, {}),
+    ("manda um relatório de vendas",                     False, None, {}),
+    ("o que você acha do Pedro?",                        False, None, {}),
+    ("me lembra de ligar para o Juan amanhã",            False, None, {}),
 ]
 
 
@@ -39,118 +46,167 @@ def get_google_key():
     return key
 
 
-def get_classify_model():
-    return os.getenv("WHATSAPP_CONTACT_CLASSIFIER_MODEL", "gemini-2.0-flash-lite")
+def get_model():
+    return os.getenv("WHATSAPP_CONTACT_CLASSIFIER_MODEL", "gemini-3.1-flash-lite")
 
 
-def extract_json_from_text(text: str) -> str:
-    import re
-    m = re.search(r"```(?:json)?\s*([\s\S]*?)```", text)
+def call_api(url, headers, payload):
+    req = urllib.request.Request(
+        url, data=json.dumps(payload).encode(), headers=headers, method="POST"
+    )
+    with urllib.request.urlopen(req, timeout=15) as resp:
+        return json.loads(resp.read().decode())
+
+
+def extract_json(text: str) -> dict:
+    text = re.sub(r"```(?:json)?\s*", "", text)
+    text = re.sub(r"```", "", text).strip()
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        m = re.search(r"(\{[\s\S]*\})", text)
+        if m:
+            return json.loads(m.group(1))
+        raise
+
+
+def classify_intent(message: str, google_key: str, model: str) -> dict:
+    clean_msg = message
+    m = re.match(r'\[Áudio:\s*"(.+?)"\]', message, re.IGNORECASE | re.DOTALL)
     if m:
-        return m.group(1).strip()
-    m = re.search(r"(\{[\s\S]*\})", text)
-    if m:
-        return m.group(1).strip()
-    return text.strip()
+        clean_msg = m.group(1)
+
+    prompt = (
+        "Você é um classificador de intenções para um assistente de WhatsApp.\n"
+        "Analise a mensagem do usuário e determine se é um COMANDO DE ATUALIZAÇÃO DE CONTATO.\n\n"
+        "É um comando de atualização quando o usuário quer:\n"
+        "- Mudar/definir o relacionamento, apelido, observação, nome ou produto de um contato\n"
+        "- Exemplos: 'coloque a Mayra como namorada', 'cadastre um apelido para Pedro como Pedrinho',\n"
+        "  'coloque uma observação no Juan', 'atualize o nome da Viviane', 'defina o Pedro como filho'\n\n"
+        "NÃO é atualização quando o usuário:\n"
+        "- Faz perguntas, pedidos ao bot, ou comandos gerais sem mencionar um contato específico\n\n"
+        f"Mensagem: \"{clean_msg}\"\n\n"
+        "Retorne APENAS JSON:\n"
+        "Se for atualização: {\"is_update\": true, \"contact_name\": \"nome do contato mencionado\", \"intent\": \"descrição em 5 palavras\"}\n"
+        "Se não for: {\"is_update\": false, \"intent\": \"descrição em 5 palavras\"}\n"
+    )
+    payload = {"contents": [{"parts": [{"text": prompt}]}], "generationConfig": {"maxOutputTokens": 128}}
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={google_key}"
+    result = call_api(url, {"Content-Type": "application/json"}, payload)
+    text = result["candidates"][0]["content"]["parts"][0]["text"].strip()
+    return extract_json(text)
 
 
-def extract_update_fields(contact_name: str, message: str, google_key: str, model: str) -> dict:
+def extract_fields(contact_name: str, message: str, google_key: str, model: str) -> dict:
     prompt = (
         f"O usuário pediu para atualizar o contato '{contact_name}' com a seguinte instrução:\n"
         f"\"{message}\"\n\n"
         "Extraia SOMENTE os campos explicitamente mencionados e retorne um JSON.\n"
         "Campos permitidos: relationship, manual_relationship, nickname, pet_name, notes, product, name.\n"
-        "- notes = observação/anotação sobre o contato (texto livre). Use quando o usuário disser 'coloque uma observação', 'anote', 'registre que', etc.\n"
-        "- nickname = apelido (ex: Bebel, Zé). Use quando o usuário disser 'o apelido é X'.\n"
+        "- notes = observação/anotação (texto livre)\n"
+        "- nickname = apelido\n"
         "- relationship enum: Amigo, AmigoProximo, Parente, Filho, Cliente, Vendedor\n"
         "- manual_relationship: valor livre (ex: Namorada, Filho, Esposa, Cliente VIP)\n"
-        "  'como namorada' → relationship=AmigoProximo, manual_relationship=Namorada\n"
-        "  'como filho' → relationship=Filho, manual_relationship=Filho\n"
-        "  'como cliente' → relationship=Cliente, manual_relationship=Cliente\n"
-        "NÃO invente campos. NÃO inclua tone, guidelines, summary, intent, frequency.\n"
-        "Retorne APENAS JSON. Exemplos:\n"
-        "  'coloque como namorada' → {\"relationship\": \"AmigoProximo\", \"manual_relationship\": \"Namorada\"}\n"
-        "  'coloque uma observação: ele prefere WhatsApp' → {\"notes\": \"ele prefere WhatsApp\"}\n"
-        "  'apelido é Zé, coloque como cliente' → {\"nickname\": \"Zé\", \"relationship\": \"Cliente\", \"manual_relationship\": \"Cliente\"}\n"
+        "NÃO invente campos. Retorne APENAS JSON.\n"
     )
-
-    payload = {
-        "contents": [{"parts": [{"text": prompt}]}],
-        "generationConfig": {"maxOutputTokens": 256},
-    }
+    payload = {"contents": [{"parts": [{"text": prompt}]}], "generationConfig": {"maxOutputTokens": 256}}
     url = f"https://generativelanguage.googleapis.com/v1beta/models/{model}:generateContent?key={google_key}"
-    req = urllib.request.Request(
-        url,
-        data=json.dumps(payload).encode(),
-        headers={"Content-Type": "application/json"},
-        method="POST",
-    )
-    with urllib.request.urlopen(req, timeout=15) as resp:
-        result = json.loads(resp.read().decode())
-        text_content = result["candidates"][0]["content"]["parts"][0]["text"].strip()
-
-    raw = extract_json_from_text(text_content)
-    return json.loads(raw)
+    result = call_api(url, {"Content-Type": "application/json"}, payload)
+    text = result["candidates"][0]["content"]["parts"][0]["text"].strip()
+    return extract_json(text)
 
 
-def run_case(contact_name: str, message: str, google_key: str, model: str):
-    print(f"\n  Contato : {contact_name}")
-    print(f"  Comando : {message}")
+def run_case(message, expected_update, expected_name, expected_fields, google_key, model):
+    print(f"\n  Mensagem : {message}")
     try:
-        fields = extract_update_fields(contact_name, message, google_key, model)
-        print(f"  Campos  : {json.dumps(fields, ensure_ascii=False)}")
+        intent = classify_intent(message, google_key, model)
+        is_update = intent.get("is_update", False)
+        contact_name = intent.get("contact_name", "")
+        intent_label = intent.get("intent", "")
+        print(f"  Intenção : is_update={is_update} | intent='{intent_label}' | contato='{contact_name}'")
 
-        # Validações básicas
-        warnings = []
-        bad_fields = {"tone", "guidelines", "summary", "intent", "frequency", "classification"}
-        found_bad = bad_fields & set(fields.keys())
-        if found_bad:
-            warnings.append(f"AVISO: campos não permitidos retornados: {found_bad}")
-        if not fields:
-            warnings.append("AVISO: nenhum campo extraído")
+        ok_intent = is_update == expected_update
+        ok_name = True
+        ok_fields = True
+        fields = {}
 
-        for w in warnings:
-            print(f"  *** {w}")
+        if is_update and expected_update:
+            # Validar nome extraído (case-insensitive, substring)
+            ok_name = expected_name and expected_name.lower() in contact_name.lower()
+            if not ok_name:
+                print(f"  *** NOME ERRADO: esperado '{expected_name}', got '{contact_name}'")
 
-        return True, fields
+            # Extrair campos e validar
+            fields = extract_fields(contact_name or expected_name, message, google_key, model)
+            print(f"  Campos   : {json.dumps(fields, ensure_ascii=False)}")
+            for k, v in expected_fields.items():
+                if k not in fields:
+                    print(f"  *** CAMPO AUSENTE: '{k}' não extraído")
+                    ok_fields = False
+                elif v and v.lower() not in str(fields[k]).lower():
+                    print(f"  *** VALOR ERRADO: '{k}'='{fields[k]}' (esperado '{v}')")
+                    ok_fields = False
+
+        elif not is_update and expected_update:
+            print(f"  *** FALSO NEGATIVO: deveria ser update mas não foi detectado")
+            ok_intent = False
+
+        elif is_update and not expected_update:
+            print(f"  *** FALSO POSITIVO: não deveria ser update mas foi detectado")
+            ok_intent = False
+
+        passed = ok_intent and ok_name and ok_fields
+        print(f"  Status   : {'✓ OK' if passed else '✗ FALHOU'}")
+        return passed
+
     except Exception as e:
         print(f"  ERRO: {e}")
-        return False, {}
+        return False
 
 
 def main():
-    print("=" * 60)
-    print("Teste de Extração de Campos NL — whatsapp-manager")
-    print("=" * 60)
+    print("=" * 65)
+    print("Teste de Intenção NL + Extração de Campos — whatsapp-manager")
+    print("=" * 65)
 
     google_key = get_google_key()
     if not google_key:
         print("[ERRO] GOOGLE_API_KEY não encontrada (env nem auth.json)")
         sys.exit(1)
 
-    model = get_classify_model()
+    model = get_model()
     print(f"\nModelo : {model}")
-    print(f"API Key: {'✓ configurada' if google_key else '✗ ausente'}")
 
-    # Modo ad-hoc: argumento da linha de comando
+    # Modo ad-hoc
     if len(sys.argv) > 1:
         message = " ".join(sys.argv[1:])
-        contact_name = "Contato"
-        # Tenta extrair nome do contato da mensagem para deixar mais legível
         print(f"\n--- Teste ad-hoc ---")
-        run_case(contact_name, message, google_key, model)
+        try:
+            intent = classify_intent(message, google_key, model)
+            print(f"  Intenção : {json.dumps(intent, ensure_ascii=False)}")
+            if intent.get("is_update"):
+                name = intent.get("contact_name", "Contato")
+                fields = extract_fields(name, message, google_key, model)
+                print(f"  Campos   : {json.dumps(fields, ensure_ascii=False)}")
+        except Exception as e:
+            print(f"  ERRO: {e}")
         return
 
-    # Suite de casos padrão
-    print(f"\n--- {len(CASOS)} casos de teste ---")
+    # Suite completa
+    updates = [c for c in CASOS_INTENT if c[1]]
+    non_updates = [c for c in CASOS_INTENT if not c[1]]
+    print(f"\n--- {len(updates)} casos de UPDATE + {len(non_updates)} casos de NÃO-UPDATE ---")
+
     ok = 0
-    for contact_name, message in CASOS:
-        success, _ = run_case(contact_name, message, google_key, model)
-        if success:
+    for msg, exp_update, exp_name, exp_fields in CASOS_INTENT:
+        if run_case(msg, exp_update, exp_name, exp_fields, google_key, model):
             ok += 1
 
-    print(f"\n{'=' * 60}")
-    print(f"Resultado: {ok}/{len(CASOS)} casos bem-sucedidos")
+    total = len(CASOS_INTENT)
+    print(f"\n{'=' * 65}")
+    print(f"Resultado: {ok}/{total} casos corretos")
+    if ok < total:
+        sys.exit(1)
 
 
 if __name__ == "__main__":
