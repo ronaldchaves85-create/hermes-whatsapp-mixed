@@ -5016,6 +5016,9 @@ def pre_gateway_dispatch(*args, **kwargs):
     try:
         session_key = gateway._session_key_for_source(event.source)
         if session_key:
+            # Garantir que post_llm_call consiga resolver chat_id pelo session_id
+            if chat_id and session_key not in _sender_to_chat:
+                _sender_to_chat[session_key] = chat_id
             owner_model = config.whatsapp_owner_model
             owner_provider = config.whatsapp_owner_provider
             client_model = config.whatsapp_client_model
