@@ -5333,6 +5333,31 @@ def _run_periodic_sync():
         time.sleep(60)
 
 
+def pre_tool_call(*args, **kwargs):
+    """Bloqueia execução de tools para sessões de contato (não-owner).
+
+    Contatos só recebem respostas de status — não precisam de tools.
+    Bloquear aqui evita o segundo ciclo pre_llm_call → post_llm_call
+    que causava respostas duplicadas.
+    """
+    platform = kwargs.get("platform", "")
+    session_id = kwargs.get("session_id", "")
+    if platform != "whatsapp" or not session_id:
+        return None
+
+    owner_number = config.whatsapp_owner_number
+    if not owner_number:
+        return None
+
+    clean_session = "".join(c for c in session_id.split("@")[0].split(":")[0] if c.isdigit())
+    clean_owner = "".join(c for c in owner_number.split("@")[0].split(":")[0] if c.isdigit())
+    if _normalize_brazilian_phone(clean_session) == _normalize_brazilian_phone(clean_owner):
+        return None  # owner pode usar tools normalmente
+
+    logger.info(f"[pre_tool_call] Bloqueando tool para contato session={session_id!r}")
+    return "Ferramentas não disponíveis para sessões de contato."
+
+
 _EXEC_PATTERN = re.compile(
     r"^EXEC:\s*update\s+contact\s+(.+)$",
     re.IGNORECASE | re.MULTILINE,
@@ -5694,6 +5719,7 @@ def register(ctx):
     ctx.register_hook("pre_gateway_dispatch", pre_gateway_dispatch)
     ctx.register_hook("pre_llm_call", pre_llm_call)
     ctx.register_hook("post_llm_call", post_llm_call)
+    ctx.register_hook("pre_tool_call", pre_tool_call)
 
     # Restaurar cache de notificações de status (sobrevive a reinicializações)
     _load_status_notified()
