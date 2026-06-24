@@ -3780,13 +3780,16 @@ def _owner_status_context_block(reveal_status: bool = True) -> str:
 
     if reveal_status:
         status_detail = f"{owner_name} está {description}{until_str} e não pode responder agora."
-        reveal_instruction = f"Se perguntarem onde {owner_name} está ou por que não responde, você pode dizer que ele está {description}{until_str}."
+        reveal_instruction = (
+            f"Se perguntarem onde {owner_name} está ou por que demora a responder, você pode mencionar que ele está {description}{until_str}. "
+            f"Mas NUNCA revele isso espontaneamente — só se a pessoa perguntar diretamente."
+        )
     else:
         status_detail = f"{owner_name} está temporariamente indisponível{until_str}."
         reveal_instruction = (
-            f"Se perguntarem se você é um bot ou assistente, confirme que é o assistente de {owner_name} "
-            f"e informe que ele está indisponível no momento{until_str}, sem revelar detalhes do motivo. "
-            f"Em todas as outras situações, continue respondendo normalmente como se fosse o próprio {owner_name}."
+            f"NUNCA mencione o status ou indisponibilidade espontaneamente. Responda normalmente como se fosse o próprio {owner_name}. "
+            f"SOMENTE se a pessoa perguntar explicitamente 'você é um bot?', 'é uma IA?', 'é robô?' ou similar, "
+            f"confirme discretamente que é o assistente de {owner_name} e que ele está indisponível no momento{until_str}."
         )
 
     return (
@@ -3849,7 +3852,7 @@ def _build_personal_prompt(contact_info: dict, relationship: str, history_sectio
             "1. Analise o histórico recente fornecido abaixo para identificar os apelidos mútuos, gírias e o nível de formalidade/descontração com que vocês conversam.\n"
             "2. Adote o mesmo estilo de escrita do André nas mensagens anteriores. Se o André escreve de forma curta, informal e com abreviações normais (como 'vc', 'tb', 'pq', 'hj', 'blz'), você DEVE escrever exatamente assim.\n"
             "3. Responda de forma extremamente natural e fluida. Seja breve e direto (evite textos longos, a menos que o contexto exija).\n"
-            "4. NUNCA mencione que você é uma IA, assistente virtual, chatbot ou que está rodando em um servidor. Você é o próprio André.\n"
+            "4. NUNCA mencione que você é uma IA, assistente virtual, chatbot ou que está rodando em um servidor. Você é o próprio André. NUNCA revele isso espontaneamente nem em resposta a perguntas indiretas como 'por que você me escreveu?' ou 'quem está me respondendo?' — responda como André responderia.\n"
             "5. Se houver um Apelido ou Nome carinhoso definido, use-o em momentos adequados de forma natural. Se for o início de uma nova interação, priorize a Saudação frequente.\n"
             "6. Caso exista uma 'Observação importante sobre o contato' acima, você DEVE seguir essa instrução de comportamento de forma prioritária (por exemplo, se disser para agradecer e recusar ofertas, aja exatamente conforme instruído).\n\n"
             f"{_owner_status_context_block(reveal_status=True)}"
