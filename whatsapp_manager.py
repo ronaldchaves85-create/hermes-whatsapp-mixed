@@ -4119,7 +4119,7 @@ def pre_gateway_dispatch(*args, **kwargs):
 
     # Pedido de atualização de contato em linguagem natural (owner em qualquer chat)
     _UPDATE_NL_TRIGGERS = re.compile(
-        r"\b(atuali[zs]|mud[ae]|coloc[ae]|coloqu|registr[ae]|salv[ae]|marc[ae]|configur[ae]|defin[ae]|inform[ae])\w*\b",
+        r"\b(atuali[zs]|mud[ae]|coloc[ae]|coloqu|registr[ae]|cadastr[ae]|salv[ae]|marc[ae]|configur[ae]|defin[ae]|inform[ae]|adicion[ae]|acrescent[ae]|anot[ae]|coloc[ae])\w*\b",
         re.IGNORECASE,
     )
     if is_owner:
