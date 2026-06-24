@@ -3736,7 +3736,13 @@ def _load_personal_contacts() -> dict:
 def _datetime_context_block() -> str:
     """Retorna bloco com data/hora atual, dia da semana e tipo de dia para injetar no contexto do LLM."""
     from datetime import datetime as _dt
-    now = _dt.now()
+    import os as _os
+    try:
+        from zoneinfo import ZoneInfo as _ZoneInfo
+        tz_name = _os.getenv("TZ", "America/Sao_Paulo")
+        now = _dt.now(_ZoneInfo(tz_name))
+    except Exception:
+        now = _dt.now()
     weekday_names = ["segunda-feira", "terça-feira", "quarta-feira", "quinta-feira", "sexta-feira", "sábado", "domingo"]
     weekday = weekday_names[now.weekday()]
     is_weekend = now.weekday() >= 5
