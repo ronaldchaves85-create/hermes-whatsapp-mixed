@@ -155,10 +155,39 @@ class TestBuscaContatos(unittest.TestCase):
 class TestLLM(unittest.TestCase):
     """Chamadas reais ao LLM — requer API key."""
 
-    def test_classify_intent_update(self):
+    def _get_identifier(self, result: dict) -> str:
+        """Retorna contact_identifier ou contact_name (compatibilidade)."""
+        return (result.get("contact_identifier") or result.get("contact_name") or "").lower()
+
+    def test_classify_identifier_por_nome(self):
+        """Mensagem sem número → identifier deve ser o nome atual do contato."""
         result = wm._classify_owner_intent("coloque a Mayra como namorada")
         self.assertTrue(result.get("is_update"), f"Esperava is_update=True: {result}")
-        self.assertIn("mayra", result.get("contact_name", "").lower())
+        self.assertIn("mayra", self._get_identifier(result),
+            f"Identifier deveria conter 'mayra': {result}")
+
+    def test_classify_identifier_por_numero(self):
+        """Mensagem com número → identifier deve ser o número, não o nome futuro."""
+        result = wm._classify_owner_intent(
+            "coloque o número 558699997003, o nome dele é Suporte, como amigo"
+        )
+        self.assertTrue(result.get("is_update"), f"Esperava is_update=True: {result}")
+        identifier = self._get_identifier(result)
+        self.assertIn("558699997003", identifier,
+            f"Identifier deveria ser o número, não o nome futuro. Resultado: {result}")
+        self.assertNotIn("suporte", identifier,
+            f"Identifier não deve ser o nome futuro 'Suporte'. Resultado: {result}")
+
+    def test_extract_fields_renomear_com_numero(self):
+        """Quando há número, name extraído é o nome futuro (não o identifier)."""
+        result = wm._extract_update_fields_via_llm(
+            "558699997003",
+            "coloque o número 558699997003, o nome dele é Suporte, como amigo"
+        )
+        self.assertIn("name", result, f"Campo 'name' não extraído: {result}")
+        self.assertIn("suporte", result.get("name", "").lower(),
+            f"name deveria ser 'Suporte': {result}")
+        self.assertIn("relationship", result, f"Campo 'relationship' não extraído: {result}")
 
     def test_classify_intent_status(self):
         result = wm._classify_owner_intent("vou estar no futebol até as 21h")
