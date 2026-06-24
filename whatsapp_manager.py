@@ -2732,6 +2732,52 @@ def _github_put_file(
     return False
 
 
+def _find_contact_matches(identifier: str) -> list[tuple[str, str, str]]:
+    """Retorna lista de (key, display_name, phone) que batem com o identifier por nome/apelido.
+
+    Usado para detectar ambiguidade antes de chamar _update_contact_fields.
+    Não busca por número (quando identifier é número, é inequívoco).
+    """
+    pc_path = Path("/opt/data/personal_contacts.json")
+    if not pc_path.exists():
+        return []
+    try:
+        personal_contacts = json.loads(pc_path.read_text(encoding="utf-8"))
+    except Exception:
+        return []
+
+    owner_phone = "".join(c for c in (config.whatsapp_owner_number or "").split("@")[0] if c.isdigit())
+
+    def _is_owner(key: str) -> bool:
+        phone = key.split("@")[0]
+        return bool(owner_phone) and (phone == owner_phone or _normalize_brazilian_phone(phone) == _normalize_brazilian_phone(owner_phone))
+
+    id_norm = _normalize_text(identifier)
+    matches: list[tuple[str, str, str]] = []
+
+    for key, data in personal_contacts.items():
+        if _is_owner(key):
+            continue
+        name = data.get("name") or ""
+        nick = data.get("nickname") or ""
+        pet = data.get("pet_name") or ""
+        phone = key.split("@")[0].split(":")[0]
+        display = name or nick or phone
+
+        name_norm = _normalize_text(name)
+        nick_norm = _normalize_text(nick)
+        pet_norm = _normalize_text(pet)
+
+        # Exact match em qualquer campo de nome
+        if id_norm in (name_norm, nick_norm, pet_norm):
+            matches.append((key, display, phone))
+        # Substring match em name (ex: "Pedro" encontra "Pedro Alves")
+        elif name_norm and id_norm in name_norm:
+            matches.append((key, display, phone))
+
+    return matches
+
+
 def _update_contact_fields(identifier: str, fields: dict) -> str:
     """Atualiza campos específicos de um contato em personal_contacts.json pelo nome ou número.
 
@@ -4214,8 +4260,37 @@ def pre_gateway_dispatch(*args, **kwargs):
         pending = _pending_contact_update.get(sender_id)
         if pending and re.match(r"^\+?[\d\s\(\)\-]{7,}$", msg_text.strip()):
             phone_digits = re.sub(r"\D", "", msg_text.strip())
-            pend_name = pending["name"]
             pend_fields = pending["fields"]
+            pend_name = pending.get("name", "")
+
+            # Pendência de desambiguação: escolher entre múltiplos candidatos
+            if pending.get("type") == "disambiguate":
+                candidates = pending.get("candidates", [])
+                del _pending_contact_update[sender_id]
+                selected_key = None
+                for key, display, phone in candidates:
+                    phone_norm = _normalize_brazilian_phone(re.sub(r"\D", "", phone))
+                    digits_norm = _normalize_brazilian_phone(phone_digits)
+                    if phone_digits in phone or phone in phone_digits or phone_norm == digits_norm:
+                        selected_key = key
+                        break
+                if selected_key:
+                    result = _update_contact_fields(selected_key.split("@")[0], pend_fields)
+                else:
+                    result = f"❌ Número {phone_digits} não corresponde a nenhum dos candidatos listados."
+                chat_id = str(event.source.chat_id) if event.source.chat_id else ""
+                logger.info(f"[update-nl] Desambiguação resolvida: {result}")
+                if chat_id:
+                    try:
+                        payload = json.dumps({"chatId": chat_id, "message": result}).encode("utf-8")
+                        req = urllib.request.Request(f"{BRIDGE_URL}/send", data=payload, method="POST")
+                        req.add_header("Content-Type", "application/json")
+                        with urllib.request.urlopen(req, timeout=10):
+                            pass
+                    except Exception as e:
+                        logger.error(f"[update-nl] Erro ao enviar resposta de desambiguação: {e}")
+                return {"action": "skip", "reason": "update-contact-disambiguate"}
+
             del _pending_contact_update[sender_id]
             result = _update_contact_fields(phone_digits, pend_fields)
             # Se encontrou pelo número mas o name ainda é genérico, atualizar o nome também
@@ -4304,7 +4379,24 @@ def pre_gateway_dispatch(*args, **kwargs):
                     else:
                         result = None
                     if card is not None or result is None:
-                        result = _update_contact_fields(nl_contact_name, fields_to_update)
+                        # Verificar ambiguidade antes de atualizar por nome
+                        candidates = _find_contact_matches(nl_contact_name)
+                        if len(candidates) > 1:
+                            # Múltiplos matches — pedir confirmação com número
+                            _pending_contact_update[sender_id] = {
+                                "type": "disambiguate",
+                                "candidates": candidates,
+                                "fields": fields_to_update,
+                                "name": nl_contact_name,
+                            }
+                            lines = [f"❓ Encontrei {len(candidates)} contatos com nome *{nl_contact_name}*:"]
+                            for i, (key, display, phone) in enumerate(candidates, 1):
+                                lines.append(f"  {i}. {display} — {phone}")
+                            lines.append("\nQual é o número do contato que deseja atualizar?")
+                            result = "\n".join(lines)
+                            logger.info(f"[update-nl] Ambiguidade detectada para '{nl_contact_name}': {len(candidates)} candidatos")
+                        else:
+                            result = _update_contact_fields(nl_contact_name, fields_to_update)
                     logger.info(f"[update-nl] Resultado: {result}")
                     if "não encontrado" in result:
                         # Tentar com cartão de contato compartilhado anteriormente
