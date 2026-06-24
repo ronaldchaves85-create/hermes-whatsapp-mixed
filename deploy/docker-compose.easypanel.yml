@@ -24,6 +24,7 @@
 # 🟢 WHATSAPP (Opcional — deixe false até parear):
 #   WHATSAPP_ENABLED      : Habilitar integração (padrão: false)
 #   WHATSAPP_OWNER_NUMBER : Número do proprietário (ex: "5511999999999")
+#   WHATSAPP_OWNER_NAME   : Nome do proprietário exibido nas respostas (ex: "André")
 #   WHATSAPP_MODE         : Modo de funcionamento (padrão: bot)
 #   WHATSAPP_ALLOWED_USERS: Números autorizados (padrão: *)
 #
@@ -99,6 +100,7 @@ services:
       # WhatsApp (deixe false até parear)
       - WHATSAPP_ENABLED=${WHATSAPP_ENABLED:-true}
       - WHATSAPP_OWNER_NUMBER=${WHATSAPP_OWNER_NUMBER:-}
+      - WHATSAPP_OWNER_NAME=${WHATSAPP_OWNER_NAME:-}
       - WHATSAPP_MODE=${WHATSAPP_MODE:-bot}
       - WHATSAPP_ALLOWED_USERS=${WHATSAPP_ALLOWED_USERS:-*}
       - WHATSAPP_CONNECTION_NAME=${WHATSAPP_CONNECTION_NAME:-EmpreendedorSerial}

@@ -30,6 +30,7 @@
 # 🟢 INTEGRAÇÃO WHATSAPP (Opcional)
 #   - WHATSAPP_ENABLED      : Habilitar integração com o WhatsApp (padrão: false)
 #   - WHATSAPP_OWNER_NUMBER : Número do proprietário do WhatsApp (ex: "5511999999999")
+#   - WHATSAPP_OWNER_NAME   : Nome do proprietário exibido nas respostas (ex: "André")
 #   - WHATSAPP_MODE         : Modo de funcionamento do WhatsApp (padrão: bot)
 #   - WHATSAPP_ALLOWED_USERS: Números/contatos autorizados a usar o bot (padrão: *)
 #   - WHATSAPP_QR_PATH      : Caminho opcional do QR no dashboard (padrão: /whatsapp)
@@ -85,6 +86,7 @@ services:
       # Deixe false até parear.
       - WHATSAPP_ENABLED=${WHATSAPP_ENABLED:-true}
       - WHATSAPP_OWNER_NUMBER=${WHATSAPP_OWNER_NUMBER:-}
+      - WHATSAPP_OWNER_NAME=${WHATSAPP_OWNER_NAME:-}
       - WHATSAPP_MODE=${WHATSAPP_MODE:-bot}
       - WHATSAPP_ALLOWED_USERS=${WHATSAPP_ALLOWED_USERS:-*}
       - WHATSAPP_BRIDGE_URL=http://whatsapp-bridge:3000
