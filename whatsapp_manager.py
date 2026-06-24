@@ -166,8 +166,8 @@ config = PluginConfig()
 # Mapeamento temporário sender_id -> chat_id (usado entre pre_gateway_dispatch e pre_llm_call)
 _sender_to_chat: dict[str, str] = {}
 
-# Deduplicação: { session_id -> timestamp } — evita múltiplos envios por sessão
-_session_responded: dict[str, float] = {}
+# Debounce de envio: { chat_id -> threading.Timer } — só o último post_llm_call por turno dispara
+_pending_send: dict[str, "threading.Timer"] = {}
 
 # Contatos já notificados do status ativo: { chat_id -> status_description }
 # Evita reenviar o proativo a cada mensagem enquanto o status está ativo.
@@ -5404,25 +5404,22 @@ def post_llm_call(*args, **kwargs):
                     clean_text
                 )
                 if clean_text:
-                    import hashlib as _hashlib
-                    now = time.time()
-                    # Camada 1: dedup por (chat_id + hash da mensagem do usuário) — 90s
-                    user_msg = kwargs.get("user_message") or ""
-                    dedup_key = chat_id + ":" + _hashlib.md5(user_msg.encode()).hexdigest()
-                    last_ts = _session_responded.get(dedup_key, 0.0)
-                    if user_msg and (now - last_ts) < 90:
-                        logger.warning(f"[post_llm_call] Dedup L1: {chat_id!r} já respondeu a esta msg — ignorando")
-                        return {"assistant_response": ""}
-                    # Camada 2: dedup por conteúdo da resposta — 10s (captura tool results com user_msg diferente)
-                    content_key = chat_id + ":content:" + _hashlib.md5(clean_text.encode()).hexdigest()
-                    last_content_ts = _session_responded.get(content_key, 0.0)
-                    if (now - last_content_ts) < 10:
-                        logger.warning(f"[post_llm_call] Dedup L2: mesmo conteúdo enviado há {now - last_content_ts:.1f}s — ignorando")
-                        return {"assistant_response": ""}
-                    _session_responded[dedup_key] = now
-                    _session_responded[content_key] = now
-                    logger.info(f"[post_llm_call] Enviando ao contato {chat_id} via _human_send")
-                    _human_send(chat_id, clean_text)
+                    # Debounce: cancela envio anterior para este chat e agenda novo.
+                    # Quando Hermes chama post_llm_call múltiplas vezes por turno,
+                    # só o último texto (resposta final do LLM) é enviado.
+                    existing = _pending_send.pop(chat_id, None)
+                    if existing:
+                        existing.cancel()
+                        logger.info(f"[post_llm_call] Debounce: envio anterior cancelado para {chat_id}")
+
+                    def _do_send(cid=chat_id, txt=clean_text):
+                        _pending_send.pop(cid, None)
+                        logger.info(f"[post_llm_call] Enviando ao contato {cid} via _human_send")
+                        _human_send(cid, txt)
+
+                    timer = threading.Timer(2.0, _do_send)
+                    _pending_send[chat_id] = timer
+                    timer.start()
                     return {"assistant_response": ""}
             except Exception as e:
                 logger.error(f"[post_llm_call] Erro no _human_send: {e}")
