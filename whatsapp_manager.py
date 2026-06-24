@@ -166,8 +166,8 @@ config = PluginConfig()
 # Mapeamento temporário sender_id -> chat_id (usado entre pre_gateway_dispatch e pre_llm_call)
 _sender_to_chat: dict[str, str] = {}
 
-# Deduplicação: { chat_id -> (texto, timestamp) } — evita envio duplicado
-_last_sent: dict[str, tuple[str, float]] = {}
+# Deduplicação: { session_id -> timestamp } — evita múltiplos envios por sessão
+_session_responded: dict[str, float] = {}
 
 # Contatos já notificados do status ativo: { chat_id -> status_description }
 # Evita reenviar o proativo a cada mensagem enquanto o status está ativo.
@@ -5366,6 +5366,18 @@ def post_llm_call(*args, **kwargs):
             try:
                 # Limpar EXECs antes de enviar ao contato
                 clean_text = _EXEC_PATTERN.sub("", response_text).strip()
+                # Filtrar resultados de ferramentas que não devem ser enviados a contatos
+                _tool_result_patterns = [
+                    r"^nothing to save\.?$",
+                    r"^nada para salvar\.?$",
+                    r"^saved\.$",
+                    r"^ok\.$",
+                    r"^\[tool result\]",
+                    r"^tool_result:",
+                ]
+                if any(re.match(p, clean_text, re.IGNORECASE) for p in _tool_result_patterns):
+                    logger.warning(f"[post_llm_call] Resultado de ferramenta filtrado: {clean_text!r}")
+                    return {"assistant_response": ""}
                 # Detectar se o LLM afirmou ter executado uma ferramenta/ação no sistema
                 _action_patterns = [
                     r"pronto[,.]?\s*(inclu|adicion|edit|atualiz|salv|modific|coloc|registr)",
@@ -5387,12 +5399,12 @@ def post_llm_call(*args, **kwargs):
                     clean_text
                 )
                 if clean_text:
-                    # Deduplicação: pular se idêntico ao último envio nos últimos 10s
-                    last_text, last_ts = _last_sent.get(chat_id, ("", 0.0))
-                    if clean_text == last_text and (time.time() - last_ts) < 30:
-                        logger.warning(f"[post_llm_call] Duplicata detectada para {chat_id} — ignorando")
+                    # Deduplicação por session_id — só envia 1 vez por turno do usuário
+                    last_ts = _session_responded.get(session_id, 0.0)
+                    if (time.time() - last_ts) < 60:
+                        logger.warning(f"[post_llm_call] Sessão {session_id!r} já respondida — ignorando duplicata")
                         return {"assistant_response": ""}
-                    _last_sent[chat_id] = (clean_text, time.time())
+                    _session_responded[session_id] = time.time()
                     logger.info(f"[post_llm_call] Enviando ao contato {chat_id} via _human_send")
                     _human_send(chat_id, clean_text)
                     return {"assistant_response": ""}
