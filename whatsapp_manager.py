@@ -3860,7 +3860,7 @@ def _owner_status_context_block(reveal_status: bool = True) -> str:
     )
 
 
-def _build_personal_prompt(contact_info: dict, relationship: str, history_section: str) -> dict:
+def _build_personal_prompt(contact_info: dict, relationship: str, history_section: str, whatsapp_soul: str = "") -> dict:
     """Constrói o payload de contexto para contatos pessoais (Amigo, Parente, etc.).
 
     Inclui nome, relacionamento, tom, apelidos, saudação frequente e diretrizes.
@@ -3900,6 +3900,7 @@ def _build_personal_prompt(contact_info: dict, relationship: str, history_sectio
     return {
         "context": (
             f"{_datetime_context_block()}"
+            f"{('### ESTILO DE ESCRITA DO ANDRÉ ###\n' + whatsapp_soul + '\n\n') if whatsapp_soul else ''}"
             "### PERSONA — ALGUÉM RESPONDENDO PELO ANDRÉ ###\n"
             "Você está respondendo pelo WhatsApp do André para um amigo ou familiar próximo dele.\n"
             "Imagine que você é alguém de confiança que pegou o celular do André para avisar como ele está.\n"
@@ -5104,7 +5105,7 @@ def pre_llm_call(*args, **kwargs):
     )
     if _rel in ("Amigo", "AmigoProximo", "Parente", "Filho") or _pessoal_manual:
         logger.info(f"[prompt] Usando prompt pessoal para {phone_number} (relationship={_rel}, manual={_man_rel})")
-        return _build_personal_prompt(contact_info or {}, _rel or _man_rel, history_section)
+        return _build_personal_prompt(contact_info or {}, _rel or _man_rel, history_section, whatsapp_soul)
 
     return _build_support_prompt(whatsapp_soul, rules_content, history_section, contact_info=contact_info)
 
