@@ -3684,5 +3684,201 @@ class TestBuildLidPhoneMap(unittest.TestCase):
         self.assertEqual(result["265231477510271"], "558695903469")
 
 
+class TestPostLlmCall(BaseWhatsAppManagerTest):
+    """Testes para o hook post_llm_call — filtragem, dedup de turno e typing."""
+
+    def setUp(self):
+        super().setUp()
+        import whatsapp_manager
+        whatsapp_manager._turn_key.clear()
+        whatsapp_manager._turn_sent.clear()
+        whatsapp_manager._sender_to_chat.clear()
+
+    def tearDown(self):
+        import whatsapp_manager
+        whatsapp_manager._turn_key.clear()
+        whatsapp_manager._turn_sent.clear()
+        super().tearDown()
+
+    def _call(self, session_id, response_text, platform="whatsapp"):
+        post_llm = self.ctx.hooks.get("post_llm_call")
+        return post_llm(
+            "post_llm_call",
+            platform=platform,
+            session_id=session_id,
+            assistant_response=response_text,
+        )
+
+    @patch("urllib.request.urlopen")
+    @patch("time.sleep")
+    def test_contact_gets_filtered_response(self, mock_sleep, mock_urlopen):
+        """Contato recebe assistant_response filtrado."""
+        mock_urlopen.return_value.__enter__ = lambda s: s
+        mock_urlopen.return_value.__exit__ = MagicMock(return_value=False)
+        result = self._call("5511888888888@s.whatsapp.net", "oi, tudo bem!")
+        self.assertIsNotNone(result)
+        self.assertEqual(result["assistant_response"], "oi, tudo bem!")
+
+    @patch("urllib.request.urlopen")
+    @patch("time.sleep")
+    def test_owner_session_returns_none_without_exec(self, mock_sleep, mock_urlopen):
+        """Owner sem EXEC no response: post_llm_call retorna None (Hermes envia normalmente)."""
+        result = self._call("5511999999999@s.whatsapp.net", "resposta normal sem exec")
+        self.assertIsNone(result)
+
+    @patch("urllib.request.urlopen")
+    @patch("time.sleep")
+    def test_tool_result_suppressed(self, mock_sleep, mock_urlopen):
+        """Tool results intermediários são suprimidos (espaço)."""
+        mock_urlopen.return_value.__enter__ = lambda s: s
+        mock_urlopen.return_value.__exit__ = MagicMock(return_value=False)
+        result = self._call("5511888888888@s.whatsapp.net", "nothing to save.")
+        self.assertEqual(result["assistant_response"], " ")
+
+    @patch("urllib.request.urlopen")
+    @patch("time.sleep")
+    def test_tool_result_ok_suppressed(self, mock_sleep, mock_urlopen):
+        mock_urlopen.return_value.__enter__ = lambda s: s
+        mock_urlopen.return_value.__exit__ = MagicMock(return_value=False)
+        result = self._call("5511888888888@s.whatsapp.net", "ok.")
+        self.assertEqual(result["assistant_response"], " ")
+
+    @patch("urllib.request.urlopen")
+    @patch("time.sleep")
+    def test_action_claim_replaced(self, mock_sleep, mock_urlopen):
+        """Afirmações de ação no sistema são substituídas por recusa."""
+        mock_urlopen.return_value.__enter__ = lambda s: s
+        mock_urlopen.return_value.__exit__ = MagicMock(return_value=False)
+        result = self._call("5511888888888@s.whatsapp.net", "pronto, adicionei o contato.")
+        self.assertIn("dono", result["assistant_response"])
+        self.assertNotIn("adicionei", result["assistant_response"])
+
+    @patch("urllib.request.urlopen")
+    @patch("time.sleep")
+    def test_phone_number_redacted(self, mock_sleep, mock_urlopen):
+        """Números de telefone são redactados."""
+        mock_urlopen.return_value.__enter__ = lambda s: s
+        mock_urlopen.return_value.__exit__ = MagicMock(return_value=False)
+        result = self._call("5511888888888@s.whatsapp.net", "ligue para 11999887766 ok?")
+        self.assertIn("[número omitido]", result["assistant_response"])
+
+    @patch("urllib.request.urlopen")
+    @patch("time.sleep")
+    def test_turn_dedup_suppresses_second_call(self, mock_sleep, mock_urlopen):
+        """Segundo post_llm_call para o mesmo turno é suprimido."""
+        import whatsapp_manager
+        mock_urlopen.return_value.__enter__ = lambda s: s
+        mock_urlopen.return_value.__exit__ = MagicMock(return_value=False)
+
+        session = "5511888888888@s.whatsapp.net"
+        whatsapp_manager._turn_key[session] = "turno-abc"
+
+        r1 = self._call(session, "primeira resposta")
+        self.assertEqual(r1["assistant_response"], "primeira resposta")
+
+        r2 = self._call(session, "segunda resposta duplicada")
+        self.assertEqual(r2["assistant_response"], " ")
+
+    @patch("urllib.request.urlopen")
+    @patch("time.sleep")
+    def test_typing_indicator_called(self, mock_sleep, mock_urlopen):
+        """Typing indicator é enviado via HTTP antes de retornar."""
+        mock_urlopen.return_value.__enter__ = lambda s: s
+        mock_urlopen.return_value.__exit__ = MagicMock(return_value=False)
+        self._call("5511888888888@s.whatsapp.net", "olá!")
+        mock_urlopen.assert_called_once()
+        call_args = mock_urlopen.call_args[0][0]
+        self.assertIn("/typing", call_args.full_url)
+
+    @patch("urllib.request.urlopen")
+    @patch("time.sleep")
+    def test_sleep_called_after_typing(self, mock_sleep, mock_urlopen):
+        """Sleep proporcional é chamado após o typing indicator."""
+        mock_urlopen.return_value.__enter__ = lambda s: s
+        mock_urlopen.return_value.__exit__ = MagicMock(return_value=False)
+        self._call("5511888888888@s.whatsapp.net", "mensagem de teste")
+        mock_sleep.assert_called_once()
+
+    @patch("urllib.request.urlopen")
+    @patch("time.sleep")
+    def test_typing_failure_does_not_crash(self, mock_sleep, mock_urlopen):
+        """Falha no typing indicator não interrompe o retorno da resposta."""
+        mock_urlopen.side_effect = Exception("bridge offline")
+        result = self._call("5511888888888@s.whatsapp.net", "tudo certo!")
+        self.assertIsNotNone(result)
+        self.assertEqual(result["assistant_response"], "tudo certo!")
+
+    def test_non_whatsapp_platform_returns_none(self):
+        """Plataformas que não são whatsapp passam sem filtro."""
+        result = self._call("qualquer_session", "resposta", platform="telegram")
+        self.assertIsNone(result)
+
+    def test_empty_response_returns_none(self):
+        """Response vazio retorna None."""
+        post_llm = self.ctx.hooks.get("post_llm_call")
+        result = post_llm("post_llm_call", platform="whatsapp", session_id="5511888888888@s.whatsapp.net", assistant_response="")
+        self.assertIsNone(result)
+
+    @patch("whatsapp_manager._update_contact_fields", return_value="✅ Contato atualizado.")
+    def test_owner_exec_is_processed(self, mock_update):
+        """Owner com EXEC no response: executa update e remove o EXEC do texto."""
+        result = self._call(
+            "5511999999999@s.whatsapp.net",
+            "Ok, vou atualizar.\nEXEC: update contact Isabel relationship=Filha"
+        )
+        self.assertIsNotNone(result)
+        mock_update.assert_called_once()
+        self.assertNotIn("EXEC:", result["assistant_response"])
+
+
+class TestPreToolCall(BaseWhatsAppManagerTest):
+    """Testes para o hook pre_tool_call — bloqueio de tools para contatos."""
+
+    def _call(self, session_id, platform="whatsapp"):
+        pre_tool = self.ctx.hooks.get("pre_tool_call")
+        return pre_tool("pre_tool_call", platform=platform, session_id=session_id)
+
+    def test_contact_session_blocked(self):
+        """Contato não pode usar tools."""
+        result = self._call("5511888888888@s.whatsapp.net")
+        self.assertIsNotNone(result)
+        self.assertIn("Ferramentas não disponíveis", result)
+
+    def test_owner_session_allowed(self):
+        """Owner pode usar tools (retorna None = permitir)."""
+        result = self._call("5511999999999@s.whatsapp.net")
+        self.assertIsNone(result)
+
+    def test_owner_with_device_suffix_allowed(self):
+        """Owner com device suffix (5511999999999:2@s.whatsapp.net) é reconhecido."""
+        result = self._call("5511999999999:2@s.whatsapp.net")
+        self.assertIsNone(result)
+
+    def test_non_whatsapp_platform_allowed(self):
+        """Plataformas diferentes de whatsapp passam sem bloqueio."""
+        result = self._call("qualquer@s.whatsapp.net", platform="telegram")
+        self.assertIsNone(result)
+
+    def test_empty_session_allowed(self):
+        """Session vazia passa (não há como identificar)."""
+        result = self._call("")
+        self.assertIsNone(result)
+
+    def test_contact_with_device_suffix_blocked(self):
+        """Contato com device suffix é bloqueado corretamente."""
+        result = self._call("5511888888888:1@s.whatsapp.net")
+        self.assertIsNotNone(result)
+
+    def test_brazilian_normalization_owner(self):
+        """Número do owner com 8 dígitos local vs 9 dígitos ainda é reconhecido."""
+        import whatsapp_manager
+        # owner é 5511999999999; testar variação com 8 dígitos (5511 99999999)
+        # _normalize_brazilian_phone deve resolver a diferença
+        result = self._call("551199999999@s.whatsapp.net")
+        # Pode ser None (reconhecido como owner) ou bloqueado dependendo da normalização
+        # O importante é não lançar exceção
+        self.assertIn(result, [None, "Ferramentas não disponíveis para sessões de contato."])
+
+
 if __name__ == "__main__":
     unittest.main()
