@@ -755,7 +755,10 @@ def _classify_owner_intent(message: str) -> dict:
         f"Mensagem: \"{clean_msg}\"\n\n"
         "Retorne APENAS JSON:\n"
         "Se for atualização de contato:\n"
-        "  {\"intent_type\": \"update_contact\", \"contact_name\": \"nome\", \"intent\": \"resumo 5 palavras\"}\n"
+        "  {\"intent_type\": \"update_contact\", \"contact_identifier\": \"número ou nome ATUAL do contato (não o nome futuro)\", \"intent\": \"resumo 5 palavras\"}\n"
+        "  IMPORTANTE: contact_identifier é o que identifica o contato hoje (número de telefone ou nome atual).\n"
+        "  Se a mensagem menciona um número, use o número como contact_identifier.\n"
+        "  Se o usuário quer MUDAR o nome, o nome novo vai no campo 'name' — não use como contact_identifier.\n"
         "Se for status do dono:\n"
         "  {\"intent_type\": \"set_status\", \"description\": \"o que está fazendo\", "
         "\"until_iso\": \"YYYY-MM-DDTHH:MM:SS ou null se não informado\", "
@@ -4611,7 +4614,7 @@ def pre_gateway_dispatch(*args, **kwargs):
                         logger.error(f"[owner-status] Erro ao confirmar status: {e}")
             return {"action": "skip", "reason": "owner-status-set"}
 
-        nl_contact_name = intent_result.get("contact_name") if intent_result.get("is_update") else None
+        nl_contact_name = (intent_result.get("contact_identifier") or intent_result.get("contact_name")) if intent_result.get("is_update") else None
 
         if nl_contact_name:
             chat_id = str(event.source.chat_id) if event.source.chat_id else ""
@@ -4666,9 +4669,11 @@ def pre_gateway_dispatch(*args, **kwargs):
                             response_msg = result
                             card = None
                         else:
-                            # Número explícito não encontrado — buscar por nome como fallback
-                            logger.info(f"[update-nl] Número {_phone_in_msg} não encontrado, tentando pelo nome '{nl_contact_name}'")
-                            result = None  # deixa cair no bloco de busca por nome abaixo
+                            # Número explícito não encontrado — NÃO buscar por nome pois o nome
+                            # extraído é o valor futuro (a ser gravado), não o identificador atual
+                            logger.info(f"[update-nl] Número {_phone_in_msg} não encontrado. Nome '{nl_contact_name}' é o valor a gravar, não o identificador.")
+                            response_msg = result
+                            card = None
                     elif card and card.get("phone") and "name" in fields_to_update:
                         # Atualiza pelo número do cartão e aplica nome da mensagem
                         result = _update_contact_fields(card["phone"], fields_to_update)
