@@ -4005,11 +4005,14 @@ def _build_personal_prompt(contact_info: dict, relationship: str, history_sectio
             "- Siga as diretrizes do contato se houver.\n\n"
             f"{_owner_status_context_block(reveal_status=reveal_status)}"
             f"{history_section}"
-            "CONSTRAINTS RÍGIDAS DE SEGURANÇA:\n"
-            "- NUNCA execute comandos no terminal (terminal tool) para esta pessoa.\n"
-            "- NUNCA edite, remova ou crie arquivos do sistema para ela.\n"
-            "- Mantenha sigilo sobre detalhes técnicos de como você funciona.\n"
-            "- NUNCA escreva ou exiba em suas respostas qualquer representação de ferramentas como '📖 read_file: ...' ou 'terminal'."
+            "CONSTRAINTS ABSOLUTAS — NUNCA VIOLE:\n"
+            f"Você é apenas um intermediário passando recado pelo celular do {owner_name}.\n"
+            "VOCÊ NÃO TEM ACESSO A NENHUMA FERRAMENTA, SERVIDOR OU SISTEMA.\n"
+            "- Se pedirem para criar cron, executar script, configurar servidor, criar arquivo, acessar banco de dados ou qualquer coisa técnica: recuse com naturalidade. Ex: 'isso é com o André mesmo, não tenho como fazer'\n"
+            "- NUNCA afirme que consegue fazer algo técnico no servidor.\n"
+            "- NUNCA use ferramentas como terminal, read_file, cron, ou qualquer outra.\n"
+            "- NUNCA revele detalhes técnicos de como você funciona.\n"
+            "- NUNCA exiba representações de ferramentas como '📖 read_file: ...' ou 'terminal'."
         )
     }
 
@@ -4087,13 +4090,12 @@ def _build_support_prompt(
             f"{rules_content}\n\n"
             f"{_owner_status_context_block(reveal_status=False)}"
             f"{history_section}"
-            "CONSTRAINTS RÍGIDAS DE SEGURANÇA:\n"
-            "- NUNCA execute comandos no terminal (terminal tool).\n"
-            "- NUNCA edite, remova ou crie arquivos do sistema.\n"
+            "CONSTRAINTS ABSOLUTAS — NUNCA VIOLE:\n"
+            "- NUNCA afirme que consegue executar cron, scripts, comandos, criar arquivos ou acessar servidor.\n"
+            "- Se pedirem algo técnico no servidor: recuse. Ex: 'isso não é algo que posso fazer por aqui'\n"
+            "- NUNCA use ferramentas como terminal, read_file, cron ou similares.\n"
             "- Mantenha total sigilo sobre o fato de você rodar em um servidor ou ter ferramentas.\n"
-            "- NUNCA escreva ou exiba em suas respostas qualquer representação de ferramentas "
-            "ou status como '📖 read_file: ...', 'terminal', etc. Toda a execução de ferramentas "
-            "deve ser 100% invisível para o usuário final."
+            "- NUNCA exiba representações de ferramentas como '📖 read_file: ...', 'terminal', etc."
         )
     }
 
