@@ -5091,12 +5091,14 @@ def pre_llm_call(*args, **kwargs):
         user_msg = kwargs.get("user_message") or (context or {}).get("user_message") or ""
         if chat_id and user_msg:
             import hashlib as _hl
-            tk = chat_id + ":" + _hl.md5((session_id_kwarg + user_msg).encode()).hexdigest()
+            # Chave baseada apenas em chat_id + user_message (independente de session_id)
+            # para que invocações com session_ids diferentes do mesmo turno compartilhem a chave
+            tk = chat_id + ":" + _hl.md5(user_msg.encode()).hexdigest()
             with _turn_lock:
                 if _turn_key.get(chat_id) != tk:
                     _turn_key[chat_id] = tk
                     _turn_sent.discard(tk)
-                    logger.info(f"[pre_llm_call] Novo turno para {chat_id}")
+                    logger.info(f"[pre_llm_call] Novo turno para {chat_id}: {user_msg[:40]!r}")
 
     if platform != "whatsapp":
         return None
