@@ -3684,6 +3684,170 @@ class TestBuildLidPhoneMap(unittest.TestCase):
         self.assertEqual(result["265231477510271"], "558695903469")
 
 
+class TestOwnerCommands(BaseWhatsAppManagerTest):
+    """Testes para comandos do owner em pre_gateway_dispatch."""
+
+    def setUp(self):
+        super().setUp()
+        import whatsapp_manager
+        whatsapp_manager._pending_contact_update.clear()
+
+    def tearDown(self):
+        import whatsapp_manager
+        whatsapp_manager._pending_contact_update.clear()
+        super().tearDown()
+
+    def _dispatch(self, msg_text, mock_urlopen):
+        pre_dispatch = self.ctx.hooks.get("pre_gateway_dispatch")
+        event = MagicMock()
+        event.source.platform = "whatsapp"
+        event.source.user_id = "5511999999999@s.whatsapp.net"
+        event.source.chat_id = "5511999999999@s.whatsapp.net"
+        event.text = msg_text
+        event.has_media = False
+        gateway = MagicMock()
+        gateway._session_key_for_source.return_value = "sess_owner"
+        gateway._session_model_overrides = {}
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = b""
+        mock_urlopen.return_value.__enter__.return_value = mock_resp
+        return pre_dispatch("pre_gateway_dispatch", {"event": event, "gateway": gateway})
+
+    # ── update contact (comando direto) ──────────────────────────────────────
+
+    @patch("whatsapp_manager._update_contact_fields", return_value="✅ Contato Isabel atualizado.")
+    @patch("urllib.request.urlopen")
+    def test_update_contact_command(self, mock_urlopen, mock_update):
+        """'update contact Isabel relationship=Filha' executa e retorna skip."""
+        result = self._dispatch("update contact Isabel relationship=Filha", mock_urlopen)
+        self.assertEqual(result["action"], "skip")
+        self.assertEqual(result["reason"], "update-contact-command")
+        mock_update.assert_called_once_with("Isabel", {"relationship": "Filha"})
+
+    @patch("urllib.request.urlopen")
+    def test_update_contact_missing_fields(self, mock_urlopen):
+        """'update contact Isabel' sem campos avisa o owner."""
+        result = self._dispatch("update contact Isabel", mock_urlopen)
+        self.assertEqual(result["action"], "skip")
+        # Deve ter enviado mensagem de erro via bridge
+        mock_urlopen.assert_called()
+
+    @patch("urllib.request.urlopen")
+    def test_update_contact_no_fields(self, mock_urlopen):
+        """'update contact Isabel' sem campo=valor avisa o owner."""
+        result = self._dispatch("update contact Isabel", mock_urlopen)
+        self.assertEqual(result["action"], "skip")
+        mock_urlopen.assert_called()
+
+    # ── NL update (via _classify_owner_intent) ───────────────────────────────
+
+    @patch("whatsapp_manager._update_contact_fields", return_value="✅ Contato Maria atualizado.")
+    @patch("whatsapp_manager._extract_update_fields_via_llm", return_value={"relationship": "Parente", "manual_relationship": "Parente"})
+    @patch("whatsapp_manager._classify_owner_intent", return_value={
+        "intent_type": "update_contact", "is_update": True,
+        "contact_identifier": "Maria", "intent": "atualizar Maria",
+    })
+    @patch("urllib.request.urlopen")
+    def test_nl_update_found(self, mock_urlopen, mock_intent, mock_extract, mock_update):
+        """NL update com contato encontrado retorna skip."""
+        result = self._dispatch("a Maria é minha parente", mock_urlopen)
+        self.assertEqual(result["action"], "skip")
+        mock_update.assert_called()
+
+    @patch("whatsapp_manager._save_owner_status")
+    @patch("whatsapp_manager._classify_owner_intent", return_value={
+        "intent_type": "set_status", "is_update": False, "is_status": True,
+        "is_clear": False, "description": "em reunião", "until_iso": None,
+        "intent": "definir status",
+    })
+    @patch("urllib.request.urlopen")
+    def test_set_status(self, mock_urlopen, mock_intent, mock_save):
+        """Owner informa status: _save_owner_status é chamado e retorna skip."""
+        result = self._dispatch("entrei em reunião agora", mock_urlopen)
+        self.assertEqual(result["action"], "skip")
+        self.assertEqual(result["reason"], "owner-status-set")
+        mock_save.assert_called_once()
+
+    @patch("whatsapp_manager._clear_owner_status")
+    @patch("whatsapp_manager._classify_owner_intent", return_value={
+        "intent_type": "set_status", "is_update": False, "is_status": True,
+        "is_clear": True, "intent": "limpando status",
+    })
+    @patch("urllib.request.urlopen")
+    def test_clear_status(self, mock_urlopen, mock_intent, mock_clear):
+        """Owner limpa status: _clear_owner_status é chamado."""
+        result = self._dispatch("já voltei", mock_urlopen)
+        self.assertEqual(result["action"], "skip")
+        mock_clear.assert_called_once()
+
+    @patch("whatsapp_manager._get_active_owner_status", return_value={"description": "em reunião", "until_iso": None})
+    @patch("whatsapp_manager._classify_owner_intent", return_value={
+        "intent_type": "query_status", "is_update": False, "is_status": False,
+        "intent": "consultar status ativo",
+    })
+    @patch("urllib.request.urlopen")
+    def test_query_status_active(self, mock_urlopen, mock_intent, mock_get):
+        """Owner consulta status ativo: retorna skip."""
+        result = self._dispatch("qual meu status?", mock_urlopen)
+        self.assertEqual(result["action"], "skip")
+        self.assertEqual(result["reason"], "owner-status-query")
+
+    @patch("whatsapp_manager._get_active_owner_status", return_value=None)
+    @patch("whatsapp_manager._classify_owner_intent", return_value={
+        "intent_type": "query_status", "is_update": False, "is_status": False,
+        "intent": "consultar status ativo",
+    })
+    @patch("urllib.request.urlopen")
+    def test_query_status_none(self, mock_urlopen, mock_intent, mock_get):
+        """Owner consulta status quando não há nenhum ativo."""
+        result = self._dispatch("qual meu status?", mock_urlopen)
+        self.assertEqual(result["action"], "skip")
+
+    # ── Pendência resolvida por número ────────────────────────────────────────
+
+    @patch("whatsapp_manager._update_contact_fields", return_value="✅ Contato atualizado.")
+    @patch("urllib.request.urlopen")
+    def test_pending_resolved_by_phone(self, mock_urlopen, mock_update):
+        """Quando há pendência e owner manda um número, resolve a pendência."""
+        import whatsapp_manager
+        whatsapp_manager._pending_contact_update["5511999999999@s.whatsapp.net"] = {
+            "name": "João",
+            "fields": {"relationship": "Amigo", "manual_relationship": "Amigo"},
+        }
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = b""
+        mock_urlopen.return_value.__enter__.return_value = mock_resp
+
+        result = self._dispatch("5511888777666", mock_urlopen)
+        self.assertEqual(result["action"], "skip")
+        self.assertEqual(result["reason"], "update-contact-pending")
+        mock_update.assert_called()
+        self.assertNotIn("5511999999999@s.whatsapp.net", whatsapp_manager._pending_contact_update)
+
+    @patch("whatsapp_manager._update_contact_fields", return_value="✅ Contato atualizado.")
+    @patch("urllib.request.urlopen")
+    def test_disambiguate_resolved(self, mock_urlopen, mock_update):
+        """Desambiguação resolvida quando owner manda número correspondente."""
+        import whatsapp_manager
+        whatsapp_manager._pending_contact_update["5511999999999@s.whatsapp.net"] = {
+            "type": "disambiguate",
+            "name": "Ana",
+            "candidates": [
+                ("5511111111111@s.whatsapp.net", "Ana Silva", "5511111111111"),
+                ("5511222222222@s.whatsapp.net", "Ana Costa", "5511222222222"),
+            ],
+            "fields": {"relationship": "Cliente"},
+        }
+        mock_resp = MagicMock()
+        mock_resp.read.return_value = b""
+        mock_urlopen.return_value.__enter__.return_value = mock_resp
+
+        result = self._dispatch("5511111111111", mock_urlopen)
+        self.assertEqual(result["action"], "skip")
+        self.assertEqual(result["reason"], "update-contact-disambiguate")
+        mock_update.assert_called_once()
+
+
 class TestPostLlmCall(BaseWhatsAppManagerTest):
     """Testes para o hook post_llm_call — filtragem, dedup de turno e typing."""
 
