@@ -4651,41 +4651,22 @@ def pre_gateway_dispatch(*args, **kwargs):
                             break
 
                 if fields_to_update:
-                    # Extrair número de telefone da mensagem (ex: "edite o contato 5511996472188")
-                    _phone_in_msg = None
-                    _phone_match = re.search(r"(\+?[\d][\d\s\-\(\)]{8,18}[\d])", msg_text)
-                    if _phone_match:
-                        _phone_in_msg = re.sub(r"\D", "", _phone_match.group(1))
-                        if len(_phone_in_msg) < 10:
-                            _phone_in_msg = None
-                        logger.info(f"[update-nl] Número encontrado na mensagem: {_phone_in_msg}")
-
-                    # Se há cartão pendente, tentar pelo número do cartão diretamente (evita busca por nome que pode falhar)
+                    # O contact_identifier já foi extraído pelo LLM (número ou nome atual)
+                    # Não usamos regex — o LLM diferencia identificador de dados futuros
                     card = _pending_contact_card.get(sender_id)
-                    if _phone_in_msg:
-                        result = _update_contact_fields(_phone_in_msg, fields_to_update)
-                        logger.info(f"[update-nl] Tentativa via número da mensagem ({_phone_in_msg}): {result}")
-                        if "não encontrado" not in result:
-                            response_msg = result
-                            card = None
-                        else:
-                            # Número explícito não encontrado — NÃO buscar por nome pois o nome
-                            # extraído é o valor futuro (a ser gravado), não o identificador atual
-                            logger.info(f"[update-nl] Número {_phone_in_msg} não encontrado. Nome '{nl_contact_name}' é o valor a gravar, não o identificador.")
-                            response_msg = result
-                            card = None
-                    elif card and card.get("phone") and "name" in fields_to_update:
-                        # Atualiza pelo número do cartão e aplica nome da mensagem
+                    result = None
+
+                    # Cartão de contato compartilhado tem prioridade se não há campos suficientes
+                    if card and card.get("phone") and not re.match(r"^\+?[\d\s\-\(\)]+$", nl_contact_name):
                         result = _update_contact_fields(card["phone"], fields_to_update)
                         logger.info(f"[update-nl] Tentativa via cartão pendente ({card['phone']}): {result}")
                         if "não encontrado" not in result:
                             del _pending_contact_card[sender_id]
                             response_msg = result
-                            card = None  # já resolvido
-                    else:
-                        result = None
+                            card = None
+
                     if card is not None or result is None:
-                        # Verificar ambiguidade antes de atualizar por nome
+                        # Verificar ambiguidade antes de atualizar por identificador
                         candidates = _find_contact_matches(nl_contact_name)
                         if len(candidates) > 1:
                             # Múltiplos matches — pedir confirmação com número
