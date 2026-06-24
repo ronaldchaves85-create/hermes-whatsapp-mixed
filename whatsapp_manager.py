@@ -2985,6 +2985,8 @@ def _update_contact_fields(identifier: str, fields: dict) -> str:
             if _is_owner_key(key):
                 continue
             phone = key.split("@")[0].split(":")[0]
+            if len(phone) < 8:
+                continue
             phone_norm_br = _normalize_brazilian_phone(phone)
             if id_digits in phone or phone in id_digits or id_norm_br == phone_norm_br:
                 logger.info(f"[update-contact] Passo 1: match → {key}")
