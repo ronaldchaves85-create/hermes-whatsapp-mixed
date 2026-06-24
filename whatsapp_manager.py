@@ -721,6 +721,69 @@ def _call_llm_api(url: str, headers: dict, payload: dict, extract_fn, timeout: i
         return None
 
 
+def _extract_update_fields_via_llm(contact_name: str, message: str) -> dict:
+    """Extrai campos de atualização de contato de uma mensagem em linguagem natural.
+
+    Retorna dict com os campos explicitamente mencionados (relationship, manual_relationship,
+    nickname, pet_name, notes, product, name). Nunca inventa campos.
+    """
+    google_key = config.google_api_key
+    openai_key = config.openai_api_key
+    openrouter_key = config.openrouter_api_key
+    classify_model = config.whatsapp_contact_classifier_model
+
+    prompt = (
+        f"O usuário pediu para atualizar o contato '{contact_name}' com a seguinte instrução:\n"
+        f"\"{message}\"\n\n"
+        "Extraia SOMENTE os campos explicitamente mencionados e retorne um JSON.\n"
+        "Campos permitidos: relationship, manual_relationship, nickname, pet_name, notes, product, name.\n"
+        "- notes = observação/anotação sobre o contato (texto livre). Use quando o usuário disser 'coloque uma observação', 'anote', 'registre que', etc.\n"
+        "- nickname = apelido (ex: Bebel, Zé). Use quando o usuário disser 'o apelido é X'.\n"
+        "- relationship enum: Amigo, AmigoProximo, Parente, Filho, Cliente, Vendedor\n"
+        "- manual_relationship: valor livre (ex: Namorada, Filho, Esposa, Cliente VIP)\n"
+        "  'como namorada' → relationship=AmigoProximo, manual_relationship=Namorada\n"
+        "  'como filho' → relationship=Filho, manual_relationship=Filho\n"
+        "  'como cliente' → relationship=Cliente, manual_relationship=Cliente\n"
+        "NÃO invente campos. NÃO inclua tone, guidelines, summary, intent, frequency.\n"
+        "Retorne APENAS JSON. Exemplos:\n"
+        "  'coloque como namorada' → {\"relationship\": \"AmigoProximo\", \"manual_relationship\": \"Namorada\"}\n"
+        "  'coloque uma observação: ele prefere WhatsApp' → {\"notes\": \"ele prefere WhatsApp\"}\n"
+        "  'apelido é Zé, coloque como cliente' → {\"nickname\": \"Zé\", \"relationship\": \"Cliente\", \"manual_relationship\": \"Cliente\"}\n"
+    )
+
+    text_content = None
+    for key, url, headers, make_payload, extract_fn in [
+        (google_key,
+         f"https://generativelanguage.googleapis.com/v1beta/models/{classify_model or 'gemini-3.1-flash-lite'}:generateContent?key={google_key}",
+         {"Content-Type": "application/json"},
+         lambda p: {"contents": [{"parts": [{"text": p}]}], "generationConfig": {"maxOutputTokens": 256}},
+         lambda r: r["candidates"][0]["content"]["parts"][0]["text"]),
+        (openai_key,
+         "https://api.openai.com/v1/chat/completions",
+         {"Content-Type": "application/json", "Authorization": f"Bearer {openai_key}"},
+         lambda p: {"model": classify_model or "gpt-4o-mini", "messages": [{"role": "user", "content": p}]},
+         lambda r: r["choices"][0]["message"]["content"]),
+        (openrouter_key,
+         "https://openrouter.ai/api/v1/chat/completions",
+         {"Content-Type": "application/json", "Authorization": f"Bearer {openrouter_key}"},
+         lambda p: {"model": classify_model or "google/gemini-flash-1.5-8b", "messages": [{"role": "user", "content": p}]},
+         lambda r: r["choices"][0]["message"]["content"]),
+    ]:
+        if not key:
+            continue
+        text_content = _call_llm_api(url, headers, make_payload(prompt), extract_fn, timeout=15)
+        if text_content:
+            break
+
+    if not text_content:
+        return {}
+    try:
+        raw = _extract_json_from_text(text_content)
+        return json.loads(raw) if raw else {}
+    except Exception:
+        return {}
+
+
 def _extract_contact_name_via_llm(message: str) -> str | None:
     """Usa a LLM para extrair o nome do contato de uma mensagem em linguagem natural.
     Retorna apenas o nome/apelido, ou None se não encontrado."""
@@ -4094,33 +4157,9 @@ def pre_gateway_dispatch(*args, **kwargs):
             # Usar LLM apenas para extrair campos explicitamente mencionados pelo owner
             # Campos auto-gerados pelo classificador (summary, tone, guidelines, etc.) são excluídos
             # para não sobrescrever dados reais com valores inventados
-            extract_prompt = (
-                f"O usuário pediu para atualizar o contato '{nl_contact_name}' com a seguinte instrução:\n"
-                f"\"{msg_text}\"\n\n"
-                "Extraia SOMENTE os campos explicitamente mencionados e retorne um JSON.\n"
-                "Campos permitidos: relationship, manual_relationship, nickname, pet_name, notes, product.\n"
-                "- NÃO inclua 'name' — o nome do contato não deve ser alterado por este comando.\n"
-                "- nickname = apelido da pessoa (ex: Bebel, Zé)\n"
-                "- pet_name = nome do animal de estimação (só inclua se mencionado)\n"
-                "- notes = observação/anotação sobre o contato (texto livre)\n"
-                "- relationship enum válidos: Amigo, AmigoProximo, Parente, Filho, Cliente, Vendedor\n"
-                "- manual_relationship: valor livre que descreve o relacionamento real (ex: Namorada, Filho, Esposa, Cliente VIP)\n"
-                "  Se o usuário disser 'coloque como namorada': relationship=AmigoProximo, manual_relationship=Namorada\n"
-                "  Se o usuário disser 'coloque como filho': relationship=Filho, manual_relationship=Filho\n"
-                "  Se o usuário disser 'coloque como cliente': relationship=Cliente, manual_relationship=Cliente\n"
-                "NÃO invente campos não mencionados. NÃO inclua tone, guidelines, summary, intent, frequency.\n"
-                "Retorne APENAS o JSON. Exemplo: "
-                "{\"relationship\": \"Filho\", \"manual_relationship\": \"Filho\", \"notes\": \"mora em SP\"}"
-            )
             try:
-                extracted = _classify_contact_via_llm(
-                    name=nl_contact_name,
-                    chat_history=extract_prompt,
-                    stats_info="",
-                )
-                # Permitir apenas campos que fazem sentido em updates manuais
-                # tone/guidelines/summary/intent/frequency só devem vir do histórico real
-                owner_update_fields = {"name", "relationship", "manual_relationship", "nickname", "pet_name", "product", "frequent_greeting"}
+                extracted = _extract_update_fields_via_llm(nl_contact_name, msg_text)
+                owner_update_fields = {"name", "relationship", "manual_relationship", "nickname", "pet_name", "notes", "product", "frequent_greeting"}
                 fields_to_update = {k: v for k, v in extracted.items() if k in owner_update_fields and v is not None}
 
                 # Garantir manual_relationship quando relationship for definido pelo owner
