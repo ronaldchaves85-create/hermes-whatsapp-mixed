@@ -3425,13 +3425,31 @@ def _pull_and_merge_configurations():
         for k, v in local_contacts.items():
             if k not in merged:
                 merged[k] = v
-        
+
+        # Remover chaves com número vazio ou inválido (evita falso match no passo 1)
+        merged = _sanitize_contacts_keys(merged)
+
         try:
             with open(personal_contacts_path, "w", encoding="utf-8") as f:
                 json.dump(merged, f, indent=2, ensure_ascii=False)
             logger.info(f"✓ Contatos mesclados localmente.")
         except Exception as e:
             logger.error(f"Erro ao salvar personal_contacts.json mesclado: {e}")
+
+
+def _sanitize_contacts_keys(contacts: dict) -> dict:
+    """Remove entradas com chave inválida (número vazio ou muito curto)."""
+    valid = {}
+    removed = []
+    for k, v in contacts.items():
+        phone = k.split("@")[0].split(":")[0]
+        if len(phone) < 8 and not k.endswith("@lid"):
+            removed.append(k)
+        else:
+            valid[k] = v
+    if removed:
+        logger.warning(f"[contacts] Chaves inválidas removidas: {removed}")
+    return valid
 
 
 def _self_update_plugin_code() -> bool:
