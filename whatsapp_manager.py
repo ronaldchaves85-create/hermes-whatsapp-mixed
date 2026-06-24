@@ -500,6 +500,51 @@ MESSAGE_SERVER_URL = config.message_server_url
 BRIDGE_URL = config.whatsapp_bridge_url
 
 
+def _human_send(chat_id: str, message: str) -> None:
+    """Envia mensagem simulando comportamento humano: typing + delay proporcional ao texto.
+
+    Se a mensagem tiver duas partes separadas por '\\n\\n', envia como duas bolhas distintas
+    com um pequeno intervalo entre elas.
+    """
+    import random
+
+    def _typing(cid: str) -> None:
+        try:
+            payload = json.dumps({"chatId": cid}).encode("utf-8")
+            req = urllib.request.Request(f"{BRIDGE_URL}/typing", data=payload, method="POST")
+            req.add_header("Content-Type", "application/json")
+            with urllib.request.urlopen(req, timeout=5):
+                pass
+        except Exception:
+            pass
+
+    def _send_one(cid: str, text: str) -> None:
+        payload = json.dumps({"chatId": cid, "message": text}).encode("utf-8")
+        req = urllib.request.Request(f"{BRIDGE_URL}/send", data=payload, method="POST")
+        req.add_header("Content-Type", "application/json")
+        with urllib.request.urlopen(req, timeout=10):
+            pass
+
+    # Divide em partes se o LLM devolver dois parágrafos
+    parts = [p.strip() for p in message.split("\n\n") if p.strip()]
+    if len(parts) == 1:
+        parts = [p.strip() for p in message.split("\n") if p.strip()]
+        # Só divide se tiver exatamente 2 linhas e a primeira for curta (reação)
+        if len(parts) == 2 and len(parts[0]) <= 60:
+            pass  # mantém as duas partes
+        else:
+            parts = [message.strip()]
+
+    for i, part in enumerate(parts):
+        _typing(chat_id)
+        # Delay: ~50ms por caractere + jitter humano, entre 1s e 5s
+        delay = min(max(len(part) * 0.05 + random.uniform(0.5, 1.5), 1.0), 5.0)
+        time.sleep(delay)
+        _send_one(chat_id, part)
+        if i < len(parts) - 1:
+            time.sleep(random.uniform(0.8, 1.5))
+
+
 def _normalize_brazilian_phone(phone: str) -> str:
     """Normaliza números de telefone brasileiros para comparação segura (tratando o dígito 9 extra)."""
     clean = "".join(c for c in phone if c.isdigit())
@@ -954,8 +999,11 @@ def _generate_status_response(contact_name: str, relationship: str, manual_rel: 
         f"Contato: {contact_name or 'alguém'}" + (f" ({rel_label})" if rel_label else "") + ".\n"
         f"{status_info}.\n\n"
         f"{tone_instruction}\n\n"
-        f"Escreva UMA mensagem curta — no máximo 2 frases. "
-        f"Sem emojis em excesso. Sem saudação formal. Direto ao ponto, como num WhatsApp normal.\n"
+        f"Escreva como se fosse uma conversa real de WhatsApp.\n"
+        f"Formato: duas mensagens separadas por uma linha em branco.\n"
+        f"Primeira: reação curta e natural (ex: 'Opa!', 'Eai!', 'Oi!' — máx 5 palavras).\n"
+        f"Segunda: o aviso sobre o status em 1-2 frases, no máximo.\n"
+        f"Sem emojis em excesso. Sem saudação formal. Varie o estilo — não use sempre as mesmas palavras.\n"
         f"NÃO mencione IA, bot ou sistema automatizado.\n"
     )
 
@@ -4920,11 +4968,7 @@ def pre_gateway_dispatch(*args, **kwargs):
                     if not already_notified:
                         logger.info(f"[owner-status] Notificando proativamente {contact_name or sender_id} (rel={rel_label})")
                         status_response = _generate_status_response(contact_name, relationship, manual_rel, owner_status)
-                        payload = json.dumps({"chatId": chat_id, "message": status_response}).encode("utf-8")
-                        req = urllib.request.Request(f"{BRIDGE_URL}/send", data=payload, method="POST")
-                        req.add_header("Content-Type", "application/json")
-                        with urllib.request.urlopen(req, timeout=10):
-                            pass
+                        _human_send(chat_id, status_response)
                         _status_notified[chat_id] = current_desc
                         logger.info(f"[owner-status] Resposta de status enviada para {chat_id}")
                         return {"action": "skip", "reason": "owner-status-proativo"}
