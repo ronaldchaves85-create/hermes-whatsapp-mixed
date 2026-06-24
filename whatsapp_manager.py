@@ -5342,6 +5342,12 @@ def post_llm_call(*args, **kwargs):
             try:
                 # Limpar EXECs antes de enviar ao contato
                 clean_text = _EXEC_PATTERN.sub("", response_text).strip()
+                # Redactar números de telefone antes de enviar a contatos
+                clean_text = re.sub(
+                    r'\(?\+?[\d][\d\s\-\.\(\)]{6,18}[\d]',
+                    lambda m: "[número omitido]" if len(re.sub(r'\D', '', m.group())) >= 8 else m.group(),
+                    clean_text
+                )
                 if clean_text:
                     logger.info(f"[post_llm_call] Enviando ao contato {chat_id} via _human_send")
                     _human_send(chat_id, clean_text)
