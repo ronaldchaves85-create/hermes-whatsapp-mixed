@@ -3950,9 +3950,10 @@ def _build_personal_prompt(contact_info: dict, relationship: str, history_sectio
     Inclui nome, relacionamento, tom, apelidos, saudação frequente e diretrizes.
     Retorna {"context": "..."}.
     """
+    owner_name = config.whatsapp_owner_name or "dono"
     name = contact_info.get("name", "Contato Pessoal")
     tone = contact_info.get("tone", "informal e amigável")
-    guidelines = contact_info.get("guidelines", "Responda como André.")
+    guidelines = contact_info.get("guidelines", f"Responda como {owner_name}.")
 
     nickname = contact_info.get("nickname")
     pet_name = contact_info.get("pet_name")
@@ -4032,6 +4033,7 @@ def _build_support_prompt(
 
     Retorna {"context": "..."}.
     """
+    owner_name = config.whatsapp_owner_name or "dono"
     contact_block = ""
     if contact_info:
         name = contact_info.get("name", "")
