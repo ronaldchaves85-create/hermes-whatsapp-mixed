@@ -911,39 +911,52 @@ def _generate_status_response(contact_name: str, relationship: str, manual_rel: 
 
     rel_label = manual_rel or relationship or ""
     rel_type = relationship or ""
-    is_close = (
-        rel_type in ("AmigoProximo", "Parente", "Filho")
-        or rel_label.lower() in ("namorada", "namorado", "esposa", "marido", "mãe", "pai", "filho", "filha", "irmão", "irmã", "avó", "avô")
+    is_personal = (
+        rel_type in ("Amigo", "AmigoProximo", "Parente", "Filho")
+        or rel_label.lower() in ("namorada", "namorado", "esposa", "marido", "mãe", "mae", "pai", "filho", "filha", "irmão", "irmao", "irmã", "irma", "avó", "avo", "avô")
     )
-    is_friend = rel_type == "Amigo"
     is_business = rel_type in ("Cliente", "Vendedor")
 
-    if is_close:
-        tone_instruction = "Tom casual e caloroso, como um assistente próximo da família."
+    # Carregar SOUL para manter o estilo de escrita do dono
+    soul_text = ""
+    try:
+        soul_path = "/opt/data/SOUL_WHATSAPP.md"
+        if os.path.exists(soul_path):
+            soul_text = open(soul_path, encoding="utf-8").read()
+    except Exception:
+        pass
+
+    if is_personal:
         status_info = f"{owner_name} está {description}{until_str}"
-    elif is_friend:
-        tone_instruction = "Tom descontraído e amigável."
-        status_info = f"{owner_name} está {description}{until_str}"
-    elif is_business:
-        tone_instruction = "Tom profissional mas leve. NÃO revele o que André está fazendo — diga apenas que ele está indisponível no momento."
-        status_info = f"{owner_name} está indisponível no momento{until_str}"
-    else:
         tone_instruction = (
-            "Tom neutro e prestativo. NÃO revele o que André está fazendo — diga apenas que ele está indisponível. "
-            "Pergunte brevemente como pode ajudar ou o que a pessoa precisa, para que André possa retornar já informado."
+            f"Imagine que você é alguém de confiança que pegou o celular do {owner_name} pra avisar. "
+            f"Fale como um amigo que está cobrindo ele por um momento — curto, leve, sem formalidade. "
+            f"Mencione o status ({description}{until_str}) de forma natural, como numa conversa de WhatsApp mesmo."
         )
+    elif is_business:
+        status_info = f"{owner_name} está indisponível no momento{until_str}"
+        tone_instruction = (
+            f"Você é o assistente do {owner_name}. Informe que ele está indisponível{until_str} "
+            f"de forma breve e profissional. NÃO revele o que ele está fazendo."
+        )
+    else:
         status_info = f"{owner_name} está indisponível no momento"
+        tone_instruction = (
+            f"Você é o assistente do {owner_name}. Informe que ele está indisponível de forma breve. "
+            f"NÃO revele o que ele está fazendo. Pergunte como pode ajudar."
+        )
+
+    soul_section = f"\nEstilo de escrita do {owner_name} (siga este estilo):\n{soul_text}\n" if soul_text else ""
 
     prompt = (
-        f"Você é o Assistente pessoal de {owner_name}.\n"
-        f"Data e hora atual: {date_context}.\n"
-        f"{status_info} e não pode responder agora.\n\n"
-        f"A pessoa que mandou mensagem é: {contact_name or 'alguém'}"
-        + (f" (relacionamento: {rel_label})" if rel_label else "") + ".\n"
+        f"Data e hora: {date_context}.\n"
+        f"{soul_section}\n"
+        f"Contato: {contact_name or 'alguém'}" + (f" ({rel_label})" if rel_label else "") + ".\n"
+        f"{status_info}.\n\n"
         f"{tone_instruction}\n\n"
-        f"Escreva UMA mensagem curta (2-3 linhas). Seja natural, não robótico. Não use emojis em excesso.\n"
-        f"NÃO diga que é uma IA nem use termos como 'inteligência artificial'.\n"
-        f"Se perguntarem se é um bot, diga que é o assistente de {owner_name} e confirme que ele está indisponível.\n"
+        f"Escreva UMA mensagem curta — no máximo 2 frases. "
+        f"Sem emojis em excesso. Sem saudação formal. Direto ao ponto, como num WhatsApp normal.\n"
+        f"NÃO mencione IA, bot ou sistema automatizado.\n"
     )
 
     model_name = classify_model
