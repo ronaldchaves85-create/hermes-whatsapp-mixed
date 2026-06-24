@@ -743,13 +743,15 @@ def _classify_owner_intent(message: str) -> dict:
 
     prompt = (
         "Você é um classificador de intenções para um assistente de WhatsApp.\n"
-        "Analise a mensagem e classifique em UMA das três categorias:\n\n"
+        "Analise a mensagem e classifique em UMA das quatro categorias:\n\n"
         "1. ATUALIZAÇÃO DE CONTATO — usuário quer mudar dados de um contato:\n"
         "   Ex: 'coloque a Mayra como namorada', 'cadastre apelido Pedro como Pedrinho'\n\n"
         "2. STATUS DO DONO — usuário informa onde está ou o que vai fazer, com ou sem horário:\n"
         "   Ex: 'vou estar no futebol até as 21h', 'entrei em call agora', 'estou dirigindo',\n"
         "       'já voltei', 'cancelar status', 'to livre agora'\n\n"
-        "3. OUTRO — qualquer outra coisa\n\n"
+        "3. CONSULTA DE STATUS — usuário quer saber qual é o status ativo dele:\n"
+        "   Ex: 'qual meu status?', 'qual o meu status atual?', 'tem algum status ativo?'\n\n"
+        "4. OUTRO — qualquer outra coisa\n\n"
         f"Data/hora atual: {now_str}\n"
         f"Mensagem: \"{clean_msg}\"\n\n"
         "Retorne APENAS JSON:\n"
@@ -763,6 +765,8 @@ def _classify_owner_intent(message: str) -> dict:
         "\"until_iso\": \"YYYY-MM-DDTHH:MM:SS ou null se não informado\", "
         "\"is_clear\": false, \"intent\": \"resumo 5 palavras\"}\n"
         "  (se for 'já voltei'/'cancelar status'/'to livre': {\"intent_type\": \"set_status\", \"is_clear\": true, \"intent\": \"limpando status\"})\n"
+        "Se for consulta de status:\n"
+        "  {\"intent_type\": \"query_status\", \"intent\": \"consultar status ativo\"}\n"
         "Se for outro:\n"
         "  {\"intent_type\": \"other\", \"intent\": \"resumo 5 palavras\"}\n"
     )
@@ -4638,6 +4642,34 @@ def pre_gateway_dispatch(*args, **kwargs):
                     except Exception as e:
                         logger.error(f"[owner-status] Erro ao confirmar status: {e}")
             return {"action": "skip", "reason": "owner-status-set"}
+
+        # Consulta do status ativo
+        if intent_type == "query_status":
+            chat_id = str(event.source.chat_id) if event.source.chat_id else ""
+            status = _get_active_owner_status()
+            if status:
+                description = status.get("description", "")
+                until_iso = status.get("until_iso")
+                until_str = ""
+                if until_iso:
+                    try:
+                        from datetime import datetime as _dt2
+                        until_str = f" até {_dt2.fromisoformat(until_iso).strftime('%H:%M')}"
+                    except Exception:
+                        pass
+                reply = f"✅ Status ativo: *{description}*{until_str}"
+            else:
+                reply = "ℹ️ Nenhum status ativo no momento."
+            if chat_id:
+                try:
+                    payload = json.dumps({"chatId": chat_id, "message": reply}).encode("utf-8")
+                    req = urllib.request.Request(f"{BRIDGE_URL}/send", data=payload, method="POST")
+                    req.add_header("Content-Type", "application/json")
+                    with urllib.request.urlopen(req, timeout=10):
+                        pass
+                except Exception as e:
+                    logger.error(f"[owner-status] Erro ao responder consulta: {e}")
+            return {"action": "skip", "reason": "owner-status-query"}
 
         nl_contact_name = (intent_result.get("contact_identifier") or intent_result.get("contact_name")) if intent_result.get("is_update") else None
 
