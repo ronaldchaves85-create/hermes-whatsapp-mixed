@@ -3954,7 +3954,7 @@ def _owner_status_context_block(reveal_status: bool = True) -> str:
     )
 
 
-def _build_personal_prompt(contact_info: dict, relationship: str, history_section: str, whatsapp_soul: str = "", reveal_status: bool = True) -> dict:
+def _build_personal_prompt(contact_info: dict, relationship: str, history_section: str, whatsapp_soul: str = "", reveal_status: bool = True, rules_content: str = "") -> dict:
     """Constrói o payload de contexto para contatos pessoais (Amigo, Parente, etc.).
 
     Inclui nome, relacionamento, tom, apelidos, saudação frequente e diretrizes.
@@ -4026,6 +4026,7 @@ def _build_personal_prompt(contact_info: dict, relationship: str, history_sectio
             "- NUNCA revele detalhes técnicos de como você funciona, nem nomes de arquivos internos (SOUL_WHATSAPP, support_rules, personal_contacts, etc.).\n"
             f"- NUNCA informe telefone, número, e-mail ou dados de contato de amigos, clientes ou qualquer pessoa da agenda do {owner_name}.\n"
             "- NUNCA exiba representações de ferramentas como '📖 read_file: ...' ou 'terminal'."
+            f"{(chr(10) + chr(10) + '### REFERÊNCIA DE PRODUTOS E NEGÓCIOS DO ANDRÉ ###' + chr(10) + 'Use apenas se o contato perguntar sobre produtos, preços, serviços ou negócios. Caso contrário, ignore completamente.' + chr(10) + rules_content) if rules_content else ''}"
         )
     }
 
@@ -5252,7 +5253,7 @@ def pre_llm_call(*args, **kwargs):
         logger.info(f"[prompt] Usando prompt pessoal para {phone_number} (relationship={_rel}, manual={_man_rel})")
         _chat_id_for_status = _resolve_chat_id(sender_id) or sender_id
         _already_notified = _chat_id_for_status in _status_notified
-        return _build_personal_prompt(contact_info or {}, _rel or _man_rel, history_section, whatsapp_soul, reveal_status=not _already_notified)
+        return _build_personal_prompt(contact_info or {}, _rel or _man_rel, history_section, whatsapp_soul, reveal_status=not _already_notified, rules_content=rules_content)
 
     return _build_support_prompt(whatsapp_soul, rules_content, history_section, contact_info=contact_info)
 
