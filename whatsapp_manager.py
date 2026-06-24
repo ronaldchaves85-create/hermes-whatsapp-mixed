@@ -2871,41 +2871,64 @@ def _update_contact_fields(identifier: str, fields: dict) -> str:
                 search_result = json.loads(resp.read().decode())
             bridge_results = search_result.get("results", [])
             logger.info(f"[update-contact] Passo 6: bridge retornou {len(bridge_results)} resultado(s) para '{identifier}'")
-            for entry in bridge_results:
+
+            # Filtrar owner e entradas sem jid
+            valid_results = [
+                e for e in bridge_results
+                if e.get("jid") and not _is_owner_key(e.get("jid", ""))
+            ]
+
+            # Passar 1: tentar match em personal_contacts existente
+            for entry in valid_results:
                 jid = entry.get("jid", "")
                 real_name = entry.get("name", "")
-                if not jid or _is_owner_key(jid):
-                    continue
                 phone_row = jid.split("@")[0]
-                # Mapear para chave existente em personal_contacts
                 for key in personal_contacts:
                     if _is_owner_key(key):
                         continue
                     if key.split("@")[0] == phone_row:
-                        logger.info(f"[update-contact] Passo 6: match '{real_name}' → {key}")
-                        personal_contacts[key]["name"] = real_name
+                        logger.info(f"[update-contact] Passo 6: match existente '{real_name}' → {key}")
                         matched_key = key
                         break
-                if not matched_key:
-                    # Contato no WhatsApp mas sem entrada no JSON — criar
-                    matched_key = jid if "@" in jid else f"{phone_row}@s.whatsapp.net"
-                    personal_contacts[matched_key] = {
-                        "name": real_name,
-                        "relationship": "Cliente",
-                        "manual_relationship": None,
-                        "notes": None, "product": None,
-                        "tone": "polido e profissional",
-                        "nickname": None, "pet_name": None,
-                        "frequent_greeting": None,
-                        "summary": "Pendente de classificação.",
-                        "intent": "Contato inicial.",
-                        "frequency": "esporádica",
-                        "guidelines": "Responda de forma prestativa.",
-                        "last_interaction": time.time(),
-                    }
-                    logger.info(f"[update-contact] Passo 6: nova entrada criada para {real_name} ({matched_key})")
                 if matched_key:
                     break
+
+            # Passar 2: nenhum match existente — escolher o resultado com nome mais próximo
+            if not matched_key and valid_results:
+                id_lower = identifier.lower()
+
+                def _name_score(e):
+                    n = (e.get("name") or "").lower()
+                    if not n:
+                        return 0
+                    if n == id_lower:
+                        return 3
+                    if id_lower in n or n in id_lower:
+                        return 2
+                    # Quantidade de palavras em comum
+                    common = set(id_lower.split()) & set(n.split())
+                    return len(common)
+
+                best = max(valid_results, key=_name_score)
+                best_jid = best.get("jid", "")
+                best_name = best.get("name", "")
+                best_phone = best_jid.split("@")[0]
+                matched_key = best_jid if "@" in best_jid else f"{best_phone}@s.whatsapp.net"
+                personal_contacts[matched_key] = {
+                    "name": best_name,
+                    "relationship": "Cliente",
+                    "manual_relationship": None,
+                    "notes": None, "product": None,
+                    "tone": "polido e profissional",
+                    "nickname": None, "pet_name": None,
+                    "frequent_greeting": None,
+                    "summary": "Pendente de classificação.",
+                    "intent": "Contato inicial.",
+                    "frequency": "esporádica",
+                    "guidelines": "Responda de forma prestativa.",
+                    "last_interaction": time.time(),
+                }
+                logger.info(f"[update-contact] Passo 6: nova entrada criada para '{best_name}' ({matched_key}) — melhor match de {len(valid_results)} resultados")
         except Exception as e:
             logger.warning(f"[update-contact] Passo 6: erro ao consultar bridge: {e}")
 
