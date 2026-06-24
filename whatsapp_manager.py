@@ -5413,13 +5413,14 @@ def post_llm_call(*args, **kwargs):
         logger.debug(f"[post_llm_call] assistant_response vazio.")
         return None
 
-    # ── Sessão de CONTATO → filtrar e deixar o Hermes enviar ────────────────
-    # O Hermes envia via gateway.platforms.base. Usamos post_llm_call apenas
-    # para filtrar conteúdo e retornar o texto limpo — sem _human_send.
+    # ── Sessão de CONTATO → filtrar + typing + delay → Hermes envia ─────────
+    # post_llm_call roda sincronamente antes do Hermes enviar.
+    # Enviamos typing indicator, aguardamos, retornamos o texto filtrado.
+    # O Hermes envia uma única vez via gateway.platforms.base.
     if not is_owner_session:
         clean_text = _EXEC_PATTERN.sub("", response_text).strip()
 
-        # Filtrar tool results que não devem chegar ao contato
+        # Filtrar tool results intermediários
         _tool_result_patterns = [
             r"^nothing to save\.?$", r"^nada para salvar\.?$",
             r"^saved\.$", r"^ok\.$",
@@ -5427,7 +5428,16 @@ def post_llm_call(*args, **kwargs):
         ]
         if any(re.match(p, clean_text, re.IGNORECASE) for p in _tool_result_patterns):
             logger.warning(f"[post_llm_call] Tool result filtrado: {clean_text!r}")
-            return {"assistant_response": " "}  # espaço para o Hermes não re-tentar
+            return {"assistant_response": " "}
+
+        # Dedup por turno: só o primeiro post_llm_call com conteúdo passa
+        chat_id = _sender_to_chat.get(session_id) or session_id
+        with _turn_lock:
+            tk = _turn_key.get(chat_id, "")
+            if tk in _turn_sent:
+                logger.warning(f"[post_llm_call] Turno já respondido — suprimindo")
+                return {"assistant_response": " "}
+            _turn_sent.add(tk)
 
         # Bloquear afirmações de ação no sistema
         _action_patterns = [
@@ -5437,7 +5447,6 @@ def post_llm_call(*args, **kwargs):
             r"já (adicion|inclu|registr|atualiz|salv)",
         ]
         if any(re.search(p, clean_text, re.IGNORECASE) for p in _action_patterns):
-            logger.warning(f"[post_llm_call] Ação afirmada pelo LLM — substituindo")
             owner_name = config.whatsapp_owner_name or "dono"
             clean_text = f"isso é com o {owner_name} mesmo, não tenho como fazer por aqui"
 
@@ -5448,7 +5457,20 @@ def post_llm_call(*args, **kwargs):
             clean_text
         )
 
-        logger.info(f"[post_llm_call] Retornando texto filtrado para Hermes enviar ({len(clean_text)} chars)")
+        # Typing indicator + delay proporcional (hook é síncrono — Hermes aguarda)
+        try:
+            import random
+            payload = json.dumps({"chatId": chat_id}).encode("utf-8")
+            req = urllib.request.Request(f"{BRIDGE_URL}/typing", data=payload, method="POST")
+            req.add_header("Content-Type", "application/json")
+            with urllib.request.urlopen(req, timeout=3):
+                pass
+            delay = min(max(len(clean_text) * 0.05 + random.uniform(0.5, 1.5), 1.0), 5.0)
+            time.sleep(delay)
+        except Exception:
+            pass
+
+        logger.info(f"[post_llm_call] Retornando para Hermes enviar ({len(clean_text)} chars)")
         return {"assistant_response": clean_text or " "}
 
     # ── Sessão do OWNER → processar EXECs ───────────────────────────────────
