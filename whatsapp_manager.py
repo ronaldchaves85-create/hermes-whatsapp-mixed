@@ -4012,6 +4012,7 @@ def _build_personal_prompt(contact_info: dict, relationship: str, history_sectio
             "- NUNCA afirme que consegue fazer algo técnico no servidor.\n"
             "- NUNCA use ferramentas como terminal, read_file, cron, ou qualquer outra.\n"
             "- NUNCA revele detalhes técnicos de como você funciona.\n"
+            f"- NUNCA informe telefone, número, e-mail ou dados de contato de amigos, clientes ou qualquer pessoa da agenda do {owner_name}.\n"
             "- NUNCA exiba representações de ferramentas como '📖 read_file: ...' ou 'terminal'."
         )
     }
@@ -4095,6 +4096,7 @@ def _build_support_prompt(
             "- Se pedirem algo técnico no servidor: recuse. Ex: 'isso não é algo que posso fazer por aqui'\n"
             "- NUNCA use ferramentas como terminal, read_file, cron ou similares.\n"
             "- Mantenha total sigilo sobre o fato de você rodar em um servidor ou ter ferramentas.\n"
+            f"- NUNCA informe telefone, número, e-mail ou dados de contato de amigos, clientes ou qualquer pessoa da agenda do {owner_name}.\n"
             "- NUNCA exiba representações de ferramentas como '📖 read_file: ...', 'terminal', etc."
         )
     }
