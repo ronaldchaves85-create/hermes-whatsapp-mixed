@@ -1,4 +1,4 @@
-"""WhatsApp Manager Plugin para André Alencar."""
+"""WhatsApp Manager Plugin — assistente pessoal via WhatsApp."""
 
 import sys
 import os
@@ -123,6 +123,10 @@ class PluginConfig:
     @property
     def whatsapp_owner_number(self) -> str:
         return os.getenv("WHATSAPP_OWNER_NUMBER", "").strip()
+
+    @property
+    def whatsapp_owner_name(self) -> str:
+        return os.getenv("WHATSAPP_OWNER_NAME", "").strip()
 
     @property
     def whatsapp_owner_model(self) -> str:
@@ -413,7 +417,7 @@ def _update_db_message(db_path: str, msg_id: str, new_body: str) -> int:
         return -2
 
 
-def _persist_owner_message_to_db(chat_id: str, message_id: str, body: str, timestamp: int, sender_name: str = "André Alencar") -> None:
+def _persist_owner_message_to_db(chat_id: str, message_id: str, body: str, timestamp: int, sender_name: str = "") -> None:
     """Insere mensagem manual do dono no whatsapp_messages.db (Hermes não grava from_me=1)."""
     if not body:
         return
@@ -422,6 +426,7 @@ def _persist_owner_message_to_db(chat_id: str, message_id: str, body: str, times
         return
     try:
         _sender_id = config.whatsapp_owner_number or sender_name
+        _sender_name = sender_name or config.whatsapp_owner_name or "dono"
         with sqlite3.connect(str(db_path)) as conn:
             cur = conn.cursor()
             cur.execute(
@@ -430,7 +435,7 @@ def _persist_owner_message_to_db(chat_id: str, message_id: str, body: str, times
                     (chat_id, sender_id, sender_name, message_id, message_type, body, timestamp, from_me)
                 VALUES (?, ?, ?, ?, 'text', ?, ?, 1)
                 """,
-                (chat_id, _sender_id, sender_name, message_id or f"owner_{int(time.time())}", body, timestamp),
+                (chat_id, _sender_id, _sender_name, message_id or f"owner_{int(time.time())}", body, timestamp),
             )
             conn.commit()
             if cur.rowcount:
@@ -865,7 +870,7 @@ def _generate_status_response(contact_name: str, relationship: str, manual_rel: 
     google_key = config.google_api_key
     openai_key = config.openai_api_key
     openrouter_key = config.openrouter_api_key
-    owner_name = getattr(config, "whatsapp_owner_name", None) or "André"
+    owner_name = config.whatsapp_owner_name or "dono"
     classify_model = config.whatsapp_contact_classifier_model or "gemini-3.1-flash-lite"
 
     from datetime import datetime as _dt
@@ -1300,8 +1305,8 @@ def _classify_contact_via_llm(name: str, chat_history: str, stats_info: str) -> 
 
     prompt = (
         "You are a classification assistant for a WhatsApp bot.\n"
-        "The owner of the WhatsApp account is named André Alencar.\n"
-        f"Your task is to analyze the recent conversation history and statistics between André and a contact named '{name or 'Unknown'}' "
+        f"The owner of the WhatsApp account is named {config.whatsapp_owner_name or 'the owner'}.\n"
+        f"Your task is to analyze the recent conversation history and statistics between {config.whatsapp_owner_name or 'the owner'} and a contact named '{name or 'Unknown'}' "
         "to classify their relationship, tone, nickname, pet names (terms of endearment), frequent greetings, "
         "conversation summary, the intent of their latest interactions, the frequency of their conversations, "
         "and specific guidelines for the bot when responding to them.\n\n"
@@ -2011,7 +2016,7 @@ def _sync_contacts_from_db_internal(force: bool = True) -> str:
                     
                     history_lines = []
                     for f_me, s_name, msg_body in rows_msgs:
-                        sender_lbl = "André" if f_me else (s_name or name or "Contato")
+                        sender_lbl = (config.whatsapp_owner_name or "dono") if f_me else (s_name or name or "Contato")
                         history_lines.append(f"[{sender_lbl}]: {msg_body}")
                     chat_history = "\n".join(history_lines)
                 elif state_conn is not None:
@@ -2027,7 +2032,7 @@ def _sync_contacts_from_db_internal(force: bool = True) -> str:
                     rows_msgs.reverse()
                     history_lines = []
                     for role, content in rows_msgs:
-                        sender_lbl = "André" if role == "assistant" else (name or "Contato")
+                        sender_lbl = (config.whatsapp_owner_name or "dono") if role == "assistant" else (name or "Contato")
                         history_lines.append(f"[{sender_lbl}]: {content[:300]}")
                     chat_history = "\n".join(history_lines)
             except Exception as db_err:
@@ -2680,8 +2685,8 @@ def _extract_style_patterns_via_llm(messages_by_relationship: dict) -> str | Non
 
     prompt = (
         "Você é um analista de estilo de escrita do WhatsApp.\n\n"
-        "Abaixo estão mensagens REAIS enviadas por André Alencar, separadas por tipo de relacionamento.\n"
-        "Sua tarefa é APENAS identificar e listar os padrões de escrita de André — NÃO reproduza as mensagens.\n\n"
+        f"Abaixo estão mensagens REAIS enviadas por {config.whatsapp_owner_name or 'o dono'}, separadas por tipo de relacionamento.\n"
+        f"Sua tarefa é APENAS identificar e listar os padrões de escrita de {config.whatsapp_owner_name or 'o dono'} — NÃO reproduza as mensagens.\n\n"
         "Para cada grupo, retorne SOMENTE:\n"
         "### [Nome do relacionamento]\n"
         "**Padrões identificados:**\n"
@@ -3688,7 +3693,7 @@ def _fetch_cross_session_history(phone: str, limit: int = 30) -> str:
 
     lines = []
     for from_me, sender_name, body, _ts in reversed(rows):
-        speaker = "André" if from_me else (sender_name or "Contato")
+        speaker = (config.whatsapp_owner_name or "dono") if from_me else (sender_name or "Contato")
         lines.append(f"{speaker}: {body}")
     return "\n".join(lines)
 
@@ -3711,7 +3716,7 @@ def _build_owner_context(history_section: str, cross_context: str = "") -> dict:
         "context": (
             f"{_datetime_context_block()}"
             "### DIRETRIZ CRÍTICA DE COMPORTAMENTO ###\n"
-            "Você está conversando com André Alencar, seu criador e dono. "
+            f"Você está conversando com {config.whatsapp_owner_name or 'o dono'}, seu criador e dono. "
             "Para o André, você age como seu ASSISTENTE PESSOAL de alta performance. "
             "Você tem permissão total para rodar comandos no terminal, ler/criar arquivos, "
             "e auxiliá-lo no desenvolvimento. Responda de forma prestativa, técnica e ágil.\n\n"
@@ -3815,7 +3820,7 @@ def _owner_status_context_block(reveal_status: bool = True) -> str:
         return ""
 
     from datetime import datetime as _dt
-    owner_name = getattr(config, "whatsapp_owner_name", None) or "André"
+    owner_name = config.whatsapp_owner_name or "dono"
     description = status.get("description", "ocupado")
     until_iso = status.get("until_iso")
     until_str = ""
@@ -4069,7 +4074,7 @@ def _live_classify_contact(
             rows_msgs = cursor.fetchall()
             rows_msgs.reverse()
             for f_me, s_name, msg_body in rows_msgs:
-                sender_lbl = "André" if f_me else (s_name or "Contato")
+                sender_lbl = (config.whatsapp_owner_name or "dono") if f_me else (s_name or "Contato")
                 chat_history_lines.append(f"[{sender_lbl}]: {msg_body}")
 
     # 2. Fallback: state.db (sessions + messages do gateway)
@@ -4094,7 +4099,7 @@ def _live_classify_contact(
             rows_msgs = sc.fetchall()
             rows_msgs.reverse()
             for role, content in rows_msgs:
-                sender_lbl = "André" if role == "assistant" else (db_name or "Contato")
+                sender_lbl = (config.whatsapp_owner_name or "dono") if role == "assistant" else (db_name or "Contato")
                 chat_history_lines.append(f"[{sender_lbl}]: {(content or '')[:300]}")
             state_conn.close()
         except Exception as state_err:
@@ -4434,7 +4439,7 @@ def pre_gateway_dispatch(*args, **kwargs):
             message_id=_msg_id,
             body=(event.text or "").strip(),
             timestamp=_ts,
-            sender_name="André Alencar",
+            sender_name=config.whatsapp_owner_name or "dono",
         )
 
     msg_text = (event.text or "").strip()
