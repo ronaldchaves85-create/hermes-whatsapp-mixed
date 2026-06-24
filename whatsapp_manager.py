@@ -5413,73 +5413,43 @@ def post_llm_call(*args, **kwargs):
         logger.debug(f"[post_llm_call] assistant_response vazio.")
         return None
 
-    # ── Sessão de CONTATO → enviar com comportamento humano ──────────────────
+    # ── Sessão de CONTATO → filtrar e deixar o Hermes enviar ────────────────
+    # O Hermes envia via gateway.platforms.base. Usamos post_llm_call apenas
+    # para filtrar conteúdo e retornar o texto limpo — sem _human_send.
     if not is_owner_session:
-        logger.info(f"[post_llm_call] session_id={session_id!r} _sender_to_chat keys={list(_sender_to_chat.keys())[:10]}")
-        chat_id = _sender_to_chat.get(session_id)
-        if not chat_id:
-            # Fallback: extrair dígitos do session_id e procurar no mapa
-            sid_digits = re.sub(r"\D", "", session_id)
-            for k, v in _sender_to_chat.items():
-                k_digits = re.sub(r"\D", "", k.split("@")[0])
-                if sid_digits and k_digits and (sid_digits in k_digits or k_digits in sid_digits):
-                    chat_id = v
-                    logger.info(f"[post_llm_call] chat_id resolvido por dígitos: {chat_id}")
-                    break
-        if not chat_id:
-            logger.warning(f"[post_llm_call] Não foi possível resolver chat_id para session_id={session_id!r} — abortando envio")
-            return None
-        if chat_id:
-            try:
-                # Limpar EXECs antes de enviar ao contato
-                clean_text = _EXEC_PATTERN.sub("", response_text).strip()
-                # Filtrar resultados de ferramentas que não devem ser enviados a contatos
-                _tool_result_patterns = [
-                    r"^nothing to save\.?$",
-                    r"^nada para salvar\.?$",
-                    r"^saved\.$",
-                    r"^ok\.$",
-                    r"^\[tool result\]",
-                    r"^tool_result:",
-                ]
-                if any(re.match(p, clean_text, re.IGNORECASE) for p in _tool_result_patterns):
-                    logger.warning(f"[post_llm_call] Resultado de ferramenta filtrado: {clean_text!r}")
-                    return {"assistant_response": ""}
-                # Detectar se o LLM afirmou ter executado uma ferramenta/ação no sistema
-                _action_patterns = [
-                    r"pronto[,.]?\s*(inclu|adicion|edit|atualiz|salv|modific|coloc|registr)",
-                    r"(inclu|adicion|edit|atualiz|salv|modific)i\b",
-                    r"(fiz|feit[oa]|execut|realiz)\b.*\b(isso|alteraç|ediç|inclusão)",
-                    r"já (adicion|inclu|registr|atualiz|salv)",
-                ]
-                _claimed_action = any(
-                    re.search(p, clean_text, re.IGNORECASE) for p in _action_patterns
-                )
-                if _claimed_action:
-                    logger.warning(f"[post_llm_call] LLM afirmou ter executado ação — substituindo resposta")
-                    owner_name = config.whatsapp_owner_name or "dono"
-                    clean_text = f"isso é com o {owner_name} mesmo, não tenho como fazer por aqui"
-                # Redactar números de telefone antes de enviar a contatos
-                clean_text = re.sub(
-                    r'\(?\+?[\d][\d\s\-\.\(\)]{6,18}[\d]',
-                    lambda m: "[número omitido]" if len(re.sub(r'\D', '', m.group())) >= 8 else m.group(),
-                    clean_text
-                )
-                if clean_text:
-                    # Envio único por turno: só o primeiro post_llm_call com conteúdo envia.
-                    # pre_llm_call registrou a chave do turno atual; aqui marcamos como enviado.
-                    with _turn_lock:
-                        tk = _turn_key.get(chat_id, "")
-                        if tk in _turn_sent:
-                            logger.warning(f"[post_llm_call] Turno {tk!r} já respondido — ignorando")
-                            return {"assistant_response": ""}
-                        _turn_sent.add(tk)
-                    logger.info(f"[post_llm_call] Enviando ao contato {chat_id} via _human_send")
-                    _human_send(chat_id, clean_text)
-                    return {"assistant_response": ""}
-            except Exception as e:
-                logger.error(f"[post_llm_call] Erro no _human_send: {e}")
-        return None
+        clean_text = _EXEC_PATTERN.sub("", response_text).strip()
+
+        # Filtrar tool results que não devem chegar ao contato
+        _tool_result_patterns = [
+            r"^nothing to save\.?$", r"^nada para salvar\.?$",
+            r"^saved\.$", r"^ok\.$",
+            r"^\[tool result\]", r"^tool_result:",
+        ]
+        if any(re.match(p, clean_text, re.IGNORECASE) for p in _tool_result_patterns):
+            logger.warning(f"[post_llm_call] Tool result filtrado: {clean_text!r}")
+            return {"assistant_response": " "}  # espaço para o Hermes não re-tentar
+
+        # Bloquear afirmações de ação no sistema
+        _action_patterns = [
+            r"pronto[,.]?\s*(inclu|adicion|edit|atualiz|salv|modific|coloc|registr)",
+            r"(inclu|adicion|edit|atualiz|salv|modific)i\b",
+            r"(fiz|feit[oa]|execut|realiz)\b.*\b(isso|alteraç|ediç|inclusão)",
+            r"já (adicion|inclu|registr|atualiz|salv)",
+        ]
+        if any(re.search(p, clean_text, re.IGNORECASE) for p in _action_patterns):
+            logger.warning(f"[post_llm_call] Ação afirmada pelo LLM — substituindo")
+            owner_name = config.whatsapp_owner_name or "dono"
+            clean_text = f"isso é com o {owner_name} mesmo, não tenho como fazer por aqui"
+
+        # Redactar telefones
+        clean_text = re.sub(
+            r'\(?\+?[\d][\d\s\-\.\(\)]{6,18}[\d]',
+            lambda m: "[número omitido]" if len(re.sub(r'\D', '', m.group())) >= 8 else m.group(),
+            clean_text
+        )
+
+        logger.info(f"[post_llm_call] Retornando texto filtrado para Hermes enviar ({len(clean_text)} chars)")
+        return {"assistant_response": clean_text or " "}
 
     # ── Sessão do OWNER → processar EXECs ───────────────────────────────────
     matches = _EXEC_PATTERN.findall(response_text)
