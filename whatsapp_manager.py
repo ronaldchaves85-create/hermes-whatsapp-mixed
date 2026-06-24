@@ -3888,11 +3888,15 @@ def pre_gateway_dispatch(*args, **kwargs):
                     if _audio_files:
                         _audio_path = str(_audio_files[0])
             if _audio_path and Path(_audio_path).exists():
+                # Setar atributos no evento para _get_media_info() os encontrar
+                event.has_media = True
+                event.media_type = "ptt"
+                event.media_urls = [_audio_path]
                 media_info["has_media"] = True
                 media_info["media_type"] = "ptt"
                 media_info["media_urls"] = [_audio_path]
-                _transcribe_outgoing_audio(event, media_info)
                 logger.info(f"[audio-out] Transcrição via fallback: {Path(_audio_path).name}")
+                _transcribe_outgoing_audio(event, media_info)
 
     # Identificar chat
     chat_id = str(event.source.chat_id) if event.source.chat_id else ""
