@@ -187,29 +187,49 @@ class TestSanitizeClassificationResult(unittest.TestCase):
         self.assertEqual(res["tone"], "carinhoso")
 
 
+def _patch_globals(fn_name, fake):
+    """Patcha uma função no __globals__ do exec namespace de forma segura."""
+    globs = wm._owner_status_context_block.__globals__
+    orig = globs[fn_name]
+    globs[fn_name] = fake
+    return globs, fn_name, orig
+
+
 class TestOwnerStatusContextBlock(unittest.TestCase):
     """_owner_status_context_block — injeção de status no prompt."""
 
     def test_sem_status_retorna_vazio(self):
-        with patch.object(wm, "_get_active_owner_status", return_value=None):
+        globs, fn, orig = _patch_globals("_get_active_owner_status", lambda: None)
+        try:
             result = wm._owner_status_context_block()
+        finally:
+            globs[fn] = orig
         self.assertEqual(result, "")
 
     def test_com_status_reveal_true_contem_descricao(self):
-        with patch.object(wm, "_get_active_owner_status", return_value=STATUS_DORMINDO):
+        globs, fn, orig = _patch_globals("_get_active_owner_status", lambda: STATUS_DORMINDO)
+        try:
             result = wm._owner_status_context_block(reveal_status=True)
+        finally:
+            globs[fn] = orig
         self.assertIn("dormindo", result)
         self.assertIn("STATUS", result)
 
     def test_com_status_reveal_false_nao_revela_descricao(self):
-        with patch.object(wm, "_get_active_owner_status", return_value=STATUS_DORMINDO):
+        globs, fn, orig = _patch_globals("_get_active_owner_status", lambda: STATUS_DORMINDO)
+        try:
             result = wm._owner_status_context_block(reveal_status=False)
-        # reveal=False → clientes não sabem o que ele está fazendo
+        finally:
+            globs[fn] = orig
         self.assertNotIn("dormindo", result)
 
     def test_until_iso_formatado_como_hora(self):
-        with patch.object(wm, "_get_active_owner_status", return_value=STATUS_DORMINDO):
+        globs, fn, orig = _patch_globals("_get_active_owner_status", lambda: STATUS_DORMINDO)
+        try:
             result = wm._owner_status_context_block(reveal_status=True)
+        finally:
+            globs[fn] = orig
+        # STATUS_DORMINDO.until_iso = "2099-01-01T08:00:00" → deve aparecer "08:00"
         self.assertIn("08:00", result)
 
 
