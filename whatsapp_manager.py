@@ -2980,14 +2980,18 @@ def _update_contact_fields(identifier: str, fields: dict) -> str:
     if re.match(r"^\+?[\d\s\-]+$", identifier):
         id_digits = id_norm.replace(" ", "").replace("-", "")
         id_norm_br = _normalize_brazilian_phone(id_digits)
+        logger.info(f"[update-contact] Passo 1: id_digits='{id_digits}' id_norm_br='{id_norm_br}' total_contacts={len(personal_contacts)}")
         for key in personal_contacts:
             if _is_owner_key(key):
                 continue
             phone = key.split("@")[0].split(":")[0]
             phone_norm_br = _normalize_brazilian_phone(phone)
             if id_digits in phone or phone in id_digits or id_norm_br == phone_norm_br:
+                logger.info(f"[update-contact] Passo 1: match → {key}")
                 matched_key = key
                 break
+        if not matched_key:
+            logger.info(f"[update-contact] Passo 1: nenhum match — primeiros keys: {list(personal_contacts.keys())[:5]}")
 
     # 2. Match exato de name (prioridade máxima)
     if not matched_key:
