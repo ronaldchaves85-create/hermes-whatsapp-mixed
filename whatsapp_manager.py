@@ -5084,15 +5084,19 @@ def pre_llm_call(*args, **kwargs):
         if chat_id and session_id_kwarg not in _sender_to_chat:
             _sender_to_chat[session_id_kwarg] = chat_id
             logger.info(f"[pre_llm_call] mapeado session_id={session_id_kwarg!r} → {chat_id}")
-        # Registrar novo turno: reseta o controle de envio para este chat
+        # Registrar novo turno apenas quando a mensagem do usuário mudar.
+        # pre_llm_call é chamado múltiplas vezes por turno (antes de cada tool call e
+        # antes da resposta final) — só a primeira chamada com uma nova user_message
+        # reseta o controle de envio.
         user_msg = kwargs.get("user_message") or (context or {}).get("user_message") or ""
         if chat_id and user_msg:
             import hashlib as _hl
             tk = chat_id + ":" + _hl.md5((session_id_kwarg + user_msg).encode()).hexdigest()
             with _turn_lock:
-                _turn_key[chat_id] = tk
-                _turn_sent.discard(tk)
-            logger.info(f"[pre_llm_call] Novo turno registrado para {chat_id}")
+                if _turn_key.get(chat_id) != tk:
+                    _turn_key[chat_id] = tk
+                    _turn_sent.discard(tk)
+                    logger.info(f"[pre_llm_call] Novo turno para {chat_id}")
 
     if platform != "whatsapp":
         return None
