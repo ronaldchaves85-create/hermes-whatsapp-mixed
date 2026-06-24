@@ -28,48 +28,50 @@ RUN_QUICK = "--quick" in sys.argv
 # ── Carregar plugin com mocks mínimos ──────────────────────────────────────────
 
 def _load_plugin():
-    """Importa whatsapp_manager com as dependências externas mockadas."""
-    # Mocks dos módulos do Hermes que não existem fora do container
-    for mod_name in [
-        "hermes", "hermes.gateway", "hermes.config", "hermes.plugin",
-        "hermes.models", "hermes.events", "hermes.storage",
-    ]:
-        if mod_name not in sys.modules:
-            sys.modules[mod_name] = types.ModuleType(mod_name)
-
-    # Config mock com valores realistas
-    mock_config = MagicMock()
-    mock_config.whatsapp_owner_number = "5586981612061@s.whatsapp.net"
-    mock_config.whatsapp_owner_name = "André"
-    mock_config.whatsapp_contact_classifier_model = "gemini-3.1-flash-lite"
+    """Executa whatsapp_manager.py num namespace isolado e retorna como módulo."""
+    # Ler chaves da API do auth.json
+    google_key = os.getenv("GOOGLE_API_KEY", "")
+    openai_key = os.getenv("OPENAI_API_KEY", "")
+    openrouter_key = os.getenv("OPENROUTER_API_KEY", "")
 
     auth_path = Path(HERMES_HOME) / "auth.json"
     if auth_path.exists():
         try:
             auth = json.loads(auth_path.read_text())
-            mock_config.google_api_key = (auth.get("credential_pool", {}).get("gemini") or "").strip()
-            mock_config.openai_api_key = (auth.get("credential_pool", {}).get("openai") or "").strip()
-            mock_config.openrouter_api_key = (auth.get("credential_pool", {}).get("openrouter") or "").strip()
+            google_key = google_key or (auth.get("credential_pool", {}).get("gemini") or "").strip()
+            openai_key = openai_key or (auth.get("credential_pool", {}).get("openai") or "").strip()
+            openrouter_key = openrouter_key or (auth.get("credential_pool", {}).get("openrouter") or "").strip()
         except Exception:
-            mock_config.google_api_key = os.getenv("GOOGLE_API_KEY", "")
-            mock_config.openai_api_key = os.getenv("OPENAI_API_KEY", "")
-            mock_config.openrouter_api_key = os.getenv("OPENROUTER_API_KEY", "")
+            pass
 
-    import importlib.util
-    spec = importlib.util.spec_from_file_location("whatsapp_manager", str(PLUGIN_PATH))
-    module = importlib.util.module_from_spec(spec)
+    # Namespace com __builtins__ e __file__ para o exec funcionar
+    ns = {"__file__": str(PLUGIN_PATH), "__name__": "whatsapp_manager"}
 
-    with patch.dict("sys.modules", {"whatsapp_manager": module}):
-        with patch("builtins.__import__", side_effect=lambda name, *a, **kw: (
-            sys.modules[name] if name in sys.modules else __import__(name, *a, **kw)
-        )):
-            try:
-                spec.loader.exec_module(module)
-            except Exception:
-                pass  # Erros de boot (gateway, etc.) são esperados
+    source = PLUGIN_PATH.read_text(encoding="utf-8")
+    try:
+        exec(compile(source, str(PLUGIN_PATH), "exec"), ns)
+    except Exception as e:
+        print(f"\n[WARN] exec parcial: {e}")
 
-    # Injetar config mock
-    module.config = mock_config
+    # Criar módulo a partir do namespace
+    module = types.ModuleType("whatsapp_manager")
+    module.__dict__.update(ns)
+
+    # Injetar config com valores reais
+    if hasattr(module, "config"):
+        module.config.google_api_key = google_key
+        module.config.openai_api_key = openai_key
+        module.config.openrouter_api_key = openrouter_key
+    else:
+        mock_config = MagicMock()
+        mock_config.whatsapp_owner_number = "5586981612061@s.whatsapp.net"
+        mock_config.whatsapp_owner_name = "André"
+        mock_config.whatsapp_contact_classifier_model = "gemini-3.1-flash-lite"
+        mock_config.google_api_key = google_key
+        mock_config.openai_api_key = openai_key
+        mock_config.openrouter_api_key = openrouter_key
+        module.config = mock_config
+
     return module
 
 
