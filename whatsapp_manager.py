@@ -5076,6 +5076,12 @@ def pre_llm_call(*args, **kwargs):
         except Exception as live_err:
             logger.error(f"Erro na classificação em tempo real do contato: {live_err}")
 
+    # Roteamento: Amigo/Parente → prompt pessoal; demais → suporte/cliente
+    _rel = (contact_info or {}).get("relationship") or ""
+    if _rel in ("Amigo", "AmigoProximo", "Parente", "Filho"):
+        logger.info(f"[prompt] Usando prompt pessoal para {phone_number} (relationship={_rel})")
+        return _build_personal_prompt(contact_info or {}, _rel, history_section)
+
     return _build_support_prompt(whatsapp_soul, rules_content, history_section, contact_info=contact_info)
 
 
