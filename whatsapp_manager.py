@@ -3100,11 +3100,16 @@ def _update_contact_fields(identifier: str, fields: dict) -> str:
                 jid = entry.get("jid", "")
                 real_name = (entry.get("name") or "").lower()
                 phone_row = jid.split("@")[0]
-                # Nome do resultado deve conter o identifier ou vice-versa
-                if id_lower not in real_name and real_name not in id_lower:
-                    common_words = set(id_lower.split()) & set(real_name.split())
-                    if not common_words:
-                        continue
+                # Nome muito curto (inicial, abreviação) — rejeitar
+                if len(real_name) < 3:
+                    continue
+                # Nome do resultado deve ter palavra em comum com identifier (match por palavra inteira)
+                id_words = set(w for w in id_lower.split() if len(w) >= 3)
+                real_words = set(w for w in real_name.split() if len(w) >= 3)
+                exact_match = id_lower == real_name or id_lower in real_name or real_name in id_lower
+                word_match = bool(id_words & real_words)
+                if not exact_match and not word_match:
+                    continue
                 for key in personal_contacts:
                     if _is_owner_key(key):
                         continue
@@ -4641,9 +4646,11 @@ def pre_gateway_dispatch(*args, **kwargs):
                 if fields_to_update:
                     # Extrair número de telefone da mensagem (ex: "edite o contato 5511996472188")
                     _phone_in_msg = None
-                    _phone_match = re.search(r"\b(\+?[\d]{10,15})\b", msg_text)
+                    _phone_match = re.search(r"(\+?[\d][\d\s\-\(\)]{8,18}[\d])", msg_text)
                     if _phone_match:
                         _phone_in_msg = re.sub(r"\D", "", _phone_match.group(1))
+                        if len(_phone_in_msg) < 10:
+                            _phone_in_msg = None
                         logger.info(f"[update-nl] Número encontrado na mensagem: {_phone_in_msg}")
 
                     # Se há cartão pendente, tentar pelo número do cartão diretamente (evita busca por nome que pode falhar)
