@@ -997,21 +997,21 @@ def _generate_status_response(contact_name: str, relationship: str, manual_rel: 
     if is_personal:
         status_info = f"{owner_name} está {description}{until_str}"
         tone_instruction = (
-            f"Imagine que você é alguém de confiança que pegou o celular do {owner_name} pra avisar. "
-            f"Fale como um amigo que está cobrindo ele por um momento — curto, leve, sem formalidade. "
-            f"Mencione o status ({description}{until_str}) de forma natural, como numa conversa de WhatsApp mesmo."
+            f"Você pegou o celular do {owner_name} por um segundo pra avisar. "
+            f"Escreva como WhatsApp mesmo — bem curto, sem formalidade. "
+            f"Mencione apenas: {description}{until_str}."
         )
     elif is_business:
         status_info = f"{owner_name} está indisponível no momento{until_str}"
         tone_instruction = (
-            f"Você é o assistente do {owner_name}. Informe que ele está indisponível{until_str} "
-            f"de forma breve e profissional. NÃO revele o que ele está fazendo."
+            f"Você é o assistente do {owner_name}. Avise brevemente que ele está indisponível{until_str}. "
+            f"NÃO revele o que ele está fazendo."
         )
     else:
         status_info = f"{owner_name} está indisponível no momento"
         tone_instruction = (
-            f"Você é o assistente do {owner_name}. Informe que ele está indisponível de forma breve. "
-            f"NÃO revele o que ele está fazendo. Pergunte como pode ajudar."
+            f"Você é o assistente do {owner_name}. Avise brevemente que ele está indisponível. "
+            f"NÃO revele o que ele está fazendo."
         )
 
     soul_section = f"\nEstilo de escrita do {owner_name} (siga este estilo):\n{soul_text}\n" if soul_text else ""
@@ -1022,12 +1022,12 @@ def _generate_status_response(contact_name: str, relationship: str, manual_rel: 
         f"Contato: {contact_name or 'alguém'}" + (f" ({rel_label})" if rel_label else "") + ".\n"
         f"{status_info}.\n\n"
         f"{tone_instruction}\n\n"
-        f"Escreva como se fosse uma conversa real de WhatsApp.\n"
-        f"Formato: duas mensagens separadas por uma linha em branco.\n"
-        f"Primeira: reação curta e natural (ex: 'Opa!', 'Eai!', 'Oi!' — máx 5 palavras).\n"
-        f"Segunda: o aviso sobre o status em 1-2 frases, no máximo.\n"
-        f"Sem emojis em excesso. Sem saudação formal. Varie o estilo — não use sempre as mesmas palavras.\n"
-        f"NÃO mencione IA, bot ou sistema automatizado.\n"
+        f"REGRAS:\n"
+        f"- Duas mensagens separadas por linha em branco. Nada mais.\n"
+        f"- Primeira: reação de 1-3 palavras (ex: 'eita', 'opa', 'ei').\n"
+        f"- Segunda: o status em 1 frase curta e casual. Ex: '{owner_name} capotou aqui, só umas 11h'\n"
+        f"- Zero emojis, zero saudação formal, zero listas.\n"
+        f"- NÃO mencione IA, bot ou sistema automatizado.\n"
     )
 
     model_name = classify_model
@@ -3922,11 +3922,11 @@ def _owner_status_context_block(reveal_status: bool = True) -> str:
             pass
 
     if reveal_status:
-        status_detail = f"{owner_name} está {description}{until_str} e não pode responder agora."
+        status_detail = f"{owner_name} está {description}{until_str}."
         reveal_instruction = (
-            f"Mencione logo que {owner_name} está {description}{until_str}. "
-            f"Seja breve e natural — como se fosse alguém cobrindo ele por um momento. "
-            f"Ofereça ajuda ou diga que avisa quando ele voltar. Sem formalidade."
+            f"Se o status for relevante para a resposta, mencione em 1 frase curta e casual. "
+            f"Ex: '{owner_name} capotou aqui, só umas {until_str.replace(' até as ', '') if until_str else '?'}'. "
+            f"NUNCA escreva mais de 1 frase sobre o status. Sem formalidade, sem oferecer ajuda explicitamente."
         )
     else:
         status_detail = f"{owner_name} está temporariamente indisponível{until_str}."
@@ -3995,12 +3995,14 @@ def _build_personal_prompt(contact_info: dict, relationship: str, history_sectio
             f"{details}"
             f"Diretrizes específicas: {guidelines}\n\n"
             "### COMO SE COMPORTAR ###\n"
-            "1. Frases curtas. Informal. Como alguém que está cobrindo o André por um tempinho.\n"
-            "2. Se tiver status ativo: informe logo de cara, de forma leve. Tipo 'Oi! Tô aqui pelo André, ele tá no futebol até umas 21h. Posso ajudar?'\n"
-            "3. Ofereça ajuda ou diga que avisa o André — de forma natural, sem parecer um menu de opções.\n"
-            "4. Se perguntarem 'é uma IA?' / 'é um bot?' / 'quem tá aqui?': confirme de forma simples. Ex: 'Sou o assistente dele 😄 Pode falar!'\n"
-            "5. Se houver apelido ou saudação frequente, use naturalmente.\n"
-            "6. Se houver observação importante sobre o contato, siga à risca.\n\n"
+            "REGRAS ABSOLUTAS — sem exceção:\n"
+            f"- Máximo 1-2 frases por resposta. Sem introduções, sem despedidas.\n"
+            "- Escreva como WhatsApp real: 'kk', '..', 'né', minúsculas normais.\n"
+            f"- NUNCA comece com saudação ('Olá', 'Oi!', 'Fala!', 'Boa tarde').\n"
+            "- NUNCA use listas, tópicos, parágrafos ou texto estruturado.\n"
+            f"- Status ativo → 1 frase casual. Ex: '{owner_name} capotou aqui, só umas 11h'\n"
+            "- Perguntaram quem você é → resposta ultra curta. Ex: 'assistente dele'\n"
+            "- Siga as diretrizes do contato se houver.\n\n"
             f"{_owner_status_context_block(reveal_status=reveal_status)}"
             f"{history_section}"
             "CONSTRAINTS RÍGIDAS DE SEGURANÇA:\n"
