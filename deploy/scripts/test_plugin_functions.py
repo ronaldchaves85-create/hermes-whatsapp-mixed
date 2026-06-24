@@ -28,22 +28,10 @@ RUN_QUICK = "--quick" in sys.argv
 # ── Carregar plugin com mocks mínimos ──────────────────────────────────────────
 
 def _load_plugin():
-    """Executa whatsapp_manager.py num namespace isolado e retorna como módulo."""
-    # Ler chaves da API do auth.json
-    google_key = os.getenv("GOOGLE_API_KEY", "")
-    openai_key = os.getenv("OPENAI_API_KEY", "")
-    openrouter_key = os.getenv("OPENROUTER_API_KEY", "")
+    """Executa whatsapp_manager.py num namespace isolado e retorna como módulo.
 
-    auth_path = Path(HERMES_HOME) / "auth.json"
-    if auth_path.exists():
-        try:
-            auth = json.loads(auth_path.read_text())
-            google_key = google_key or (auth.get("credential_pool", {}).get("gemini") or "").strip()
-            openai_key = openai_key or (auth.get("credential_pool", {}).get("openai") or "").strip()
-            openrouter_key = openrouter_key or (auth.get("credential_pool", {}).get("openrouter") or "").strip()
-        except Exception:
-            pass
-
+    PluginConfig já lê API keys do ambiente via @property — não é necessário injetar nada.
+    """
     # Namespace com __builtins__ e __file__ para o exec funcionar
     ns = {"__file__": str(PLUGIN_PATH), "__name__": "whatsapp_manager"}
 
@@ -56,21 +44,6 @@ def _load_plugin():
     # Criar módulo a partir do namespace
     module = types.ModuleType("whatsapp_manager")
     module.__dict__.update(ns)
-
-    # Injetar config com valores reais
-    if hasattr(module, "config"):
-        module.config.google_api_key = google_key
-        module.config.openai_api_key = openai_key
-        module.config.openrouter_api_key = openrouter_key
-    else:
-        mock_config = MagicMock()
-        mock_config.whatsapp_owner_number = "5586981612061@s.whatsapp.net"
-        mock_config.whatsapp_owner_name = "André"
-        mock_config.whatsapp_contact_classifier_model = "gemini-3.1-flash-lite"
-        mock_config.google_api_key = google_key
-        mock_config.openai_api_key = openai_key
-        mock_config.openrouter_api_key = openrouter_key
-        module.config = mock_config
 
     return module
 
