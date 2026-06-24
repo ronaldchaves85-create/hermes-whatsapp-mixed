@@ -4276,9 +4276,24 @@ def pre_gateway_dispatch(*args, **kwargs):
                             break
 
                 if fields_to_update:
+                    # Extrair número de telefone da mensagem (ex: "edite o contato 5511996472188")
+                    _phone_in_msg = None
+                    _phone_match = re.search(r"\b(\+?[\d]{10,15})\b", msg_text)
+                    if _phone_match:
+                        _phone_in_msg = re.sub(r"\D", "", _phone_match.group(1))
+                        logger.info(f"[update-nl] Número encontrado na mensagem: {_phone_in_msg}")
+
                     # Se há cartão pendente, tentar pelo número do cartão diretamente (evita busca por nome que pode falhar)
                     card = _pending_contact_card.get(sender_id)
-                    if card and card.get("phone") and "name" in fields_to_update:
+                    if _phone_in_msg:
+                        result = _update_contact_fields(_phone_in_msg, fields_to_update)
+                        logger.info(f"[update-nl] Tentativa via número da mensagem ({_phone_in_msg}): {result}")
+                        if "não encontrado" not in result:
+                            response_msg = result
+                            card = None
+                        else:
+                            result = None
+                    elif card and card.get("phone") and "name" in fields_to_update:
                         # Atualiza pelo número do cartão e aplica nome da mensagem
                         result = _update_contact_fields(card["phone"], fields_to_update)
                         logger.info(f"[update-nl] Tentativa via cartão pendente ({card['phone']}): {result}")
