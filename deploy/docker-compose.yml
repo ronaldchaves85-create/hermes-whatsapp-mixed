@@ -71,10 +71,12 @@
 #   GOOGLE_CLIENT_ID       Client ID para autenticação OAuth (Google Calendar, Drive, etc.)
 #   GOOGLE_CLIENT_SECRET   Client Secret correspondente
 #
-# 📦 SINCRONIZAÇÃO DE CONTEXTO VIA GITHUB
-#   HERMES_SETUP_GITHUB_USER  Usuário GitHub com o repositório de configuração
-#   CONFIG_REPO               Nome do repositório com contextos/contatos (padrão: hermes_agent_context_contatcs)
+# 📦 SINCRONIZAÇÃO DE CONTEXTO VIA GITHUB (indispensável na prática)
 #   CONFIG_GITHUB_TOKEN       Token GitHub com acesso de leitura ao CONFIG_REPO
+#                             → sem ele, personal_contacts.json e SOUL_WHATSAPP.md
+#                               não são sincronizados; o bot sobe mas opera sem contexto
+#   HERMES_SETUP_GITHUB_USER  Usuário GitHub dono do repositório de configuração
+#   CONFIG_REPO               Nome do repositório com contextos/contatos (padrão: hermes_agent_context_contatcs)
 #
 # ⏱️ TIMEOUTS E OUTROS
 #   TZ                         Fuso horário (padrão: America/Sao_Paulo)
