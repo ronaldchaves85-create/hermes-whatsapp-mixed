@@ -172,6 +172,11 @@ _turn_key: dict[str, str] = {}       # chat_id → chave do turno atual
 _turn_sent: set[str] = set()         # chaves de turnos que já foram enviados
 _turn_lock = threading.Lock()
 
+# Dedup por sessão Hermes: garante que cada session_id só envia UMA resposta.
+# Segunda camada de proteção independente do turn-based dedup.
+_responded_sessions: set[str] = set()
+_responded_sessions_lock = threading.Lock()
+
 # Dedup de mensagens recebidas: evita processar a mesma mensagem do WhatsApp duas vezes
 _seen_message_ids: set[str] = set()
 _seen_message_ids_lock = threading.Lock()
@@ -5033,7 +5038,11 @@ def pre_gateway_dispatch(*args, **kwargs):
                         status_response = _generate_status_response(contact_name, relationship, manual_rel, owner_status)
                         _human_send(chat_id, status_response)
                         _status_notified[chat_id] = current_desc
-                        _persist_status_notified()
+                        # Persistir em background para não bloquear o skip
+                        try:
+                            _persist_status_notified()
+                        except Exception as _pe:
+                            logger.warning(f"[owner-status] Falha ao persistir status notified: {_pe}")
                         logger.info(f"[owner-status] Resposta de status enviada para {chat_id}")
                         return {"action": "skip", "reason": "owner-status-proativo"}
                     else:
@@ -5447,6 +5456,17 @@ def post_llm_call(*args, **kwargs):
             or _sender_to_chat.get(session_clean)
             or session_id
         )
+
+        # Dedup por sessão: cada session_id Hermes só pode enviar UMA resposta real.
+        # Esta camada é independente do turn-based dedup e cobre race conditions.
+        if session_id:
+            with _responded_sessions_lock:
+                if session_id in _responded_sessions:
+                    logger.warning(f"[post_llm_call] Sessão já respondida — suprimindo (session={session_id!r})")
+                    return {"assistant_response": ""}
+                _responded_sessions.add(session_id)
+                if len(_responded_sessions) > 2000:
+                    _responded_sessions.clear()
 
         # Dedup por turno: só o primeiro post_llm_call com conteúdo real passa.
         # Só aplica dedup quando há um turn key registrado (tk != "").

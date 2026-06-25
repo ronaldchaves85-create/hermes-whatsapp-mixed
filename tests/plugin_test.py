@@ -4189,11 +4189,13 @@ class TestPostLlmCall(BaseWhatsAppManagerTest):
         whatsapp_manager._turn_key.clear()
         whatsapp_manager._turn_sent.clear()
         whatsapp_manager._sender_to_chat.clear()
+        whatsapp_manager._responded_sessions.clear()
 
     def tearDown(self):
         import whatsapp_manager
         whatsapp_manager._turn_key.clear()
         whatsapp_manager._turn_sent.clear()
+        whatsapp_manager._responded_sessions.clear()
         super().tearDown()
 
     def _call(self, session_id, response_text, platform="whatsapp"):
