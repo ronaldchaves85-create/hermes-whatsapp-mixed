@@ -173,7 +173,7 @@ Após parear, reinicie o container para carregar o estado limpo.
 
 ## Comandos no WhatsApp (self-chat)
 
-Envie para si mesmo no WhatsApp (conversa com seu próprio número):
+Envie para si mesmo no WhatsApp (conversa com seu próprio número). Todos os comandos funcionam **exclusivamente para o dono**.
 
 | Comando | Ação |
 |---|---|
@@ -181,6 +181,10 @@ Envie para si mesmo no WhatsApp (conversa com seu próprio número):
 | `start_bot` ou `!retomar` | Reativa o atendimento a clientes |
 | `sincronizar contatos` | Sync em background — classifica novos contatos e puxa dados do GitHub |
 | `sincronize os contatos` | Mesmo que acima |
+| `ajuda` ou `help` | Lista todos os comandos e funcionalidades disponíveis |
+| *"quais comandos posso usar?"* | Mesmo que acima (linguagem natural) |
+| *"como você funciona?"* | Mesmo que acima (linguagem natural) |
+| *"o que você faz?"* | Mesmo que acima (linguagem natural) |
 
 > O assistente pessoal continua funcionando normalmente durante a pausa.
 
