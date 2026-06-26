@@ -189,6 +189,44 @@ _status_notified: dict[str, str] = {}
 # Log persistente de duplicatas suprimidas — sobrevive a reinicializações
 _DEDUP_LOG_PATH = Path("/opt/data/.hermes/dedup_suppressed.log")
 
+# Persistência do turn_sent em disco — sobrevive a restarts do container
+# Formato: { turn_key: timestamp_float }  — entradas com mais de 1h são descartadas
+_TURN_SENT_PATH = Path("/opt/data/.hermes/turn_sent_state.json")
+_TURN_SENT_TTL_S = 3600  # 1 hora
+
+
+def _load_turn_sent_from_disk() -> None:
+    """Restaura _turn_sent do disco na inicialização, ignorando entradas expiradas."""
+    global _turn_sent
+    try:
+        if not _TURN_SENT_PATH.exists():
+            return
+        raw = json.loads(_TURN_SENT_PATH.read_text(encoding="utf-8"))
+        now = time.time()
+        valid = {k for k, ts in raw.items() if now - ts < _TURN_SENT_TTL_S}
+        with _turn_lock:
+            _turn_sent.update(valid)
+        logger.info(f"[turn-dedup] Restaurado do disco: {len(valid)} chaves válidas ({len(raw) - len(valid)} expiradas)")
+    except Exception as e:
+        logger.warning(f"[turn-dedup] Falha ao restaurar turn_sent do disco: {e}")
+
+
+def _persist_turn_sent_to_disk(tk: str) -> None:
+    """Persiste uma chave de turno recém-enviada no arquivo de estado."""
+    try:
+        _TURN_SENT_PATH.parent.mkdir(parents=True, exist_ok=True)
+        now = time.time()
+        try:
+            raw = json.loads(_TURN_SENT_PATH.read_text(encoding="utf-8")) if _TURN_SENT_PATH.exists() else {}
+        except Exception:
+            raw = {}
+        # Remove entradas expiradas antes de salvar
+        raw = {k: ts for k, ts in raw.items() if now - ts < _TURN_SENT_TTL_S}
+        raw[tk] = now
+        _TURN_SENT_PATH.write_text(json.dumps(raw), encoding="utf-8")
+    except Exception as e:
+        logger.warning(f"[turn-dedup] Falha ao persistir turn_sent: {e}")
+
 
 def _log_suppressed(reason: str, session_id: str, chat_id: str, response_preview: str) -> None:
     """Registra em arquivo toda tentativa de envio duplicado suprimida."""
@@ -5184,9 +5222,14 @@ def pre_llm_call(*args, **kwargs):
             # para que invocações com session_ids diferentes do mesmo turno compartilhem a chave
             tk = chat_id + ":" + _hl.md5(user_msg.encode()).hexdigest()
             with _turn_lock:
-                if _turn_key.get(chat_id) != tk:
+                old_tk = _turn_key.get(chat_id)
+                if old_tk != tk:
                     _turn_key[chat_id] = tk
-                    _turn_sent.discard(tk)
+                    # Descarta apenas a chave ANTIGA — nunca a nova.
+                    # Descartar tk removeria a proteção carregada do disco em caso de retry
+                    # após restart do container (o que causou o bug da mensagem duplicada).
+                    if old_tk:
+                        _turn_sent.discard(old_tk)
                     logger.info(f"[pre_llm_call] Novo turno para {chat_id}: {user_msg[:40]!r}")
 
     if platform != "whatsapp":
@@ -5539,6 +5582,7 @@ def post_llm_call(*args, **kwargs):
                 return {"assistant_response": ""}  # string vazia → bridge rejeita silenciosamente
             if tk:
                 _turn_sent.add(tk)
+                _persist_turn_sent_to_disk(tk)
 
         # Bloquear afirmações de ação no sistema
         _action_patterns = [
@@ -5841,6 +5885,9 @@ def register(ctx):
     # Restaurar cache de notificações de status (sobrevive a reinicializações)
     _load_status_notified()
     logger.info(f"[owner-status] Cache de notificações carregado: {len(_status_notified)} contato(s)")
+
+    # Restaurar turn_sent do disco (sobrevive a restarts — evita duplicatas pós-deploy)
+    _load_turn_sent_from_disk()
 
     # Auto-Update e Pull de Configurações no Boot
     try:

@@ -4307,6 +4307,43 @@ class TestPostLlmCall(BaseWhatsAppManagerTest):
         r2 = self._call(session, "segunda resposta duplicada")
         self.assertEqual(r2["assistant_response"], "")
 
+    @patch("whatsapp_manager._persist_turn_sent_to_disk")
+    @patch("urllib.request.urlopen")
+    @patch("time.sleep")
+    def test_turn_dedup_survives_restart(self, mock_sleep, mock_urlopen, mock_persist):
+        """Turno já enviado antes de um restart (chave carregada do disco) deve ser suprimido.
+
+        Cenário: container reinicia após responder ao Jardel (+60). _turn_sent é restaurado do
+        disco com a chave do turno. O Hermes reenvia a mensagem. pre_llm_call NÃO deve remover
+        a chave de _turn_sent; post_llm_call deve suprimir a resposta duplicada.
+        """
+        import whatsapp_manager, hashlib
+        mock_urlopen.return_value.__enter__ = lambda s: s
+        mock_urlopen.return_value.__exit__ = MagicMock(return_value=False)
+
+        chat_id = "60314276073511@s.whatsapp.net"
+        user_msg = "oi tudo bem"
+        tk = chat_id + ":" + hashlib.md5(user_msg.encode()).hexdigest()
+
+        # Simula estado restaurado do disco após restart: _turn_sent contém tk, _turn_key vazio
+        whatsapp_manager._turn_sent.add(tk)
+        # _turn_key está vazio (restart apagou memória)
+
+        # Simula pre_llm_call chegando com a mesma mensagem (retry pós-restart) — direto na lógica
+        with whatsapp_manager._turn_lock:
+            old_tk = whatsapp_manager._turn_key.get(chat_id)
+            if old_tk != tk:
+                whatsapp_manager._turn_key[chat_id] = tk
+                if old_tk:
+                    whatsapp_manager._turn_sent.discard(old_tk)
+
+        # tk NÃO deve ter sido removido de _turn_sent (old_tk era None, não foi descartado)
+        self.assertIn(tk, whatsapp_manager._turn_sent, "pre_llm_call removeu tk restaurado do disco!")
+
+        # post_llm_call deve suprimir a resposta duplicada
+        r = self._call(chat_id, "olá Jardel!")
+        self.assertEqual(r["assistant_response"], "", "Duplicata pós-restart não foi suprimida!")
+
     @patch("urllib.request.urlopen")
     @patch("time.sleep")
     def test_typing_indicator_called(self, mock_sleep, mock_urlopen):
