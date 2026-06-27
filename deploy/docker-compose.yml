@@ -34,7 +34,10 @@
 #                          → todos os modelos padrão usam gemini-3.1-flash-lite
 #                            via provider "gemini"; sem esta chave o bot não responde
 #
-# 🟢 WHATSAPP — obrigatórias quando WHATSAPP_ENABLED=true (padrão atual)
+# 🟢 WHATSAPP — obrigatórias para o bot funcionar
+#   WHATSAPP_ENABLED       Deve ser definida explicitamente como "true" (padrão do compose)
+#                          → defina "false" apenas antes de parear pela primeira vez;
+#                            volte para "true" após parear e reiniciar
 #   WHATSAPP_OWNER_NUMBER  Número do dono no formato internacional sem + (ex: 5511999999999)
 #   WHATSAPP_OWNER_NAME    Nome do dono usado nos prompts e respostas (ex: André)
 #
