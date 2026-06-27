@@ -19,6 +19,8 @@
 #
 # ██████████████████████████████████████████████████████████████████████████████
 # ▶ VARIÁVEIS INDISPENSÁVEIS — sem estas a stack não funciona
+# ⚠️  EASYPANEL: marque "Criar arquivo .env" na aba Ambiente antes de implantar
+#     Sem isso o container ignora todas as variáveis abaixo e falha ao iniciar.
 # ██████████████████████████████████████████████████████████████████████████████
 #
 # 🔑 AUTENTICAÇÃO DA API (obrigatória — sem default)
