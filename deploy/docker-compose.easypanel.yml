@@ -207,7 +207,7 @@ services:
     restart: unless-stopped
     # Aguarda o bridge.js ser copiado para o volume antes de iniciar.
     # Se o Node.js encerrar com erro, limpa a sessão corrompida e sai (Docker reinicia o container).
-    command: ["bash", "-c", "while [ ! -f /opt/data/.hermes/platforms/whatsapp/bridge/bridge.js ]; do sleep 1; done && cp /opt/data/.hermes/platforms/whatsapp/bridge/bridge.js /opt/hermes/scripts/whatsapp-bridge/bridge.js && node /opt/hermes/scripts/whatsapp-bridge/bridge.js --port 3000 --session /opt/data/.hermes/platforms/whatsapp/session --mode bot || (echo 'Cleaning session...' && rm -rf /opt/data/.hermes/platforms/whatsapp/session/* && exit 1)"]
+    command: ["bash", "-c", "while [ ! -f /opt/data/.hermes/platforms/whatsapp/bridge/bridge.js ]; do sleep 1; done && cd /opt/data/.hermes/platforms/whatsapp/bridge && ([ -d node_modules ] || npm install --no-fund --no-audit --silent) && node bridge.js --port 3000 --session /opt/data/.hermes/platforms/whatsapp/session --mode bot || (echo 'Cleaning session...' && rm -rf /opt/data/.hermes/platforms/whatsapp/session/* && exit 1)"]
 
     volumes:
       - hermes_data:/opt/data
