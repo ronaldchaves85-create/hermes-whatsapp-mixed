@@ -114,7 +114,7 @@ services:
   hermes:
     image: nousresearch/hermes-agent:v2026.5.16
     restart: unless-stopped
-    command: hermes gateway run
+    command: ["bash", "-c", "git config --global --add safe.directory /opt/data/.hermes/plugins/whatsapp-manager 2>/dev/null || true; exec hermes gateway run"]
     depends_on:
       - whatsapp-bridge
 
