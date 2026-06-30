@@ -28,6 +28,11 @@
 #   API_SERVER_KEY         Chave secreta para autenticar chamadas à API do Hermes
 #                          Gerar: openssl rand -hex 32
 #
+# 🔒 SEGURANÇA DO DASHBOARD (obrigatória — sem default)
+#   O Dashboard expõe terminal, logs e conversas — NUNCA deixe público
+#   Easypanel: ative "Password Protection" na aba "Domains & Proxy" (porta 9119)
+#   Não requer variável de ambiente — configure diretamente no proxy do Easypanel
+#
 # 🤖 PROVIDER DE IA (obrigatória na prática)
 #   GOOGLE_API_KEY         Chave da Google AI Studio / Vertex AI
 #                          → todos os modelos padrão usam gemini-3.1-flash-lite
