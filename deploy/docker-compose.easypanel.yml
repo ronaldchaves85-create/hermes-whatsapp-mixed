@@ -88,6 +88,12 @@
 #   HERMES_API_CALL_STALE_TIMEOUT  Timeout de chamada inativa (padrão: 300)
 #   API_SERVER_CORS_ORIGINS    Origens CORS permitidas (padrão: *)
 #
+# 🔒 AUTENTICAÇÃO DO DASHBOARD (Easypanel)
+#   O Easypanel não usa Traefik — proteja o Dashboard pelo proxy nativo:
+#   Na aba "Domains & Proxy" do serviço, ative "Password Protection" no domínio da porta 9119.
+#   Defina usuário e senha diretamente no Easypanel (sem necessidade de gerar hash).
+#   → o Dashboard expõe terminal, logs e conversas — NUNCA deixe público
+#
 # 🌐 DOMÍNIOS — configure na aba "Domains & Proxy" do serviço hermes no Easypanel:
 #   Porta 8642 → API REST       (ex: hermes-api.seu-dominio.com)
 #   Porta 9119 → Dashboard + WebSocket (/api/ws, /api/events, /api/pty)

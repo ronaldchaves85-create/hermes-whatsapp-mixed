@@ -31,7 +31,10 @@
 #
 # 🔒 BASIC AUTH NO DASHBOARD (obrigatória — sem default, protege contra acesso público)
 #   HERMES_DASH_AUTH_USERS  Usuário:hash para proteger o Dashboard via Traefik
-#                          Gerar: echo $(htpasswd -nb usuario senha) | sed -e s/\$/\$\$/g
+#                          Gerar (Mac/Linux): htpasswd -nb usuario senha
+#                          Cole o resultado exato no campo da variável (não use sed)
+#                          Exemplo de valor: admin:$apr1$xyz$hash...
+#                          ⚠️  Sem esta variável o Traefik bloqueia o Dashboard com 404
 #                          → o Dashboard expõe terminal, logs e conversas — NUNCA deixe sem isso
 #
 # 🤖 PROVIDER DE IA (obrigatória na prática)

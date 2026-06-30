@@ -175,6 +175,34 @@ Após parear, reinicie o container para carregar o estado limpo.
 
 ---
 
+## Protegendo o Dashboard
+
+O Dashboard expõe terminal interativo, logs e histórico de conversas. **Nunca deixe público.**
+
+### Portainer (Traefik) — Basic Auth
+
+Gere o hash no terminal:
+
+```bash
+htpasswd -nb seu_usuario sua_senha
+```
+
+> ⚠️ Cole o output **exatamente como saiu**, sem modificar. Não use `sed` ou `echo` — isso corrompe o hash.
+
+Adicione nas variáveis de ambiente da stack:
+
+| Variável | Valor |
+|---|---|
+| `HERMES_DASH_AUTH_USERS` | `usuario:$apr1$...` (output do htpasswd) |
+
+Atualize a stack. O Traefik solicita login em todas as rotas do Dashboard (interface, WebSocket, terminal).
+
+### Easypanel — Password Protection
+
+Na aba **Domains & Proxy** do serviço, ative **"Password Protection"** no domínio da porta `9119`. Defina usuário e senha diretamente no Easypanel — sem necessidade de gerar hash.
+
+---
+
 ## Comandos no WhatsApp (self-chat)
 
 Envie para si mesmo no WhatsApp (conversa com seu próprio número). Todos os comandos funcionam **exclusivamente para o dono**.
