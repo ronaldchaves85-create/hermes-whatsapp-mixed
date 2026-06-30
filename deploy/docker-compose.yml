@@ -29,6 +29,11 @@
 #   API_SERVER_KEY         Chave secreta para autenticar chamadas à API do Hermes
 #                          Gerar: openssl rand -hex 32
 #
+# 🔒 BASIC AUTH NO DASHBOARD (obrigatória — sem default, protege contra acesso público)
+#   HERMES_DASH_AUTH_USERS  Usuário:hash para proteger o Dashboard via Traefik
+#                          Gerar: echo $(htpasswd -nb usuario senha) | sed -e s/\$/\$\$/g
+#                          → o Dashboard expõe terminal, logs e conversas — NUNCA deixe sem isso
+#
 # 🤖 PROVIDER DE IA (obrigatória na prática)
 #   GOOGLE_API_KEY         Chave da Google AI Studio / Vertex AI
 #                          → todos os modelos padrão usam gemini-3.1-flash-lite
@@ -200,6 +205,10 @@ services:
         - "traefik.enable=true"
         - "traefik.docker.network=traefik_public"
 
+        # Basic Auth no Dashboard — protege contra acesso público indevido
+        # Gerar HERMES_DASH_AUTH_USERS com: echo $(htpasswd -nb usuario senha) | sed -e s/\\$/\\$\\$/g
+        - "traefik.http.middlewares.hermes-dash-auth.basicauth.users=${HERMES_DASH_AUTH_USERS}"
+
         # API REST → porta 8642
         - "traefik.http.routers.hermes-api.rule=Host(`${HERMES_API_HOST}`)"
         - "traefik.http.routers.hermes-api.entrypoints=websecure"
@@ -208,37 +217,41 @@ services:
         - "traefik.http.routers.hermes-api.service=hermes-api"
         - "traefik.http.services.hermes-api.loadbalancer.server.port=8642"
 
-        # Dashboard → porta 9119
+        # Dashboard → porta 9119 (protegido por Basic Auth)
         - "traefik.http.routers.hermes-dash.rule=Host(`${HERMES_DASH_HOST}`)"
         - "traefik.http.routers.hermes-dash.entrypoints=websecure"
         - "traefik.http.routers.hermes-dash.tls=true"
         - "traefik.http.routers.hermes-dash.tls.certresolver=le"
         - "traefik.http.routers.hermes-dash.service=hermes-dash"
+        - "traefik.http.routers.hermes-dash.middlewares=hermes-dash-auth"
         - "traefik.http.services.hermes-dash.loadbalancer.server.port=9119"
         - "traefik.http.services.hermes-dash.loadbalancer.responseforwarding.flushinterval=100ms"
 
-        # WebSocket /api/ws (Dashboard TUI)
+        # WebSocket /api/ws (Dashboard TUI) — protegido por Basic Auth
         - "traefik.http.routers.hermes-ws.rule=Host(`${HERMES_DASH_HOST}`) && PathPrefix(`/api/ws`)"
         - "traefik.http.routers.hermes-ws.entrypoints=websecure"
         - "traefik.http.routers.hermes-ws.tls=true"
         - "traefik.http.routers.hermes-ws.tls.certresolver=le"
         - "traefik.http.routers.hermes-ws.service=hermes-dash"
+        - "traefik.http.routers.hermes-ws.middlewares=hermes-dash-auth"
         - "traefik.http.routers.hermes-ws.priority=300"
 
-        # WebSocket /api/events (streaming de eventos)
+        # WebSocket /api/events (streaming de eventos) — protegido por Basic Auth
         - "traefik.http.routers.hermes-events.rule=Host(`${HERMES_DASH_HOST}`) && PathPrefix(`/api/events`)"
         - "traefik.http.routers.hermes-events.entrypoints=websecure"
         - "traefik.http.routers.hermes-events.tls=true"
         - "traefik.http.routers.hermes-events.tls.certresolver=le"
         - "traefik.http.routers.hermes-events.service=hermes-dash"
+        - "traefik.http.routers.hermes-events.middlewares=hermes-dash-auth"
         - "traefik.http.routers.hermes-events.priority=300"
 
-        # WebSocket /api/pty (terminal interativo no Dashboard)
+        # WebSocket /api/pty (terminal interativo no Dashboard) — protegido por Basic Auth
         - "traefik.http.routers.hermes-pty.rule=Host(`${HERMES_DASH_HOST}`) && PathPrefix(`/api/pty`)"
         - "traefik.http.routers.hermes-pty.entrypoints=websecure"
         - "traefik.http.routers.hermes-pty.tls=true"
         - "traefik.http.routers.hermes-pty.tls.certresolver=le"
         - "traefik.http.routers.hermes-pty.service=hermes-dash"
+        - "traefik.http.routers.hermes-pty.middlewares=hermes-dash-auth"
         - "traefik.http.routers.hermes-pty.priority=300"
 
   whatsapp-bridge:
