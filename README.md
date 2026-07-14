@@ -243,6 +243,7 @@ Envie para si mesmo no WhatsApp (conversa com seu próprio número). Todos os co
 | `ANTHROPIC_API_KEY` | Claude (Anthropic) |
 | `OPENAI_API_KEY` | GPT-4 e família |
 | `OPENROUTER_API_KEY` | Acesso multi-provider |
+| `AISA_API_KEY` | Chave da AISA (provider de IA) |
 
 ### Modelos por função (padrão: `gemini-3.1-flash-lite` / provider: `gemini`)
 

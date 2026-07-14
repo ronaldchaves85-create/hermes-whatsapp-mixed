@@ -62,6 +62,7 @@
 #   OPENAI_API_KEY         Chave da OpenAI (GPT-4, etc.)
 #   ANTHROPIC_API_KEY      Chave da Anthropic (Claude)
 #   OPENROUTER_API_KEY     Chave da OpenRouter (acesso multi-provider)
+#   AISA_API_KEY           Chave da AISA (provider de IA)
 #
 # 🤖 MODELOS POR FUNÇÃO (padrão: gemini-3.1-flash-lite / provider: gemini)
 #   WHATSAPP_OWNER_MODEL          Modelo usado para responder ao dono
@@ -128,6 +129,7 @@ services:
       - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
       - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - AISA_API_KEY=${AISA_API_KEY:-}
 
       # Google OAuth (Calendar, Drive, Gmail)
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
