@@ -180,6 +180,23 @@ A chave de API já está configurada e disponível nas variáveis de ambiente do
 
 ---
 
+### Como Usar a AISA CLI
+
+Para usar as APIs da AIsa no container, garanta que o `/opt/data/.local/bin` está no seu `PATH` e utilize os comandos principais:
+
+- **Buscas gerais:** `aisa web-search --type smart "termo"`
+- **Buscas no YouTube:** `aisa web-search --type youtube "termo"`
+- **Consultas de criptomoedas:** `aisa crypto BTC`
+- **Gerenciamento de Skills:**
+  - Listar skills: `aisa skills list`
+  - Instalar uma skill: `aisa skills install <skill>`
+  - Exibir detalhes de uma skill: `aisa skills show <skill>`
+- **Chat com o modelo:** `aisa chat "mensagem"`
+
+*Dica:* Se o comando `npm install -g` apresentar erro de permissão, lembre-se de que a instalação correta é com `--prefix /opt/data/.local`.
+
+---
+
 ## Conectar o WhatsApp (QR Code)
 
 Após o setup, acesse os endpoints da bridge no domínio do Dashboard:

@@ -68,6 +68,7 @@
   "66": "TestProcessMediaMessage",
   "67": "TestLiveClassifyContact",
   "68": "TestFullSummaryFunctions",
+  "69": "TestPreToolCall",
   "70": "TestSanitizeSensitive",
   "71": "TestBuildLidPhoneMap",
   "72": "startSocket",
@@ -137,5 +138,6 @@
   "136": "Customer Support Mode",
   "137": "Gemini Key Test",
   "138": "WhatsApp Env Vars Skill",
-  "139": "WhatsApp Logs Diagnostics Skill"
+  "139": "WhatsApp Logs Diagnostics Skill",
+  "140": "_push_personal_contacts_to_github"
 }

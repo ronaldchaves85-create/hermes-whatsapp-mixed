@@ -6084,7 +6084,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "tests_plugin_test",
-      "community": 50,
+      "community": 68,
       "norm_label": "plugin_test.py"
     },
     {
@@ -6354,7 +6354,7 @@
       "source_location": "L475",
       "_origin": "ast",
       "id": "tests_plugin_test_testllmcontextandprompting_test_sanitize_classification_result_function",
-      "community": 84,
+      "community": 23,
       "norm_label": ".test_sanitize_classification_result_function()"
     },
     {
@@ -6964,7 +6964,7 @@
       "source_location": "L1695",
       "_origin": "ast",
       "id": "tests_plugin_test_testfullsummaryfunctions",
-      "community": 68,
+      "community": 84,
       "norm_label": "testfullsummaryfunctions"
     },
     {
@@ -6974,7 +6974,7 @@
       "source_location": "L1700",
       "_origin": "ast",
       "id": "tests_plugin_test_testfullsummaryfunctions_test_update_full_summary_returns_llm_result",
-      "community": 68,
+      "community": 84,
       "norm_label": ".test_update_full_summary_returns_llm_result()"
     },
     {
@@ -6984,7 +6984,7 @@
       "source_location": "L1719",
       "_origin": "ast",
       "id": "tests_plugin_test_testfullsummaryfunctions_test_update_full_summary_no_api_key_returns_none",
-      "community": 68,
+      "community": 84,
       "norm_label": ".test_update_full_summary_no_api_key_returns_none()"
     },
     {
@@ -6994,7 +6994,7 @@
       "source_location": "L1727",
       "_origin": "ast",
       "id": "tests_plugin_test_testfullsummaryfunctions_test_compress_full_summary_returns_llm_result",
-      "community": 68,
+      "community": 84,
       "norm_label": ".test_compress_full_summary_returns_llm_result()"
     },
     {
@@ -7004,7 +7004,7 @@
       "source_location": "L1744",
       "_origin": "ast",
       "id": "tests_plugin_test_testfullsummaryfunctions_test_sync_full_summaries_only_includes_user_role",
-      "community": 68,
+      "community": 84,
       "norm_label": ".test_sync_full_summaries_only_includes_user_role()"
     },
     {
@@ -7014,7 +7014,7 @@
       "source_location": "L1788",
       "_origin": "ast",
       "id": "tests_plugin_test_testfullsummaryfunctions_test_sync_full_summaries_no_state_db_returns_zero",
-      "community": 68,
+      "community": 84,
       "norm_label": ".test_sync_full_summaries_no_state_db_returns_zero()"
     },
     {
@@ -7024,7 +7024,7 @@
       "source_location": "L1797",
       "_origin": "ast",
       "id": "tests_plugin_test_testfullsummaryfunctions_test_sync_full_summaries_skips_owner",
-      "community": 68,
+      "community": 84,
       "norm_label": ".test_sync_full_summaries_skips_owner()"
     },
     {
@@ -7724,7 +7724,7 @@
       "source_location": "L2384",
       "_origin": "ast",
       "id": "tests_plugin_test_testpushpersonalcontactstogithub",
-      "community": 35,
+      "community": 140,
       "norm_label": "testpushpersonalcontactstogithub"
     },
     {
@@ -7734,7 +7734,7 @@
       "source_location": "L2389",
       "_origin": "ast",
       "id": "tests_plugin_test_testpushpersonalcontactstogithub_test_returns_false_without_config_repo",
-      "community": 35,
+      "community": 140,
       "norm_label": ".test_returns_false_without_config_repo()"
     },
     {
@@ -7744,7 +7744,7 @@
       "source_location": "L2396",
       "_origin": "ast",
       "id": "tests_plugin_test_testpushpersonalcontactstogithub_test_returns_false_when_file_not_found",
-      "community": 35,
+      "community": 140,
       "norm_label": ".test_returns_false_when_file_not_found()"
     },
     {
@@ -7754,7 +7754,7 @@
       "source_location": "L2405",
       "_origin": "ast",
       "id": "tests_plugin_test_testpushpersonalcontactstogithub_test_calls_github_put_file_with_correct_args",
-      "community": 35,
+      "community": 140,
       "norm_label": ".test_calls_github_put_file_with_correct_args()"
     },
     {
@@ -7824,7 +7824,7 @@
       "source_location": "L2480",
       "_origin": "ast",
       "id": "tests_plugin_test_testsynccontactsnamepreservation",
-      "community": 50,
+      "community": 19,
       "norm_label": "testsynccontactsnamepreservation"
     },
     {
@@ -7834,7 +7834,7 @@
       "source_location": "L2487",
       "_origin": "ast",
       "id": "tests_plugin_test_testsynccontactsnamepreservation_test_does_not_overwrite_real_name_with_generic",
-      "community": 50,
+      "community": 19,
       "norm_label": ".test_does_not_overwrite_real_name_with_generic()"
     },
     {
@@ -8434,7 +8434,7 @@
       "source_location": "L3451",
       "_origin": "ast",
       "id": "tests_plugin_test_testdeduppersonalcontacts_setup",
-      "community": 50,
+      "community": 68,
       "norm_label": ".setup()"
     },
     {
@@ -8694,7 +8694,7 @@
       "source_location": "L3600",
       "_origin": "ast",
       "id": "tests_plugin_test_testsanitizeclassificationresult_setup",
-      "community": 84,
+      "community": 99,
       "norm_label": ".setup()"
     },
     {
@@ -8814,7 +8814,7 @@
       "source_location": "L3657",
       "_origin": "ast",
       "id": "tests_plugin_test_testnormalizebrazilianphone",
-      "community": 50,
+      "community": 104,
       "norm_label": "testnormalizebrazilianphone"
     },
     {
@@ -8824,7 +8824,7 @@
       "source_location": "L3660",
       "_origin": "ast",
       "id": "tests_plugin_test_testnormalizebrazilianphone_setup",
-      "community": 50,
+      "community": 104,
       "norm_label": ".setup()"
     },
     {
@@ -8834,7 +8834,7 @@
       "source_location": "L3664",
       "_origin": "ast",
       "id": "tests_plugin_test_testnormalizebrazilianphone_test_com_nono_digito_normaliza",
-      "community": 50,
+      "community": 104,
       "norm_label": ".test_com_nono_digito_normaliza()"
     },
     {
@@ -8844,7 +8844,7 @@
       "source_location": "L3668",
       "_origin": "ast",
       "id": "tests_plugin_test_testnormalizebrazilianphone_test_sem_nono_digito_intacto",
-      "community": 50,
+      "community": 104,
       "norm_label": ".test_sem_nono_digito_intacto()"
     },
     {
@@ -8854,7 +8854,7 @@
       "source_location": "L3671",
       "_origin": "ast",
       "id": "tests_plugin_test_testnormalizebrazilianphone_test_numero_curto_intacto",
-      "community": 50,
+      "community": 104,
       "norm_label": ".test_numero_curto_intacto()"
     },
     {
@@ -8864,7 +8864,7 @@
       "source_location": "L3674",
       "_origin": "ast",
       "id": "tests_plugin_test_testnormalizebrazilianphone_test_com_caracteres_nao_numericos",
-      "community": 50,
+      "community": 104,
       "norm_label": ".test_com_caracteres_nao_numericos()"
     },
     {
@@ -8874,7 +8874,7 @@
       "source_location": "L3678",
       "_origin": "ast",
       "id": "tests_plugin_test_testnormalizebrazilianphone_test_sem_prefixo_55_intacto",
-      "community": 50,
+      "community": 104,
       "norm_label": ".test_sem_prefixo_55_intacto()"
     },
     {
@@ -9494,7 +9494,7 @@
       "source_location": "L4399",
       "_origin": "ast",
       "id": "tests_plugin_test_testpretoolcall",
-      "community": 27,
+      "community": 69,
       "norm_label": "testpretoolcall"
     },
     {
@@ -9514,7 +9514,7 @@
       "source_location": "L4406",
       "_origin": "ast",
       "id": "tests_plugin_test_testpretoolcall_test_contact_session_blocked",
-      "community": 27,
+      "community": 69,
       "norm_label": ".test_contact_session_blocked()"
     },
     {
@@ -9524,7 +9524,7 @@
       "source_location": "L4412",
       "_origin": "ast",
       "id": "tests_plugin_test_testpretoolcall_test_owner_session_allowed",
-      "community": 27,
+      "community": 69,
       "norm_label": ".test_owner_session_allowed()"
     },
     {
@@ -9534,7 +9534,7 @@
       "source_location": "L4417",
       "_origin": "ast",
       "id": "tests_plugin_test_testpretoolcall_test_owner_with_device_suffix_allowed",
-      "community": 27,
+      "community": 69,
       "norm_label": ".test_owner_with_device_suffix_allowed()"
     },
     {
@@ -9544,7 +9544,7 @@
       "source_location": "L4422",
       "_origin": "ast",
       "id": "tests_plugin_test_testpretoolcall_test_non_whatsapp_platform_allowed",
-      "community": 27,
+      "community": 69,
       "norm_label": ".test_non_whatsapp_platform_allowed()"
     },
     {
@@ -9554,7 +9554,7 @@
       "source_location": "L4427",
       "_origin": "ast",
       "id": "tests_plugin_test_testpretoolcall_test_empty_session_allowed",
-      "community": 27,
+      "community": 69,
       "norm_label": ".test_empty_session_allowed()"
     },
     {
@@ -9564,7 +9564,7 @@
       "source_location": "L4432",
       "_origin": "ast",
       "id": "tests_plugin_test_testpretoolcall_test_contact_with_device_suffix_blocked",
-      "community": 27,
+      "community": 69,
       "norm_label": ".test_contact_with_device_suffix_blocked()"
     },
     {
@@ -9574,7 +9574,7 @@
       "source_location": "L4437",
       "_origin": "ast",
       "id": "tests_plugin_test_testpretoolcall_test_brazilian_normalization_owner",
-      "community": 27,
+      "community": 69,
       "norm_label": ".test_brazilian_normalization_owner()"
     },
     {
@@ -9584,7 +9584,7 @@
       "source_location": "L1",
       "_origin": "ast",
       "id": "tests_plugin_test_rationale_1",
-      "community": 50,
+      "community": 68,
       "norm_label": "python unit tests for the whatsapp-manager plugin."
     },
     {
@@ -10074,7 +10074,7 @@
       "source_location": "L1696",
       "_origin": "ast",
       "id": "tests_plugin_test_rationale_1696",
-      "community": 68,
+      "community": 84,
       "norm_label": "testes para _update_full_summary, _compress_full_summary e _sync_full_summaries."
     },
     {
@@ -10084,7 +10084,7 @@
       "source_location": "L1701",
       "_origin": "ast",
       "id": "tests_plugin_test_rationale_1701",
-      "community": 68,
+      "community": 84,
       "norm_label": "_update_full_summary deve retornar texto do llm."
     },
     {
@@ -10094,7 +10094,7 @@
       "source_location": "L1720",
       "_origin": "ast",
       "id": "tests_plugin_test_rationale_1720",
-      "community": 68,
+      "community": 84,
       "norm_label": "sem chave de api, _update_full_summary deve retornar none."
     },
     {
@@ -10104,7 +10104,7 @@
       "source_location": "L1728",
       "_origin": "ast",
       "id": "tests_plugin_test_rationale_1728",
-      "community": 68,
+      "community": 84,
       "norm_label": "_compress_full_summary deve retornar 1-2 frases do llm."
     },
     {
@@ -10114,7 +10114,7 @@
       "source_location": "L1745",
       "_origin": "ast",
       "id": "tests_plugin_test_rationale_1745",
-      "community": 68,
+      "community": 84,
       "norm_label": "_sync_full_summaries deve passar ao llm apenas mensagens role=user (contato)."
     },
     {
@@ -10124,7 +10124,7 @@
       "source_location": "L1789",
       "_origin": "ast",
       "id": "tests_plugin_test_rationale_1789",
-      "community": 68,
+      "community": 84,
       "norm_label": "sem state.db, retorna 0 sem erros."
     },
     {
@@ -10134,7 +10134,7 @@
       "source_location": "L1798",
       "_origin": "ast",
       "id": "tests_plugin_test_rationale_1798",
-      "community": 68,
+      "community": 84,
       "norm_label": "_sync_full_summaries nao deve processar o numero do owner."
     },
     {
@@ -10354,7 +10354,7 @@
       "source_location": "L2385",
       "_origin": "ast",
       "id": "tests_plugin_test_rationale_2385",
-      "community": 35,
+      "community": 140,
       "norm_label": "testes para _push_personal_contacts_to_github."
     },
     {
@@ -10374,7 +10374,7 @@
       "source_location": "L2481",
       "_origin": "ast",
       "id": "tests_plugin_test_rationale_2481",
-      "community": 50,
+      "community": 19,
       "norm_label": "garante que sync nao substitui nome real por nome generico 'contato xxxx'."
     },
     {
@@ -10964,7 +10964,7 @@
       "source_location": "L3658",
       "_origin": "ast",
       "id": "tests_plugin_test_rationale_3658",
-      "community": 50,
+      "community": 104,
       "norm_label": "testa _normalize_brazilian_phone \u2014 normalizacao do 9o digito."
     },
     {
@@ -11404,7 +11404,7 @@
       "source_location": "L4400",
       "_origin": "ast",
       "id": "tests_plugin_test_rationale_4400",
-      "community": 27,
+      "community": 69,
       "norm_label": "testes para o hook pre_tool_call \u2014 bloqueio de tools para contatos."
     },
     {
@@ -11414,7 +11414,7 @@
       "source_location": "L4407",
       "_origin": "ast",
       "id": "tests_plugin_test_rationale_4407",
-      "community": 27,
+      "community": 69,
       "norm_label": "contato nao pode usar tools."
     },
     {
@@ -11424,7 +11424,7 @@
       "source_location": "L4413",
       "_origin": "ast",
       "id": "tests_plugin_test_rationale_4413",
-      "community": 27,
+      "community": 69,
       "norm_label": "owner pode usar tools (retorna none = permitir)."
     },
     {
@@ -11434,7 +11434,7 @@
       "source_location": "L4418",
       "_origin": "ast",
       "id": "tests_plugin_test_rationale_4418",
-      "community": 27,
+      "community": 69,
       "norm_label": "owner com device suffix (5511999999999:2@s.whatsapp.net) e reconhecido."
     },
     {
@@ -11444,7 +11444,7 @@
       "source_location": "L4423",
       "_origin": "ast",
       "id": "tests_plugin_test_rationale_4423",
-      "community": 27,
+      "community": 69,
       "norm_label": "plataformas diferentes de whatsapp passam sem bloqueio."
     },
     {
@@ -11454,7 +11454,7 @@
       "source_location": "L4428",
       "_origin": "ast",
       "id": "tests_plugin_test_rationale_4428",
-      "community": 27,
+      "community": 69,
       "norm_label": "session vazia passa (nao ha como identificar)."
     },
     {
@@ -11464,7 +11464,7 @@
       "source_location": "L4433",
       "_origin": "ast",
       "id": "tests_plugin_test_rationale_4433",
-      "community": 27,
+      "community": 69,
       "norm_label": "contato com device suffix e bloqueado corretamente."
     },
     {
@@ -11474,7 +11474,7 @@
       "source_location": "L4438",
       "_origin": "ast",
       "id": "tests_plugin_test_rationale_4438",
-      "community": 27,
+      "community": 69,
       "norm_label": "numero do owner com 8 digitos local vs 9 digitos ainda e reconhecido."
     },
     {
@@ -12074,7 +12074,7 @@
       "source_location": "L27",
       "_origin": "ast",
       "id": "whatsapp_manager_wmloghandler",
-      "community": 19,
+      "community": 14,
       "norm_label": "_wmloghandler"
     },
     {
@@ -12084,7 +12084,7 @@
       "source_location": "L28",
       "_origin": "ast",
       "id": "whatsapp_manager_wmloghandler_emit",
-      "community": 19,
+      "community": 14,
       "norm_label": ".emit()"
     },
     {
@@ -12424,7 +12424,7 @@
       "source_location": "L541",
       "_origin": "ast",
       "id": "whatsapp_manager_resolve_phone_from_jid",
-      "community": 104,
+      "community": 14,
       "norm_label": "_resolve_phone_from_jid()"
     },
     {
@@ -12454,7 +12454,7 @@
       "source_location": "L629",
       "_origin": "ast",
       "id": "whatsapp_manager_check_bot_paused",
-      "community": 104,
+      "community": 14,
       "norm_label": "_check_bot_paused()"
     },
     {
@@ -12524,7 +12524,7 @@
       "source_location": "L808",
       "_origin": "ast",
       "id": "whatsapp_manager_sanitize_classification_result",
-      "community": 84,
+      "community": 18,
       "norm_label": "_sanitize_classification_result()"
     },
     {
@@ -12594,7 +12594,7 @@
       "source_location": "L988",
       "_origin": "ast",
       "id": "whatsapp_manager_get_active_owner_status",
-      "community": 18,
+      "community": 14,
       "norm_label": "_get_active_owner_status()"
     },
     {
@@ -12664,7 +12664,7 @@
       "source_location": "L1461",
       "_origin": "ast",
       "id": "whatsapp_manager_classify_contact_via_llm",
-      "community": 22,
+      "community": 68,
       "norm_label": "_classify_contact_via_llm()"
     },
     {
@@ -12694,7 +12694,7 @@
       "source_location": "L1699",
       "_origin": "ast",
       "id": "whatsapp_manager_merge_contact_entries",
-      "community": 50,
+      "community": 68,
       "norm_label": "_merge_contact_entries()"
     },
     {
@@ -12704,7 +12704,7 @@
       "source_location": "L1735",
       "_origin": "ast",
       "id": "whatsapp_manager_dedup_personal_contacts",
-      "community": 50,
+      "community": 68,
       "norm_label": "_dedup_personal_contacts()"
     },
     {
@@ -12714,7 +12714,7 @@
       "source_location": "L1805",
       "_origin": "ast",
       "id": "whatsapp_manager_sync_contacts_from_db_internal",
-      "community": 50,
+      "community": 19,
       "norm_label": "_sync_contacts_from_db_internal()"
     },
     {
@@ -12754,7 +12754,7 @@
       "source_location": "L2706",
       "_origin": "ast",
       "id": "whatsapp_manager_build_style_section_with_patterns",
-      "community": 47,
+      "community": 38,
       "norm_label": "_build_style_section_with_patterns()"
     },
     {
@@ -12774,7 +12774,7 @@
       "source_location": "L2811",
       "_origin": "ast",
       "id": "whatsapp_manager_extract_style_patterns_via_llm",
-      "community": 50,
+      "community": 38,
       "norm_label": "_extract_style_patterns_via_llm()"
     },
     {
@@ -12784,7 +12784,7 @@
       "source_location": "L2918",
       "_origin": "ast",
       "id": "whatsapp_manager_update_soul_whatsapp_with_examples",
-      "community": 35,
+      "community": 19,
       "norm_label": "_update_soul_whatsapp_with_examples()"
     },
     {
@@ -12794,7 +12794,7 @@
       "source_location": "L2997",
       "_origin": "ast",
       "id": "whatsapp_manager_github_put_file",
-      "community": 35,
+      "community": 19,
       "norm_label": "_github_put_file()"
     },
     {
@@ -12824,7 +12824,7 @@
       "source_location": "L3405",
       "_origin": "ast",
       "id": "whatsapp_manager_push_personal_contacts_to_github",
-      "community": 35,
+      "community": 140,
       "norm_label": "_push_personal_contacts_to_github()"
     },
     {
@@ -12944,7 +12944,7 @@
       "source_location": "L3930",
       "_origin": "ast",
       "id": "whatsapp_manager_load_personal_contacts",
-      "community": 84,
+      "community": 18,
       "norm_label": "_load_personal_contacts()"
     },
     {
@@ -12994,7 +12994,7 @@
       "source_location": "L4184",
       "_origin": "ast",
       "id": "whatsapp_manager_live_classify_contact",
-      "community": 67,
+      "community": 68,
       "norm_label": "_live_classify_contact()"
     },
     {
@@ -13194,7 +13194,7 @@
       "source_location": "L542",
       "_origin": "ast",
       "id": "whatsapp_manager_rationale_542",
-      "community": 104,
+      "community": 14,
       "norm_label": "traduz jid do whatsapp (seja lid ou formato padrao) para jid com telefone classi"
     },
     {
@@ -13224,7 +13224,7 @@
       "source_location": "L630",
       "_origin": "ast",
       "id": "whatsapp_manager_rationale_630",
-      "community": 104,
+      "community": 14,
       "norm_label": "verifica se o bot esta pausado via endpoint do bridge e atualiza o mapa de lids."
     },
     {
@@ -13294,7 +13294,7 @@
       "source_location": "L809",
       "_origin": "ast",
       "id": "whatsapp_manager_rationale_809",
-      "community": 84,
+      "community": 18,
       "norm_label": "evita que nomes possessivos/parentesco do andre (como 'pai', 'mae', etc.) sejam"
     },
     {
@@ -13344,7 +13344,7 @@
       "source_location": "L989",
       "_origin": "ast",
       "id": "whatsapp_manager_rationale_989",
-      "community": 18,
+      "community": 14,
       "norm_label": "retorna o status ativo do dono, ou none se inativo/expirado."
     },
     {
@@ -13414,7 +13414,7 @@
       "source_location": "L1462",
       "_origin": "ast",
       "id": "whatsapp_manager_rationale_1462",
-      "community": 22,
+      "community": 68,
       "norm_label": "classifica contatos usando a api do llm (gemini, openai ou openrouter) com base"
     },
     {
@@ -13444,7 +13444,7 @@
       "source_location": "L1700",
       "_origin": "ast",
       "id": "whatsapp_manager_rationale_1700",
-      "community": 50,
+      "community": 68,
       "norm_label": "mescla `secondary` em `primary` in-place.     regras de precedencia (ordem decre"
     },
     {
@@ -13454,7 +13454,7 @@
       "source_location": "L1736",
       "_origin": "ast",
       "id": "whatsapp_manager_rationale_1736",
-      "community": 50,
+      "community": 68,
       "norm_label": "deduplica personal_contacts garantindo uma entrada por contato real.      casos"
     },
     {
@@ -13464,7 +13464,7 @@
       "source_location": "L1806",
       "_origin": "ast",
       "id": "whatsapp_manager_rationale_1806",
-      "community": 50,
+      "community": 19,
       "norm_label": "sincroniza contatos do sqlite local para personal_contacts.json e envia para o g"
     },
     {
@@ -13504,7 +13504,7 @@
       "source_location": "L2707",
       "_origin": "ast",
       "id": "whatsapp_manager_rationale_2707",
-      "community": 47,
+      "community": 38,
       "norm_label": "combina padroes do llm com exemplos de dialogo gerados pelo python.      o llm f"
     },
     {
@@ -13524,7 +13524,7 @@
       "source_location": "L2812",
       "_origin": "ast",
       "id": "whatsapp_manager_rationale_2812",
-      "community": 50,
+      "community": 38,
       "norm_label": "chama o llm para extrair padroes de escrita por relacionamento.      o llm gera"
     },
     {
@@ -13534,7 +13534,7 @@
       "source_location": "L2919",
       "_origin": "ast",
       "id": "whatsapp_manager_rationale_2919",
-      "community": 35,
+      "community": 19,
       "norm_label": "injeta a secao de exemplos no soul_whatsapp.md e faz push para o github.      pr"
     },
     {
@@ -13544,7 +13544,7 @@
       "source_location": "L3007",
       "_origin": "ast",
       "id": "whatsapp_manager_rationale_3007",
-      "community": 35,
+      "community": 19,
       "norm_label": "sobe um arquivo para o github via api rest (get sha \u2192 put content).      args:"
     },
     {
@@ -13574,7 +13574,7 @@
       "source_location": "L3406",
       "_origin": "ast",
       "id": "whatsapp_manager_rationale_3406",
-      "community": 35,
+      "community": 140,
       "norm_label": "envia o arquivo personal_contacts.json local diretamente para o repositorio do g"
     },
     {
@@ -13654,7 +13654,7 @@
       "source_location": "L3931",
       "_origin": "ast",
       "id": "whatsapp_manager_rationale_3931",
-      "community": 84,
+      "community": 18,
       "norm_label": "carrega o arquivo personal_contacts.json e sanitiza cada entrada.      retorna {"
     },
     {
@@ -13704,7 +13704,7 @@
       "source_location": "L4192",
       "_origin": "ast",
       "id": "whatsapp_manager_rationale_4192",
-      "community": 67,
+      "community": 68,
       "norm_label": "classifica (ou re-classifica) um contato em tempo real durante pre_llm_call."
     },
     {
@@ -15068,10 +15068,20 @@
       "norm_label": "instalacao do provedor aisa (aisa cli)"
     },
     {
-      "label": "Conectar o WhatsApp (QR Code)",
+      "label": "Como Usar a AISA CLI",
       "file_type": "document",
       "source_file": "README.md",
       "source_location": "L183",
+      "_origin": "ast",
+      "id": "readme_como_usar_a_aisa_cli",
+      "community": 21,
+      "norm_label": "como usar a aisa cli"
+    },
+    {
+      "label": "Conectar o WhatsApp (QR Code)",
+      "file_type": "document",
+      "source_file": "README.md",
+      "source_location": "L200",
       "_origin": "ast",
       "id": "readme_conectar_o_whatsapp_qr_code",
       "community": 21,
@@ -15081,7 +15091,7 @@
       "label": "Protegendo o Dashboard",
       "file_type": "document",
       "source_file": "README.md",
-      "source_location": "L202",
+      "source_location": "L219",
       "_origin": "ast",
       "id": "readme_protegendo_o_dashboard",
       "community": 21,
@@ -15091,7 +15101,7 @@
       "label": "Portainer (Traefik) \u2014 Basic Auth",
       "file_type": "document",
       "source_file": "README.md",
-      "source_location": "L206",
+      "source_location": "L223",
       "_origin": "ast",
       "id": "readme_portainer_traefik_basic_auth",
       "community": 21,
@@ -15101,7 +15111,7 @@
       "label": "Easypanel \u2014 Password Protection",
       "file_type": "document",
       "source_file": "README.md",
-      "source_location": "L224",
+      "source_location": "L241",
       "_origin": "ast",
       "id": "readme_easypanel_password_protection",
       "community": 21,
@@ -15111,7 +15121,7 @@
       "label": "Comandos no WhatsApp (self-chat)",
       "file_type": "document",
       "source_file": "README.md",
-      "source_location": "L230",
+      "source_location": "L247",
       "_origin": "ast",
       "id": "readme_comandos_no_whatsapp_self_chat",
       "community": 21,
@@ -15121,7 +15131,7 @@
       "label": "Vari\u00e1veis de ambiente completas",
       "file_type": "document",
       "source_file": "README.md",
-      "source_location": "L249",
+      "source_location": "L266",
       "_origin": "ast",
       "id": "readme_vari\u00e1veis_de_ambiente_completas",
       "community": 21,
@@ -15131,7 +15141,7 @@
       "label": "Indispens\u00e1veis",
       "file_type": "document",
       "source_file": "README.md",
-      "source_location": "L251",
+      "source_location": "L268",
       "_origin": "ast",
       "id": "readme_indispens\u00e1veis",
       "community": 21,
@@ -15141,7 +15151,7 @@
       "label": "Providers de IA alternativos",
       "file_type": "document",
       "source_file": "README.md",
-      "source_location": "L263",
+      "source_location": "L280",
       "_origin": "ast",
       "id": "readme_providers_de_ia_alternativos",
       "community": 21,
@@ -15151,7 +15161,7 @@
       "label": "Modelos por fun\u00e7\u00e3o (padr\u00e3o: `gemini-3.1-flash-lite` / provider: `gemini`)",
       "file_type": "document",
       "source_file": "README.md",
-      "source_location": "L272",
+      "source_location": "L289",
       "_origin": "ast",
       "id": "readme_modelos_por_fun\u00e7\u00e3o_padr\u00e3o_gemini_3_1_flash_lite_provider_gemini",
       "community": 21,
@@ -15161,7 +15171,7 @@
       "label": "WhatsApp",
       "file_type": "document",
       "source_file": "README.md",
-      "source_location": "L281",
+      "source_location": "L298",
       "_origin": "ast",
       "id": "readme_whatsapp",
       "community": 21,
@@ -15171,7 +15181,7 @@
       "label": "Sincroniza\u00e7\u00e3o GitHub",
       "file_type": "document",
       "source_file": "README.md",
-      "source_location": "L291",
+      "source_location": "L308",
       "_origin": "ast",
       "id": "readme_sincroniza\u00e7\u00e3o_github",
       "community": 21,
@@ -15181,7 +15191,7 @@
       "label": "Outros",
       "file_type": "document",
       "source_file": "README.md",
-      "source_location": "L299",
+      "source_location": "L316",
       "_origin": "ast",
       "id": "readme_outros",
       "community": 21,
@@ -15191,7 +15201,7 @@
       "label": "Perfil de contato (`personal_contacts.json`)",
       "file_type": "document",
       "source_file": "README.md",
-      "source_location": "L310",
+      "source_location": "L327",
       "_origin": "ast",
       "id": "readme_perfil_de_contato_personal_contacts_json",
       "community": 21,
@@ -15201,7 +15211,7 @@
       "label": "Hooks do plugin",
       "file_type": "document",
       "source_file": "README.md",
-      "source_location": "L339",
+      "source_location": "L356",
       "_origin": "ast",
       "id": "readme_hooks_do_plugin",
       "community": 21,
@@ -15211,7 +15221,7 @@
       "label": "Dedup de respostas duplicadas",
       "file_type": "document",
       "source_file": "README.md",
-      "source_location": "L347",
+      "source_location": "L364",
       "_origin": "ast",
       "id": "readme_dedup_de_respostas_duplicadas",
       "community": 21,
@@ -15221,7 +15231,7 @@
       "label": "Arquivos de configura\u00e7\u00e3o (em `/opt/data/`)",
       "file_type": "document",
       "source_file": "README.md",
-      "source_location": "L358",
+      "source_location": "L375",
       "_origin": "ast",
       "id": "readme_arquivos_de_configura\u00e7\u00e3o_em_opt_data",
       "community": 21,
@@ -15231,7 +15241,7 @@
       "label": "Deploy de atualiza\u00e7\u00f5es",
       "file_type": "document",
       "source_file": "README.md",
-      "source_location": "L371",
+      "source_location": "L388",
       "_origin": "ast",
       "id": "readme_deploy_de_atualiza\u00e7\u00f5es",
       "community": 21,
@@ -15241,7 +15251,7 @@
       "label": "Testes",
       "file_type": "document",
       "source_file": "README.md",
-      "source_location": "L388",
+      "source_location": "L405",
       "_origin": "ast",
       "id": "readme_testes",
       "community": 21,
@@ -15251,7 +15261,7 @@
       "label": "Bancos de dados",
       "file_type": "document",
       "source_file": "README.md",
-      "source_location": "L400",
+      "source_location": "L417",
       "_origin": "ast",
       "id": "readme_bancos_de_dados",
       "community": 21,
@@ -15818,10 +15828,20 @@
       "norm_label": "passo 6.5: instalacao do provedor aisa (aisa cli) \ud83e\udd16"
     },
     {
-      "label": "Passo 7: Personalizar as Regras de Neg\u00f3cio",
+      "label": "Como Usar a AISA CLI \ud83d\udee0\ufe0f",
       "file_type": "document",
       "source_file": "deploy/README.md",
       "source_location": "L279",
+      "_origin": "ast",
+      "id": "deploy_readme_como_usar_a_aisa_cli",
+      "community": 3,
+      "norm_label": "como usar a aisa cli \ud83d\udee0\ufe0f"
+    },
+    {
+      "label": "Passo 7: Personalizar as Regras de Neg\u00f3cio",
+      "file_type": "document",
+      "source_file": "deploy/README.md",
+      "source_location": "L296",
       "_origin": "ast",
       "id": "deploy_readme_passo_7_personalizar_as_regras_de_neg\u00f3cio",
       "community": 3,
@@ -15831,7 +15851,7 @@
       "label": "\ud83d\udcbe Mapa de Persist\u00eancia no Easypanel",
       "file_type": "document",
       "source_file": "deploy/README.md",
-      "source_location": "L291",
+      "source_location": "L308",
       "_origin": "ast",
       "id": "deploy_readme_mapa_de_persist\u00eancia_no_easypanel",
       "community": 3,
@@ -15841,7 +15861,7 @@
       "label": "\ud83e\udd16 Setup Via Conversa com o Hermes (Universal \u2014 Portainer, Easypanel e Hostinger)",
       "file_type": "document",
       "source_file": "deploy/README.md",
-      "source_location": "L302",
+      "source_location": "L319",
       "_origin": "ast",
       "id": "deploy_readme_setup_via_conversa_com_o_hermes_universal_portainer_easypanel_e_hostinger",
       "community": 3,
@@ -15851,7 +15871,7 @@
       "label": "Por que funciona em qualquer ambiente?",
       "file_type": "document",
       "source_file": "deploy/README.md",
-      "source_location": "L402",
+      "source_location": "L419",
       "_origin": "ast",
       "id": "deploy_readme_por_que_funciona_em_qualquer_ambiente",
       "community": 3,
@@ -15861,7 +15881,7 @@
       "label": "\ud83c\udf99\ufe0f Como Receber \u00c1udio e Imagem (Transcri\u00e7\u00e3o e Vis\u00e3o Integradas)",
       "file_type": "document",
       "source_file": "deploy/README.md",
-      "source_location": "L414",
+      "source_location": "L431",
       "_origin": "ast",
       "id": "deploy_readme_como_receber_\u00e1udio_e_imagem_transcri\u00e7\u00e3o_e_vis\u00e3o_integradas",
       "community": 3,
@@ -15871,7 +15891,7 @@
       "label": "\ud83d\udcf8 Recebimento de Imagens (Vis\u00e3o do Bot):",
       "file_type": "document",
       "source_file": "deploy/README.md",
-      "source_location": "L417",
+      "source_location": "L434",
       "_origin": "ast",
       "id": "deploy_readme_recebimento_de_imagens_vis\u00e3o_do_bot",
       "community": 3,
@@ -15881,7 +15901,7 @@
       "label": "\ud83c\udf99\ufe0f Recebimento de \u00c1udios (Transcri\u00e7\u00e3o Integrada):",
       "file_type": "document",
       "source_file": "deploy/README.md",
-      "source_location": "L420",
+      "source_location": "L437",
       "_origin": "ast",
       "id": "deploy_readme_recebimento_de_\u00e1udios_transcri\u00e7\u00e3o_integrada",
       "community": 3,
@@ -15891,7 +15911,7 @@
       "label": "\ud83d\udce7 Como Conectar e Ativar o Suporte via Gmail (OAuth Conversacional)",
       "file_type": "document",
       "source_file": "deploy/README.md",
-      "source_location": "L429",
+      "source_location": "L446",
       "_origin": "ast",
       "id": "deploy_readme_como_conectar_e_ativar_o_suporte_via_gmail_oauth_conversacional",
       "community": 3,
@@ -15901,7 +15921,7 @@
       "label": "1. Garantir as Credenciais do Google na Stack",
       "file_type": "document",
       "source_file": "deploy/README.md",
-      "source_location": "L433",
+      "source_location": "L450",
       "_origin": "ast",
       "id": "deploy_readme_1_garantir_as_credenciais_do_google_na_stack",
       "community": 3,
@@ -15911,7 +15931,7 @@
       "label": "2. Pedir o Link ao Bot (No Console do Hermes ou no Telegram)",
       "file_type": "document",
       "source_file": "deploy/README.md",
-      "source_location": "L439",
+      "source_location": "L456",
       "_origin": "ast",
       "id": "deploy_readme_2_pedir_o_link_ao_bot_no_console_do_hermes_ou_no_telegram",
       "community": 3,
@@ -15921,7 +15941,7 @@
       "label": "3. Entregar o Link de Retorno ao Bot",
       "file_type": "document",
       "source_file": "deploy/README.md",
-      "source_location": "L446",
+      "source_location": "L463",
       "_origin": "ast",
       "id": "deploy_readme_3_entregar_o_link_de_retorno_ao_bot",
       "community": 3,
@@ -15931,7 +15951,7 @@
       "label": "\ud83d\udcbe Persist\u00eancia de Dados e Caminhos",
       "file_type": "document",
       "source_file": "deploy/README.md",
-      "source_location": "L456",
+      "source_location": "L473",
       "_origin": "ast",
       "id": "deploy_readme_persist\u00eancia_de_dados_e_caminhos",
       "community": 3,
@@ -15941,7 +15961,7 @@
       "label": "\ud83d\udccd Caminhos Persistentes (SEMPRE SALVE AQUI):",
       "file_type": "document",
       "source_file": "deploy/README.md",
-      "source_location": "L460",
+      "source_location": "L477",
       "_origin": "ast",
       "id": "deploy_readme_caminhos_persistentes_sempre_salve_aqui",
       "community": 3,
@@ -15951,7 +15971,7 @@
       "label": "\ud83d\udd79\ufe0f Como Usar os Comandos no WhatsApp",
       "file_type": "document",
       "source_file": "deploy/README.md",
-      "source_location": "L469",
+      "source_location": "L486",
       "_origin": "ast",
       "id": "deploy_readme_como_usar_os_comandos_no_whatsapp",
       "community": 3,
@@ -15961,7 +15981,7 @@
       "label": "\ud83e\udd16 Estado do Bot (bot_paused) e Silenciamento",
       "file_type": "document",
       "source_file": "deploy/README.md",
-      "source_location": "L479",
+      "source_location": "L496",
       "_origin": "ast",
       "id": "deploy_readme_estado_do_bot_bot_paused_e_silenciamento",
       "community": 3,
@@ -15971,7 +15991,7 @@
       "label": "1. Pausa Global (`stop_bot` / `start_bot`)",
       "file_type": "document",
       "source_file": "deploy/README.md",
-      "source_location": "L483",
+      "source_location": "L500",
       "_origin": "ast",
       "id": "deploy_readme_1_pausa_global_stop_bot_start_bot",
       "community": 3,
@@ -15981,7 +16001,7 @@
       "label": "2. Silenciamento Tempor\u00e1rio Autom\u00e1tico (10 minutos)",
       "file_type": "document",
       "source_file": "deploy/README.md",
-      "source_location": "L489",
+      "source_location": "L506",
       "_origin": "ast",
       "id": "deploy_readme_2_silenciamento_tempor\u00e1rio_autom\u00e1tico_10_minutos",
       "community": 3,
@@ -15991,7 +16011,7 @@
       "label": "3. Testes de Regress\u00e3o (Automatizados)",
       "file_type": "document",
       "source_file": "deploy/README.md",
-      "source_location": "L496",
+      "source_location": "L513",
       "_origin": "ast",
       "id": "deploy_readme_3_testes_de_regress\u00e3o_automatizados",
       "community": 3,
@@ -16001,7 +16021,7 @@
       "label": "\ud83e\udd16 Automa\u00e7\u00e3o Completa & Auto-Update (Zero Interven\u00e7\u00e3o)",
       "file_type": "document",
       "source_file": "deploy/README.md",
-      "source_location": "L513",
+      "source_location": "L530",
       "_origin": "ast",
       "id": "deploy_readme_automa\u00e7\u00e3o_completa_auto_update_zero_interven\u00e7\u00e3o",
       "community": 3,
@@ -16011,7 +16031,7 @@
       "label": "1. Sincroniza\u00e7\u00e3o Peri\u00f3dica e Inteligente (GitHub \u2794 Servidor)",
       "file_type": "document",
       "source_file": "deploy/README.md",
-      "source_location": "L517",
+      "source_location": "L534",
       "_origin": "ast",
       "id": "deploy_readme_1_sincroniza\u00e7\u00e3o_peri\u00f3dica_e_inteligente_github_servidor",
       "community": 3,
@@ -16021,7 +16041,7 @@
       "label": "2. Auto-Update de C\u00f3digo com Rein\u00edcio Autom\u00e1tico",
       "file_type": "document",
       "source_file": "deploy/README.md",
-      "source_location": "L522",
+      "source_location": "L539",
       "_origin": "ast",
       "id": "deploy_readme_2_auto_update_de_c\u00f3digo_com_rein\u00edcio_autom\u00e1tico",
       "community": 3,
@@ -16031,7 +16051,7 @@
       "label": "3. Classifica\u00e7\u00e3o Din\u00e2mica e Blindagem de Contatos",
       "file_type": "document",
       "source_file": "deploy/README.md",
-      "source_location": "L526",
+      "source_location": "L543",
       "_origin": "ast",
       "id": "deploy_readme_3_classifica\u00e7\u00e3o_din\u00e2mica_e_blindagem_de_contatos",
       "community": 3,
@@ -16041,7 +16061,7 @@
       "label": "\ud83d\udc65 Configura\u00e7\u00e3o Avan\u00e7ada de M\u00faltiplos Perfis (Profiles Nativo) \ud83d\ude80",
       "file_type": "document",
       "source_file": "deploy/README.md",
-      "source_location": "L538",
+      "source_location": "L555",
       "_origin": "ast",
       "id": "deploy_readme_configura\u00e7\u00e3o_avan\u00e7ada_de_m\u00faltiplos_perfis_profiles_nativo",
       "community": 3,
@@ -16051,7 +16071,7 @@
       "label": "Como criar e configurar seus perfis separados:",
       "file_type": "document",
       "source_file": "deploy/README.md",
-      "source_location": "L544",
+      "source_location": "L561",
       "_origin": "ast",
       "id": "deploy_readme_como_criar_e_configurar_seus_perfis_separados",
       "community": 3,
@@ -16061,7 +16081,7 @@
       "label": "\ud83d\ude80 Como Atualizar / Fazer Deploy do Plugin",
       "file_type": "document",
       "source_file": "deploy/README.md",
-      "source_location": "L566",
+      "source_location": "L583",
       "_origin": "ast",
       "id": "deploy_readme_como_atualizar_fazer_deploy_do_plugin",
       "community": 3,
@@ -16071,7 +16091,7 @@
       "label": "\ud83d\udd04 Como Reiniciar a Ponte do WhatsApp de Forma Segura",
       "file_type": "document",
       "source_file": "deploy/README.md",
-      "source_location": "L585",
+      "source_location": "L602",
       "_origin": "ast",
       "id": "deploy_readme_como_reiniciar_a_ponte_do_whatsapp_de_forma_segura",
       "community": 3,
@@ -39700,7 +39720,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "README.md",
-      "source_location": "L358",
+      "source_location": "L375",
       "weight": 1.0,
       "source": "readme_hermes_whatsapp_plugin",
       "target": "readme_arquivos_de_configura\u00e7\u00e3o_em_opt_data",
@@ -39710,7 +39730,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "README.md",
-      "source_location": "L400",
+      "source_location": "L417",
       "weight": 1.0,
       "source": "readme_hermes_whatsapp_plugin",
       "target": "readme_bancos_de_dados",
@@ -39720,7 +39740,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "README.md",
-      "source_location": "L230",
+      "source_location": "L247",
       "weight": 1.0,
       "source": "readme_hermes_whatsapp_plugin",
       "target": "readme_comandos_no_whatsapp_self_chat",
@@ -39730,7 +39750,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "README.md",
-      "source_location": "L183",
+      "source_location": "L200",
       "weight": 1.0,
       "source": "readme_hermes_whatsapp_plugin",
       "target": "readme_conectar_o_whatsapp_qr_code",
@@ -39740,7 +39760,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "README.md",
-      "source_location": "L371",
+      "source_location": "L388",
       "weight": 1.0,
       "source": "readme_hermes_whatsapp_plugin",
       "target": "readme_deploy_de_atualiza\u00e7\u00f5es",
@@ -39760,7 +39780,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "README.md",
-      "source_location": "L339",
+      "source_location": "L356",
       "weight": 1.0,
       "source": "readme_hermes_whatsapp_plugin",
       "target": "readme_hooks_do_plugin",
@@ -39790,7 +39810,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "README.md",
-      "source_location": "L310",
+      "source_location": "L327",
       "weight": 1.0,
       "source": "readme_hermes_whatsapp_plugin",
       "target": "readme_perfil_de_contato_personal_contacts_json",
@@ -39800,7 +39820,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "README.md",
-      "source_location": "L202",
+      "source_location": "L219",
       "weight": 1.0,
       "source": "readme_hermes_whatsapp_plugin",
       "target": "readme_protegendo_o_dashboard",
@@ -39810,7 +39830,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "README.md",
-      "source_location": "L388",
+      "source_location": "L405",
       "weight": 1.0,
       "source": "readme_hermes_whatsapp_plugin",
       "target": "readme_testes",
@@ -39820,7 +39840,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "README.md",
-      "source_location": "L249",
+      "source_location": "L266",
       "weight": 1.0,
       "source": "readme_hermes_whatsapp_plugin",
       "target": "readme_vari\u00e1veis_de_ambiente_completas",
@@ -39854,6 +39874,16 @@
       "weight": 1.0,
       "source": "readme_o_que_faz",
       "target": "readme_para_o_dono_self_chat",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "README.md",
+      "source_location": "L183",
+      "weight": 1.0,
+      "source": "readme_instala\u00e7\u00e3o",
+      "target": "readme_como_usar_a_aisa_cli",
       "confidence_score": 1.0
     },
     {
@@ -39910,7 +39940,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "README.md",
-      "source_location": "L224",
+      "source_location": "L241",
       "weight": 1.0,
       "source": "readme_protegendo_o_dashboard",
       "target": "readme_easypanel_password_protection",
@@ -39920,7 +39950,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "README.md",
-      "source_location": "L206",
+      "source_location": "L223",
       "weight": 1.0,
       "source": "readme_protegendo_o_dashboard",
       "target": "readme_portainer_traefik_basic_auth",
@@ -39930,7 +39960,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "README.md",
-      "source_location": "L251",
+      "source_location": "L268",
       "weight": 1.0,
       "source": "readme_vari\u00e1veis_de_ambiente_completas",
       "target": "readme_indispens\u00e1veis",
@@ -39940,7 +39970,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "README.md",
-      "source_location": "L272",
+      "source_location": "L289",
       "weight": 1.0,
       "source": "readme_vari\u00e1veis_de_ambiente_completas",
       "target": "readme_modelos_por_fun\u00e7\u00e3o_padr\u00e3o_gemini_3_1_flash_lite_provider_gemini",
@@ -39950,7 +39980,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "README.md",
-      "source_location": "L299",
+      "source_location": "L316",
       "weight": 1.0,
       "source": "readme_vari\u00e1veis_de_ambiente_completas",
       "target": "readme_outros",
@@ -39960,7 +39990,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "README.md",
-      "source_location": "L263",
+      "source_location": "L280",
       "weight": 1.0,
       "source": "readme_vari\u00e1veis_de_ambiente_completas",
       "target": "readme_providers_de_ia_alternativos",
@@ -39970,7 +40000,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "README.md",
-      "source_location": "L291",
+      "source_location": "L308",
       "weight": 1.0,
       "source": "readme_vari\u00e1veis_de_ambiente_completas",
       "target": "readme_sincroniza\u00e7\u00e3o_github",
@@ -39980,7 +40010,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "README.md",
-      "source_location": "L281",
+      "source_location": "L298",
       "weight": 1.0,
       "source": "readme_vari\u00e1veis_de_ambiente_completas",
       "target": "readme_whatsapp",
@@ -39990,7 +40020,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "README.md",
-      "source_location": "L347",
+      "source_location": "L364",
       "weight": 1.0,
       "source": "readme_hooks_do_plugin",
       "target": "readme_dedup_de_respostas_duplicadas",
@@ -40380,7 +40410,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "deploy/README.md",
-      "source_location": "L513",
+      "source_location": "L530",
       "weight": 1.0,
       "source": "deploy_readme_hermes_agent_modo_misto_h\u00edbrido_whatsapp_gmail",
       "target": "deploy_readme_automa\u00e7\u00e3o_completa_auto_update_zero_interven\u00e7\u00e3o",
@@ -40390,7 +40420,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "deploy/README.md",
-      "source_location": "L566",
+      "source_location": "L583",
       "weight": 1.0,
       "source": "deploy_readme_hermes_agent_modo_misto_h\u00edbrido_whatsapp_gmail",
       "target": "deploy_readme_como_atualizar_fazer_deploy_do_plugin",
@@ -40400,7 +40430,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "deploy/README.md",
-      "source_location": "L429",
+      "source_location": "L446",
       "weight": 1.0,
       "source": "deploy_readme_hermes_agent_modo_misto_h\u00edbrido_whatsapp_gmail",
       "target": "deploy_readme_como_conectar_e_ativar_o_suporte_via_gmail_oauth_conversacional",
@@ -40430,7 +40460,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "deploy/README.md",
-      "source_location": "L414",
+      "source_location": "L431",
       "weight": 1.0,
       "source": "deploy_readme_hermes_agent_modo_misto_h\u00edbrido_whatsapp_gmail",
       "target": "deploy_readme_como_receber_\u00e1udio_e_imagem_transcri\u00e7\u00e3o_e_vis\u00e3o_integradas",
@@ -40440,7 +40470,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "deploy/README.md",
-      "source_location": "L585",
+      "source_location": "L602",
       "weight": 1.0,
       "source": "deploy_readme_hermes_agent_modo_misto_h\u00edbrido_whatsapp_gmail",
       "target": "deploy_readme_como_reiniciar_a_ponte_do_whatsapp_de_forma_segura",
@@ -40450,7 +40480,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "deploy/README.md",
-      "source_location": "L469",
+      "source_location": "L486",
       "weight": 1.0,
       "source": "deploy_readme_hermes_agent_modo_misto_h\u00edbrido_whatsapp_gmail",
       "target": "deploy_readme_como_usar_os_comandos_no_whatsapp",
@@ -40460,7 +40490,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "deploy/README.md",
-      "source_location": "L538",
+      "source_location": "L555",
       "weight": 1.0,
       "source": "deploy_readme_hermes_agent_modo_misto_h\u00edbrido_whatsapp_gmail",
       "target": "deploy_readme_configura\u00e7\u00e3o_avan\u00e7ada_de_m\u00faltiplos_perfis_profiles_nativo",
@@ -40470,7 +40500,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "deploy/README.md",
-      "source_location": "L479",
+      "source_location": "L496",
       "weight": 1.0,
       "source": "deploy_readme_hermes_agent_modo_misto_h\u00edbrido_whatsapp_gmail",
       "target": "deploy_readme_estado_do_bot_bot_paused_e_silenciamento",
@@ -40490,7 +40520,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "deploy/README.md",
-      "source_location": "L456",
+      "source_location": "L473",
       "weight": 1.0,
       "source": "deploy_readme_hermes_agent_modo_misto_h\u00edbrido_whatsapp_gmail",
       "target": "deploy_readme_persist\u00eancia_de_dados_e_caminhos",
@@ -40500,7 +40530,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "deploy/README.md",
-      "source_location": "L302",
+      "source_location": "L319",
       "weight": 1.0,
       "source": "deploy_readme_hermes_agent_modo_misto_h\u00edbrido_whatsapp_gmail",
       "target": "deploy_readme_setup_via_conversa_com_o_hermes_universal_portainer_easypanel_e_hostinger",
@@ -40560,7 +40590,17 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "deploy/README.md",
-      "source_location": "L291",
+      "source_location": "L279",
+      "weight": 1.0,
+      "source": "deploy_readme_como_implantar_pelo_easypanel_passo_a_passo",
+      "target": "deploy_readme_como_usar_a_aisa_cli",
+      "confidence_score": 1.0
+    },
+    {
+      "relation": "contains",
+      "confidence": "EXTRACTED",
+      "source_file": "deploy/README.md",
+      "source_location": "L308",
       "weight": 1.0,
       "source": "deploy_readme_como_implantar_pelo_easypanel_passo_a_passo",
       "target": "deploy_readme_mapa_de_persist\u00eancia_no_easypanel",
@@ -40640,7 +40680,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "deploy/README.md",
-      "source_location": "L279",
+      "source_location": "L296",
       "weight": 1.0,
       "source": "deploy_readme_como_implantar_pelo_easypanel_passo_a_passo",
       "target": "deploy_readme_passo_7_personalizar_as_regras_de_neg\u00f3cio",
@@ -40650,7 +40690,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "deploy/README.md",
-      "source_location": "L402",
+      "source_location": "L419",
       "weight": 1.0,
       "source": "deploy_readme_setup_via_conversa_com_o_hermes_universal_portainer_easypanel_e_hostinger",
       "target": "deploy_readme_por_que_funciona_em_qualquer_ambiente",
@@ -40660,7 +40700,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "deploy/README.md",
-      "source_location": "L417",
+      "source_location": "L434",
       "weight": 1.0,
       "source": "deploy_readme_como_receber_\u00e1udio_e_imagem_transcri\u00e7\u00e3o_e_vis\u00e3o_integradas",
       "target": "deploy_readme_recebimento_de_imagens_vis\u00e3o_do_bot",
@@ -40670,7 +40710,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "deploy/README.md",
-      "source_location": "L420",
+      "source_location": "L437",
       "weight": 1.0,
       "source": "deploy_readme_como_receber_\u00e1udio_e_imagem_transcri\u00e7\u00e3o_e_vis\u00e3o_integradas",
       "target": "deploy_readme_recebimento_de_\u00e1udios_transcri\u00e7\u00e3o_integrada",
@@ -40680,7 +40720,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "deploy/README.md",
-      "source_location": "L433",
+      "source_location": "L450",
       "weight": 1.0,
       "source": "deploy_readme_como_conectar_e_ativar_o_suporte_via_gmail_oauth_conversacional",
       "target": "deploy_readme_1_garantir_as_credenciais_do_google_na_stack",
@@ -40690,7 +40730,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "deploy/README.md",
-      "source_location": "L439",
+      "source_location": "L456",
       "weight": 1.0,
       "source": "deploy_readme_como_conectar_e_ativar_o_suporte_via_gmail_oauth_conversacional",
       "target": "deploy_readme_2_pedir_o_link_ao_bot_no_console_do_hermes_ou_no_telegram",
@@ -40700,7 +40740,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "deploy/README.md",
-      "source_location": "L446",
+      "source_location": "L463",
       "weight": 1.0,
       "source": "deploy_readme_como_conectar_e_ativar_o_suporte_via_gmail_oauth_conversacional",
       "target": "deploy_readme_3_entregar_o_link_de_retorno_ao_bot",
@@ -40710,7 +40750,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "deploy/README.md",
-      "source_location": "L460",
+      "source_location": "L477",
       "weight": 1.0,
       "source": "deploy_readme_persist\u00eancia_de_dados_e_caminhos",
       "target": "deploy_readme_caminhos_persistentes_sempre_salve_aqui",
@@ -40720,7 +40760,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "deploy/README.md",
-      "source_location": "L483",
+      "source_location": "L500",
       "weight": 1.0,
       "source": "deploy_readme_estado_do_bot_bot_paused_e_silenciamento",
       "target": "deploy_readme_1_pausa_global_stop_bot_start_bot",
@@ -40730,7 +40770,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "deploy/README.md",
-      "source_location": "L489",
+      "source_location": "L506",
       "weight": 1.0,
       "source": "deploy_readme_estado_do_bot_bot_paused_e_silenciamento",
       "target": "deploy_readme_2_silenciamento_tempor\u00e1rio_autom\u00e1tico_10_minutos",
@@ -40740,7 +40780,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "deploy/README.md",
-      "source_location": "L496",
+      "source_location": "L513",
       "weight": 1.0,
       "source": "deploy_readme_estado_do_bot_bot_paused_e_silenciamento",
       "target": "deploy_readme_3_testes_de_regress\u00e3o_automatizados",
@@ -40750,7 +40790,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "deploy/README.md",
-      "source_location": "L517",
+      "source_location": "L534",
       "weight": 1.0,
       "source": "deploy_readme_automa\u00e7\u00e3o_completa_auto_update_zero_interven\u00e7\u00e3o",
       "target": "deploy_readme_1_sincroniza\u00e7\u00e3o_peri\u00f3dica_e_inteligente_github_servidor",
@@ -40760,7 +40800,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "deploy/README.md",
-      "source_location": "L522",
+      "source_location": "L539",
       "weight": 1.0,
       "source": "deploy_readme_automa\u00e7\u00e3o_completa_auto_update_zero_interven\u00e7\u00e3o",
       "target": "deploy_readme_2_auto_update_de_c\u00f3digo_com_rein\u00edcio_autom\u00e1tico",
@@ -40770,7 +40810,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "deploy/README.md",
-      "source_location": "L526",
+      "source_location": "L543",
       "weight": 1.0,
       "source": "deploy_readme_automa\u00e7\u00e3o_completa_auto_update_zero_interven\u00e7\u00e3o",
       "target": "deploy_readme_3_classifica\u00e7\u00e3o_din\u00e2mica_e_blindagem_de_contatos",
@@ -40780,7 +40820,7 @@
       "relation": "contains",
       "confidence": "EXTRACTED",
       "source_file": "deploy/README.md",
-      "source_location": "L544",
+      "source_location": "L561",
       "weight": 1.0,
       "source": "deploy_readme_configura\u00e7\u00e3o_avan\u00e7ada_de_m\u00faltiplos_perfis_profiles_nativo",
       "target": "deploy_readme_como_criar_e_configurar_seus_perfis_separados",
@@ -42538,5 +42578,5 @@
     }
   ],
   "hyperedges": [],
-  "built_at_commit": "6d5945d34e291a0db7dd7fd1ea0c3a06583f52c0"
+  "built_at_commit": "ee257e8d5a7d3f2a3d482c1570704b07b07d7f25"
 }
