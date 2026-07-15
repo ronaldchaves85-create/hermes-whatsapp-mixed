@@ -1,16 +1,16 @@
 # Graph Report - hermes-whatsapp-mixed  (2026-07-14)
 
 ## Corpus Check
-- 59 files · ~112,793 words
+- 59 files · ~112,838 words
 - Verdict: corpus is large enough that graph structure adds value.
 
 ## Summary
-- 1825 nodes · 2352 edges · 140 communities (91 shown, 49 thin omitted)
+- 1825 nodes · 2352 edges · 139 communities (90 shown, 49 thin omitted)
 - Extraction: 98% EXTRACTED · 2% INFERRED · 0% AMBIGUOUS · INFERRED: 40 edges (avg confidence: 0.56)
 - Token cost: 0 input · 0 output
 
 ## Graph Freshness
-- Built from commit: `569f3fd9`
+- Built from commit: `89afff05`
 - Run `git rev-parse HEAD` and compare to check if the graph is stale.
 - Run `graphify update .` after code changes (no API cost).
 
@@ -36,7 +36,6 @@
 - Bot Paused & Silencing checks
 - Deploy Soul WhatsApp specifications
 - System README & deployment instructions
-- External services & updates tests
 - Contact management test cases
 - Contact name resolution & sync
 - Deploy Package Dependencies (Express)
@@ -176,7 +175,7 @@
 ## Import Cycles
 - None detected.
 
-## Communities (140 total, 49 thin omitted)
+## Communities (139 total, 49 thin omitted)
 
 ### Community 0 - "Node.js WhatsApp Bridge"
 Cohesion: 0.03
@@ -249,10 +248,6 @@ Nodes (13): 🚫 Diretrizes de Abordagem e Identificação (CRÍTICO), 🚫 Dire
 ### Community 21 - "System README & deployment instructions"
 Cohesion: 0.06
 Nodes (32): Arquitetura, Arquivos de configuração (em `/opt/data/`), Bancos de dados, Comandos no WhatsApp (self-chat), Conectar o WhatsApp (QR Code), Dedup de respostas duplicadas, Deploy de atualizações, Easypanel (+24 more)
-
-### Community 22 - "External services & updates tests"
-Cohesion: 0.25
-Nodes (5): Verifica que o auto-updater do plugin usa git fetch/reset quando .git existe., Verifica que o classificador de contatos utiliza o modelo configurado no ambient, TestExternalServicesAndUpdates, _classify_contact_via_llm(), Classifica contatos usando a API do LLM (Gemini, OpenAI ou OpenRouter) com base
 
 ### Community 23 - "Contact management test cases"
 Cohesion: 0.15
@@ -340,7 +335,7 @@ Nodes (15): Testa a geração do SOUL_WHATSAPP.md com padrões do LLM + exemplos
 
 ### Community 50 - "Graphify workflows definition"
 Cohesion: 0.07
-Nodes (25): Python unit tests for the whatsapp-manager plugin., Testes para _normalize_brazilian_phone e _normalize_text., Número com 9 extra deve ser normalizado para 8 dígitos locais., Número sem 9 extra não deve ser alterado., Deve ignorar espaços, parênteses, hifens., Número não-brasileiro não deve ser alterado., Deve remover acentos e converter para minúsculas., Garante que sync não substitui nome real por nome genérico 'Contato XXXX'. (+17 more)
+Nodes (24): Testes para _normalize_brazilian_phone e _normalize_text., Número com 9 extra deve ser normalizado para 8 dígitos locais., Número sem 9 extra não deve ser alterado., Deve ignorar espaços, parênteses, hifens., Número não-brasileiro não deve ser alterado., Deve remover acentos e converter para minúsculas., Garante que sync não substitui nome real por nome genérico 'Contato XXXX'., Testa _normalize_brazilian_phone — normalização do 9º dígito. (+16 more)
 
 ### Community 57 - "🟠 Alto (estabilidade e segurança)"
 Cohesion: 0.09
@@ -383,8 +378,8 @@ Cohesion: 0.21
 Nodes (9): Testes para _process_media_message — transcrição de áudio e imagem., Patch das propriedades de config via __get__ no tipo., Sem API key: retorna None., Arquivo de mídia inexistente: retorna None., Tipo de mídia não suportado (vídeo, documento): retorna None., Gemini transcreve áudio com sucesso., Gemini descreve imagem com sucesso., Gemini falha e sem outros providers: retorna None. (+1 more)
 
 ### Community 67 - "TestLiveClassifyContact"
-Cohesion: 0.17
-Nodes (11): Testes para _live_classify_contact., Helper: configura mock SQLite para retornar stats e histórico., Contato novo com mensagens suficientes deve ser classificado via LLM., Sem mensagens no DB, deve retornar None sem chamar LLM., Dono nunca deve ser classificado — deve retornar None imediatamente., manual_relationship definido pelo dono deve sobrescrever o que o LLM classificar, Com poucas mensagens (< mínimo), deve usar classificação padrão sem chamar LLM., Resultado da classificação deve ser gravado em personal_contacts.json. (+3 more)
+Cohesion: 0.10
+Nodes (17): Python unit tests for the whatsapp-manager plugin., Verifica que o auto-updater do plugin usa git fetch/reset quando .git existe., Verifica que o classificador de contatos utiliza o modelo configurado no ambient, Testes para _live_classify_contact., Helper: configura mock SQLite para retornar stats e histórico., Contato novo com mensagens suficientes deve ser classificado via LLM., Sem mensagens no DB, deve retornar None sem chamar LLM., Dono nunca deve ser classificado — deve retornar None imediatamente. (+9 more)
 
 ### Community 68 - "TestFullSummaryFunctions"
 Cohesion: 0.13
@@ -522,9 +517,9 @@ Nodes (4): Docker Compose, Docker Compose EasyPanel, EasyPanel Config, Portainer
 ## Suggested Questions
 _Questions this graph is uniquely positioned to answer:_
 
-- **Why does `TestPostLlmCall` connect `Bridge Node Package Dependencies` to `Graphify workflows definition`, `Base WhatsApp Manager Test Suite`, `TestOwnerCommands`?**
+- **Why does `TestPostLlmCall` connect `Bridge Node Package Dependencies` to `Base WhatsApp Manager Test Suite`, `TestLiveClassifyContact`, `TestOwnerCommands`?**
   _High betweenness centrality (0.018) - this node is a cross-community bridge._
-- **Why does `TestOwnerCommands` connect `TestOwnerCommands` to `Graphify workflows definition`, `Base WhatsApp Manager Test Suite`?**
+- **Why does `TestOwnerCommands` connect `TestOwnerCommands` to `Base WhatsApp Manager Test Suite`, `TestLiveClassifyContact`?**
   _High betweenness centrality (0.013) - this node is a cross-community bridge._
 - **Why does `PluginConfig` connect `WhatsApp Manager Configurations` to `Workspace Setup & Architecture Overview`?**
   _High betweenness centrality (0.013) - this node is a cross-community bridge._

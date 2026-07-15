@@ -166,6 +166,8 @@ Para utilizar o provedor de IA AISA (aisa.one), você pode solicitar diretamente
 Hermes, preciso que você instale a AISA CLI no container.
 Siga os passos abaixo usando suas ferramentas de terminal:
 
+A chave de API já está configurada e disponível nas variáveis de ambiente do container (variável `AISA_API_KEY` vinda da stack do Portainer / Easypanel).
+
 1. Instale a AISA CLI utilizando um prefixo persistente em `/opt/data/.local` para evitar erros de permissão ao tentar instalar globalmente:
    npm install -g @aisa-one/cli --prefix /opt/data/.local
 
@@ -175,8 +177,6 @@ Siga os passos abaixo usando suas ferramentas de terminal:
    aisa --version
    aisa whoami
 ```
-
----
 
 ---
 
