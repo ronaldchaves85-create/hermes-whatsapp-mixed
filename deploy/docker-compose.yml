@@ -131,6 +131,13 @@ services:
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
       - AISA_API_KEY=${AISA_API_KEY:-}
 
+      # Integração MK-AUTH (consulta de clientes e boletos)
+      - MKAUTH_URL=${MKAUTH_URL:-}
+      - MKAUTH_CLIENT_ID=${MKAUTH_CLIENT_ID:-}
+      - MKAUTH_CLIENT_SECRET=${MKAUTH_CLIENT_SECRET:-}
+      - MKAUTH_VERIFY_SSL=${MKAUTH_VERIFY_SSL:-false}
+      - MKAUTH_SYNC_INTERVAL_H=${MKAUTH_SYNC_INTERVAL_H:-6}
+
       # Google OAuth (Calendar, Drive, Gmail)
       - GOOGLE_CLIENT_ID=${GOOGLE_CLIENT_ID:-}
       - GOOGLE_CLIENT_SECRET=${GOOGLE_CLIENT_SECRET:-}

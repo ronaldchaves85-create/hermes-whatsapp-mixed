@@ -3672,6 +3672,7 @@ def _self_update_plugin_code() -> bool:
         "bridge.js": f"{raw_root}/bridge.js",
         "package.json": f"{raw_root}/package.json",
         "google_api.py": f"{raw_root}/google_api.py",
+        "mkauth_client.py": f"{raw_root}/mkauth_client.py",
     }
 
     skills_to_update = {
@@ -4097,6 +4098,7 @@ def _build_support_prompt(
     rules_content: str,
     history_section: str,
     contact_info: dict | None = None,
+    mkauth_block: str = "",
 ) -> dict:
     """Constrói o payload de contexto para todos os contatos externos.
 
@@ -4162,6 +4164,7 @@ def _build_support_prompt(
             "NUNCA use caracteres em chinês, mandarim, japonês ou qualquer outro idioma. "
             "O bot deve responder EXCLUSIVAMENTE em português brasileiro.\n\n"
             f"{contact_block}"
+            f"{mkauth_block}"
             "### BASE DE CONHECIMENTO E REGRAS DE NEGÓCIO ###\n"
             f"{rules_content}\n\n"
             f"{_owner_status_context_block(reveal_status=False)}"
@@ -5367,7 +5370,20 @@ def pre_llm_call(*args, **kwargs):
         _already_notified = _chat_id_for_status in _status_notified
         return _build_personal_prompt(contact_info or {}, _rel or _man_rel, history_section, whatsapp_soul, reveal_status=not _already_notified, rules_content=rules_content)
 
-    return _build_support_prompt(whatsapp_soul, rules_content, history_section, contact_info=contact_info)
+    # ── Integração MK-AUTH: injetar dados reais quando o assunto é cobrança ──
+    mkauth_block = ""
+    try:
+        import mkauth_client as _mk
+        if _mk.config.enabled:
+            _user_msg = kwargs.get("user_message") or (context or {}).get("user_message") or ""
+            if _mk.detect_billing_intent(_user_msg) or _mk.extract_cpf_from_text(_user_msg):
+                mkauth_block = _mk.build_mkauth_context_block(phone_number, _user_msg)
+                if mkauth_block:
+                    logger.info(f"[mkauth] Contexto de cobrança injetado para {phone_number}")
+    except Exception as _mk_err:
+        logger.error(f"[mkauth] Erro na integração (ignorado, atendimento segue): {_mk_err}")
+
+    return _build_support_prompt(whatsapp_soul, rules_content, history_section, contact_info=contact_info, mkauth_block=mkauth_block)
 
 
 _sync_running = threading.Event()  # garante que apenas um sync roda por vez

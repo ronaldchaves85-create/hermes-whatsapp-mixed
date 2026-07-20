@@ -2439,7 +2439,11 @@ class TestRunSyncInBackground(BaseWhatsAppManagerTest):
             time.sleep(0.1)
 
         self.assertTrue(mock_sync.called)
-        # Após conclusão, o lock deve estar limpo
+        # Após conclusão, o lock deve estar limpo — aguardar o finally da thread rodar
+        for _ in range(20):
+            if not whatsapp_manager._sync_running.is_set():
+                break
+            time.sleep(0.1)
         self.assertFalse(whatsapp_manager._sync_running.is_set())
 
     @patch("whatsapp_manager._sync_contacts_from_db_internal", return_value="ok")
