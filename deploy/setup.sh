@@ -345,6 +345,12 @@ echo "⏳ 2. Baixando e aplicando o Patch do WhatsApp..."
 mkdir -p "/opt/data/.hermes/platforms/whatsapp/bridge"
 safe_download "$RAW_ROOT/docs/bridge-artifacts/bridge.js" "/opt/data/.hermes/platforms/whatsapp/bridge/bridge.js" "$CURL_CODE_AUTH_HEADER" "bridge.js"
 safe_download "$RAW_ROOT/docs/bridge-artifacts/package.json" "/opt/data/.hermes/platforms/whatsapp/bridge/package.json" "$CURL_CODE_AUTH_HEADER" "package.json"
+safe_download "$RAW_ROOT/allowlist.js" "/opt/data/.hermes/platforms/whatsapp/bridge/allowlist.js" "$CURL_CODE_AUTH_HEADER" "allowlist.js"
+# Instala as dependências da bridge se ainda não existirem (necessário para ESM imports)
+if [ ! -d "/opt/data/.hermes/platforms/whatsapp/bridge/node_modules" ]; then
+    echo "  📦 Instalando dependências da bridge (npm install)..."
+    (cd /opt/data/.hermes/platforms/whatsapp/bridge && npm install --no-audit --no-fund) && echo "  ✓ Dependências da bridge instaladas." || echo "  ⚠️ Falha no npm install da bridge — instale manualmente."
+fi
 echo "  ✓ Arquivos bridge.js e package.json sincronizados."
 
 # Corrige o desalinhamento de caminhos da sessão do WhatsApp (symlink antiga -> nova)
