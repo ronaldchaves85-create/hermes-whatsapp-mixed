@@ -125,6 +125,12 @@ class PluginConfig:
         return os.getenv("WHATSAPP_OWNER_NUMBER", "").strip()
 
     @property
+    def whatsapp_admin_numbers(self) -> list:
+        """Números extras com poderes de dono (WHATSAPP_ADMIN_NUMBERS, separados por vírgula)."""
+        raw = os.getenv("WHATSAPP_ADMIN_NUMBERS", "")
+        return [n.strip() for n in raw.split(",") if n.strip()]
+
+    @property
     def whatsapp_owner_name(self) -> str:
         return os.getenv("WHATSAPP_OWNER_NAME", "").strip()
 
@@ -624,6 +630,23 @@ def _normalize_brazilian_phone(phone: str) -> str:
         if len(rest) == 9 and rest.startswith("9"):
             clean = f"55{ddd}{rest[1:]}"
     return clean
+
+
+def _is_admin_number(sender: str) -> bool:
+    """True se o número pertence ao dono principal OU a um admin extra.
+
+    Aceita JIDs completos (5591...@s.whatsapp.net), session_ids ou só dígitos.
+    Normaliza o 9º dígito brasileiro em ambos os lados da comparação.
+    """
+    clean = "".join(c for c in (sender or "").split("@")[0].split(":")[0] if c.isdigit())
+    if not clean:
+        return False
+    norm = _normalize_brazilian_phone(clean)
+    for num in [config.whatsapp_owner_number] + config.whatsapp_admin_numbers:
+        c = "".join(ch for ch in (num or "").split("@")[0].split(":")[0] if ch.isdigit())
+        if c and _normalize_brazilian_phone(c) == norm:
+            return True
+    return False
 
 
 def _check_bot_paused() -> bool:
@@ -4555,7 +4578,7 @@ def pre_gateway_dispatch(*args, **kwargs):
         return None  # Não definido → plugin não faz nada
 
     clean_owner = "".join(c for c in owner_number.split("@")[0].split(":")[0] if c.isdigit())
-    is_owner = (_normalize_brazilian_phone(clean_sender) == _normalize_brazilian_phone(clean_owner))
+    is_owner = _is_admin_number(clean_sender)
 
     # Transcrever áudios ENVIADOS pelo André para enriquecer o style learning
     if is_owner and media_info["has_media"] and media_info["media_type"] in ["ptt", "audio"]:
@@ -5245,8 +5268,8 @@ def pre_llm_call(*args, **kwargs):
     clean_sender = "".join(c for c in sender_id.split("@")[0].split(":")[0] if c.isdigit()) if sender_id else ""
     clean_owner = "".join(c for c in owner_number.split("@")[0].split(":")[0] if c.isdigit())
 
-    # ── Modo A: André (dono) ──────────────────────────────────────────────
-    if _normalize_brazilian_phone(clean_sender) == _normalize_brazilian_phone(clean_owner):
+    # ── Modo A: dono ou admin extra ───────────────────────────────────────
+    if _is_admin_number(clean_sender):
         chat_id = _resolve_chat_id(sender_id)
         history_context = _fetch_chat_history(chat_id, limit=50) if chat_id else ""
         history_section = (
@@ -5500,9 +5523,8 @@ def pre_tool_call(*args, **kwargs):
         return None
 
     clean_session = "".join(c for c in session_id.split("@")[0].split(":")[0] if c.isdigit())
-    clean_owner = "".join(c for c in owner_number.split("@")[0].split(":")[0] if c.isdigit())
-    if _normalize_brazilian_phone(clean_session) == _normalize_brazilian_phone(clean_owner):
-        return None  # owner pode usar tools normalmente
+    if _is_admin_number(clean_session):
+        return None  # dono e admins podem usar tools normalmente
 
     logger.info(f"[pre_tool_call] Bloqueando tool para contato session={session_id!r}")
     return "Ferramentas não disponíveis para sessões de contato."
@@ -5533,8 +5555,7 @@ def post_llm_call(*args, **kwargs):
     is_owner_session = False
     if owner_number and session_id:
         clean_session = "".join(c for c in session_id.split("@")[0].split(":")[0] if c.isdigit())
-        clean_owner = "".join(c for c in owner_number.split("@")[0].split(":")[0] if c.isdigit())
-        if clean_session and clean_owner and _normalize_brazilian_phone(clean_session) == _normalize_brazilian_phone(clean_owner):
+        if clean_session and _is_admin_number(clean_session):
             is_owner_session = True
 
     response_text = kwargs.get("assistant_response") or ""

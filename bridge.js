@@ -189,6 +189,25 @@ const PAIR_ONLY = args.includes('--pair-only');
 const WHATSAPP_MODE = getArg('mode', process.env.WHATSAPP_MODE || 'self-chat'); // "bot" or "self-chat"
 const ALLOWED_USERS = parseAllowedUsers(process.env.WHATSAPP_ALLOWED_USERS || '');
 const WHATSAPP_OWNER_NUMBER = (process.env.WHATSAPP_OWNER_NUMBER || '').replace(/\D/g, '');
+
+// Admins extras (WHATSAPP_ADMIN_NUMBERS, separados por vírgula) + dono principal.
+// Inclui variantes com/sem o 9º dígito brasileiro para casar com JIDs do WhatsApp.
+function _brPhoneVariants(num) {
+  const out = [num];
+  if (num.startsWith('55')) {
+    const rest = num.slice(2);
+    if (rest.length === 11 && rest[2] === '9') out.push('55' + rest.slice(0, 2) + rest.slice(3));
+    if (rest.length === 10) out.push('55' + rest.slice(0, 2) + '9' + rest.slice(2));
+  }
+  return out;
+}
+const WHATSAPP_ADMIN_SET = new Set(
+  [process.env.WHATSAPP_OWNER_NUMBER || '', ...(process.env.WHATSAPP_ADMIN_NUMBERS || '').split(',')]
+    .map(n => n.replace(/\D/g, ''))
+    .filter(Boolean)
+    .flatMap(_brPhoneVariants)
+);
+const isAdminNumber = (clean) => Boolean(clean) && WHATSAPP_ADMIN_SET.has(clean);
 const WHATSAPP_CONNECTION_NAME = process.env.WHATSAPP_CONNECTION_NAME || 'Hermes Agent';
 const WHATSAPP_SILENCE_DURATION_MIN = parseInt(process.env.WHATSAPP_SILENCE_DURATION_MIN || '10', 10);
 const SILENCE_DURATION_MS = WHATSAPP_SILENCE_DURATION_MIN * 60 * 1000;
@@ -591,11 +610,11 @@ let onMessagesUpsert = async ({ messages, type }) => {
     const isOwner =
       (myNumber && senderClean === myNumber) ||
       (myLid && senderClean === myLid) ||
-      (WHATSAPP_OWNER_NUMBER && senderClean === WHATSAPP_OWNER_NUMBER);
+      isAdminNumber(senderClean);
 
     const chatNumber = chatId.replace(/@.*/, '').replace(/:.*/, '');
     const isSelfChat = (myNumber && chatNumber === myNumber) || (myLid && chatNumber === myLid);
-    const isOwnerChat = isSelfChat || (WHATSAPP_OWNER_NUMBER && chatNumber === WHATSAPP_OWNER_NUMBER);
+    const isOwnerChat = isSelfChat || isAdminNumber(chatNumber);
 
     if (isOwner && isOwnerChat && !isGroup && !chatId.includes('status')) {
       if (['stop_bot', '!pausar', '!parar'].includes(textLower)) {

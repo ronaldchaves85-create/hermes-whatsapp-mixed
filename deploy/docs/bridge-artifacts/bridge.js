@@ -26,7 +26,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { mkdirSync, readFileSync, writeFileSync, existsSync, readdirSync, unlinkSync, rmSync } from 'fs';
 import { randomBytes } from 'crypto';
-import { execSync } from 'child_process';
+import { execSync, spawn } from 'child_process';
 import { tmpdir } from 'os';
 import qrcode from 'qrcode';
 import qrcodeTerminal from 'qrcode-terminal';
@@ -189,6 +189,25 @@ const PAIR_ONLY = args.includes('--pair-only');
 const WHATSAPP_MODE = getArg('mode', process.env.WHATSAPP_MODE || 'self-chat'); // "bot" or "self-chat"
 const ALLOWED_USERS = parseAllowedUsers(process.env.WHATSAPP_ALLOWED_USERS || '');
 const WHATSAPP_OWNER_NUMBER = (process.env.WHATSAPP_OWNER_NUMBER || '').replace(/\D/g, '');
+
+// Admins extras (WHATSAPP_ADMIN_NUMBERS, separados por vírgula) + dono principal.
+// Inclui variantes com/sem o 9º dígito brasileiro para casar com JIDs do WhatsApp.
+function _brPhoneVariants(num) {
+  const out = [num];
+  if (num.startsWith('55')) {
+    const rest = num.slice(2);
+    if (rest.length === 11 && rest[2] === '9') out.push('55' + rest.slice(0, 2) + rest.slice(3));
+    if (rest.length === 10) out.push('55' + rest.slice(0, 2) + '9' + rest.slice(2));
+  }
+  return out;
+}
+const WHATSAPP_ADMIN_SET = new Set(
+  [process.env.WHATSAPP_OWNER_NUMBER || '', ...(process.env.WHATSAPP_ADMIN_NUMBERS || '').split(',')]
+    .map(n => n.replace(/\D/g, ''))
+    .filter(Boolean)
+    .flatMap(_brPhoneVariants)
+);
+const isAdminNumber = (clean) => Boolean(clean) && WHATSAPP_ADMIN_SET.has(clean);
 const WHATSAPP_CONNECTION_NAME = process.env.WHATSAPP_CONNECTION_NAME || 'Hermes Agent';
 const WHATSAPP_SILENCE_DURATION_MIN = parseInt(process.env.WHATSAPP_SILENCE_DURATION_MIN || '10', 10);
 const SILENCE_DURATION_MS = WHATSAPP_SILENCE_DURATION_MIN * 60 * 1000;
@@ -343,6 +362,35 @@ function buildLidMap() {
   return map;
 }
 let lidToPhone = buildLidMap();
+
+// Persistência do cache de contatos (pushName) entre restarts
+const CONTACTS_CACHE_PATH = path.join('/opt/data/.hermes', 'contacts_cache.json');
+function loadContactsCache() {
+  try {
+    if (existsSync(CONTACTS_CACHE_PATH)) {
+      return JSON.parse(readFileSync(CONTACTS_CACHE_PATH, 'utf8'));
+    }
+  } catch {}
+  return {};
+}
+let _contactsCacheDirty = false;
+function saveContactsCache(contacts) {
+  try {
+    const toSave = {};
+    for (const [jid, c] of Object.entries(contacts)) {
+      const name = c.name || c.notify || c.pushName || c.verifiedName || '';
+      if (name && !jid.endsWith('@g.us') && !jid.endsWith('@broadcast')) {
+        toSave[jid] = { name };
+      }
+    }
+    writeFileSync(CONTACTS_CACHE_PATH, JSON.stringify(toSave), 'utf8');
+    _contactsCacheDirty = false;
+  } catch (e) {
+    console.log(`[contacts-cache] Erro ao salvar: ${e.message}`);
+  }
+}
+// Salva a cada 60s se houver mudanças
+setInterval(() => { if (_contactsCacheDirty && sock?.contacts) saveContactsCache(sock.contacts); }, 60000);
 
 const logger = pino({ level: 'warn' });
 
@@ -562,11 +610,11 @@ let onMessagesUpsert = async ({ messages, type }) => {
     const isOwner =
       (myNumber && senderClean === myNumber) ||
       (myLid && senderClean === myLid) ||
-      (WHATSAPP_OWNER_NUMBER && senderClean === WHATSAPP_OWNER_NUMBER);
+      isAdminNumber(senderClean);
 
     const chatNumber = chatId.replace(/@.*/, '').replace(/:.*/, '');
     const isSelfChat = (myNumber && chatNumber === myNumber) || (myLid && chatNumber === myLid);
-    const isOwnerChat = isSelfChat || (WHATSAPP_OWNER_NUMBER && chatNumber === WHATSAPP_OWNER_NUMBER);
+    const isOwnerChat = isSelfChat || isAdminNumber(chatNumber);
 
     if (isOwner && isOwnerChat && !isGroup && !chatId.includes('status')) {
       if (['stop_bot', '!pausar', '!parar'].includes(textLower)) {
@@ -614,6 +662,7 @@ let onMessagesUpsert = async ({ messages, type }) => {
 
     // Handle fromMe messages based on mode
     if (msg.key.fromMe) {
+      console.log(`[bridge-debug] fromMe msg: chatId=${chatId} isSelfChat=${isSelfChat} isGroup=${isGroup}`);
       if (isGroup || chatId.includes('status')) continue;
 
       if (!isSelfChat && !recentlySentIds.has(msg.key.id)) {
@@ -634,10 +683,10 @@ let onMessagesUpsert = async ({ messages, type }) => {
       // Self-chat mode or self-chat in bot mode: only allow messages in the user's own self-chat
       if (!isSelfChat) {
         const isBotReply = recentlySentIds.has(msg.key.id) || (REPLY_PREFIX && getMessageContent(msg).conversation?.startsWith(REPLY_PREFIX));
-        if (isBotReply || WHATSAPP_MODE === 'bot') {
+        if (isBotReply) {
           continue;
         }
-        // Manual message sent by owner on their phone: let it flow to queue so it can be saved in SQLite history.
+        // _ownerPersist flag: persist to SQLite after body is extracted below
       }
     }
 
@@ -753,9 +802,89 @@ let onMessagesUpsert = async ({ messages, type }) => {
       }
     }
 
+    // Contact card (vCard) shared in chat
+    if (!body && (messageContent.contactMessage || messageContent.contactsArrayMessage)) {
+      const contacts = messageContent.contactsArrayMessage?.contacts || (messageContent.contactMessage ? [messageContent.contactMessage] : []);
+      const cards = [];
+      for (const c of contacts) {
+        const vcard = c.vcard || '';
+        const displayName = c.displayName || '';
+        // Extract phone from TEL line in vCard
+        const telMatch = vcard.match(/TEL[^:\n]*:([+\d\s\-().]+)/i);
+        const phone = telMatch ? telMatch[1].replace(/\D/g, '') : '';
+        const name = displayName || (vcard.match(/FN:(.+)/)?.[1]?.trim()) || '';
+        if (phone || name) {
+          cards.push(`${name}|${phone}`);
+        }
+      }
+      if (cards.length > 0) {
+        body = `[CONTACT_CARD: ${cards.join('; ')}]`;
+        console.log(`[bridge] contact card detected: ${body}`);
+      }
+    }
+
     // For media without caption, use a placeholder so the API message is never empty
     if (hasMedia && !body) {
       body = `[${mediaType} received]`;
+    }
+
+    // Persist owner's manual messages to SQLite for style learning (works for @lid and @s.whatsapp.net)
+    if (msg.key.fromMe && !isGroup && !isSelfChat && body && body.trim() && !recentlySentIds.has(msg.key.id)) {
+      try {
+        const _dbPath = '/opt/data/.hermes/whatsapp_messages.db';
+        const _ts = Math.floor((msg.messageTimestamp?.toNumber ? msg.messageTimestamp.toNumber() : Number(msg.messageTimestamp)) || Date.now() / 1000);
+        const _msgId = msg.key.id || `owner_${chatId}_${_ts}`;
+        const _ownerSid = process.env.WHATSAPP_OWNER_NUMBER || chatId;
+        const _pyScript = [
+          'import sqlite3, sys',
+          'args = sys.argv[1:]',
+          "conn = sqlite3.connect(args[0])",
+          "conn.execute('INSERT OR IGNORE INTO messages (chat_id,sender_id,sender_name,message_id,message_type,body,timestamp,from_me) VALUES (?,?,?,?,?,?,?,1)', [args[1],args[2],args[3],args[4],args[5],args[6],int(args[7])])",
+          "conn.commit()",
+          "conn.close()",
+        ].join('\n');
+        const proc = spawn('python3', ['-c', _pyScript, _dbPath, chatId, _ownerSid, 'André Alencar', _msgId, 'text', body, String(_ts)], { stdio: 'pipe' });
+        proc.on('close', (code) => {
+          if (code === 0) console.log(`[bridge-owner-msg] Gravado: chat=${chatId} body="${body.slice(0, 60)}"`);
+          else proc.stderr.on('data', (d) => console.log(`[bridge-owner-msg] Erro: ${d.toString().slice(0, 100)}`));
+        });
+      } catch (e) {
+        console.log(`[bridge-owner-msg] Exceção: ${e.message?.slice(0, 100)}`);
+      }
+    }
+
+    // Persistir mensagens recebidas no SQLite para o style learning capturar contexto
+    if (!msg.key.fromMe && !isGroup && !isSelfChat && body && body.trim()) {
+      try {
+        const _dbPath = '/opt/data/.hermes/whatsapp_messages.db';
+        const _ts = Math.floor((msg.messageTimestamp?.toNumber ? msg.messageTimestamp.toNumber() : Number(msg.messageTimestamp)) || Date.now() / 1000);
+        const _msgId = msg.key.id || `recv_${chatId}_${_ts}`;
+        const _senderName = msg.pushName || senderId.replace(/@.*/, '');
+        const _pyScript = [
+          'import sqlite3, sys',
+          'args = sys.argv[1:]',
+          "conn = sqlite3.connect(args[0])",
+          "conn.execute('INSERT OR IGNORE INTO messages (chat_id,sender_id,sender_name,message_id,message_type,body,timestamp,from_me) VALUES (?,?,?,?,?,?,?,0)', [args[1],args[2],args[3],args[4],args[5],args[6],int(args[7])])",
+          "conn.commit()",
+          "conn.close()",
+        ].join('\n');
+        const proc = spawn('python3', ['-c', _pyScript, _dbPath, chatId, senderId, _senderName, _msgId, 'text', body, String(_ts)], { stdio: 'pipe' });
+        proc.on('close', (code) => {
+          if (code !== 0) proc.stderr.on('data', (d) => console.log(`[bridge-recv-msg] Erro: ${d.toString().slice(0, 100)}`));
+        });
+      } catch (e) {
+        console.log(`[bridge-recv-msg] Exceção: ${e.message?.slice(0, 100)}`);
+      }
+    }
+
+    // Capturar pushName de mensagens recebidas e salvar em sock.contacts
+    if (!msg.key.fromMe && msg.pushName && sock && sock.contacts) {
+      const _existingContact = sock.contacts[chatId] || {};
+      if (!_existingContact.name && !_existingContact.notify) {
+        sock.contacts[chatId] = { ..._existingContact, name: msg.pushName, pushName: msg.pushName };
+        sock.contacts[senderId] = { ...(sock.contacts[senderId] || {}), name: msg.pushName, pushName: msg.pushName };
+        _contactsCacheDirty = true;
+      }
     }
 
     // Ignore Hermes' own reply messages in self-chat mode to avoid loops.
@@ -796,6 +925,7 @@ let onMessagesUpsert = async ({ messages, type }) => {
       hasQuotedMessage,
       botIds,
       timestamp: msg.messageTimestamp,
+      fromMe: !!msg.key.fromMe,
     };
 
     // ── DEBOUNCE PROGRESSIVO: apenas mensagens de texto puro ─────────────────
@@ -845,6 +975,40 @@ let onMessagesUpsert = async ({ messages, type }) => {
   }
 };
 
+// Grava lid-mapping-{phone}.json se ainda não existe, sem sobrescrever mapeamentos existentes.
+// phone deve ser apenas dígitos (ex: "558698412942").
+function _persistLidMapping(lid, phone) {
+  if (!lid || !phone || !/^\d+$/.test(phone)) return;
+  const filePath = path.join(SESSION_DIR, `lid-mapping-${phone}.json`);
+  try {
+    if (!existsSync(filePath)) {
+      writeFileSync(filePath, JSON.stringify(lid), 'utf8');
+      lidToPhone[lid] = phone;
+    }
+  } catch {}
+}
+
+// Tenta extrair o phone de um contato @lid usando o batch atual e sock.contacts.
+// Retorna apenas dígitos ou null.
+function _phoneFromLidContact(lid, batchContacts) {
+  // 1. Mesmo cleanJid no batch com sufixo @s.whatsapp.net
+  for (const c of (batchContacts || [])) {
+    if (!c.id) continue;
+    const cClean = String(c.id).split(':')[0].split('@')[0];
+    if (cClean === lid && c.id.endsWith('@s.whatsapp.net')) {
+      return cClean.replace(/\D/g, '');
+    }
+  }
+  // 2. sock.contacts já tem entrada @s.whatsapp.net para esse cleanJid
+  const existing = sock?.contacts?.[lid + '@s.whatsapp.net'];
+  if (existing?.id) {
+    const phone = String(existing.id).split(':')[0].split('@')[0].replace(/\D/g, '');
+    if (phone) return phone;
+  }
+  // 3. campo phoneNumber no próprio contato (Baileys expõe em alguns builds)
+  return null;
+}
+
 function handleContactsSet({ contacts }) {
   if (contacts) {
     for (const contact of contacts) {
@@ -852,7 +1016,12 @@ function handleContactsSet({ contacts }) {
       const cleanJid = String(contact.id).split(':')[0].split('@')[0];
       sock.contacts[contact.id] = contact;
       sock.contacts[cleanJid + '@s.whatsapp.net'] = contact;
+      if (contact.id.endsWith('@lid')) {
+        const phone = _phoneFromLidContact(cleanJid, contacts);
+        if (phone) _persistLidMapping(cleanJid, phone);
+      }
     }
+    _contactsCacheDirty = true;
   }
 }
 
@@ -863,7 +1032,12 @@ function handleContactsUpsert(contacts) {
       const cleanJid = String(contact.id).split(':')[0].split('@')[0];
       sock.contacts[contact.id] = contact;
       sock.contacts[cleanJid + '@s.whatsapp.net'] = contact;
+      if (contact.id.endsWith('@lid')) {
+        const phone = _phoneFromLidContact(cleanJid, contacts);
+        if (phone) _persistLidMapping(cleanJid, phone);
+      }
     }
+    _contactsCacheDirty = true;
   }
 }
 
@@ -876,7 +1050,12 @@ function handleContactsUpdate(updates) {
       const merged = { ...current, ...update };
       sock.contacts[update.id] = merged;
       sock.contacts[cleanJid + '@s.whatsapp.net'] = merged;
+      if (update.id.endsWith('@lid')) {
+        const phone = _phoneFromLidContact(cleanJid, updates);
+        if (phone) _persistLidMapping(cleanJid, phone);
+      }
     }
+    _contactsCacheDirty = true;
   }
 }
 
@@ -887,6 +1066,10 @@ function handleMessagingHistorySet({ contacts }) {
       const cleanJid = String(contact.id).split(':')[0].split('@')[0];
       sock.contacts[contact.id] = contact;
       sock.contacts[cleanJid + '@s.whatsapp.net'] = contact;
+      if (contact.id.endsWith('@lid')) {
+        const phone = _phoneFromLidContact(cleanJid, contacts);
+        if (phone) _persistLidMapping(cleanJid, phone);
+      }
     }
   }
 }
@@ -960,7 +1143,8 @@ async function startSocket() {
     },
   });
 
-  sock.contacts = {};
+  sock.contacts = loadContactsCache();
+  console.log(`[contacts-cache] ${Object.keys(sock.contacts).length} contatos carregados do cache`);
 
   sock.ev.on('contacts.set', handleContactsSet);
   sock.ev.on('contacts.upsert', handleContactsUpsert);
@@ -1398,7 +1582,13 @@ messagingRouter.post('/send', async (req, res) => {
       return res.json({ success: true, info: 'System status/error message blocked and logged' });
     }
 
-    const chunks = splitLongMessage(formatOutgoingMessage(message));
+    // Strip EXEC: lines before sending — they are system commands, never user-visible
+    const cleanedMessage = stripExecLines(message);
+    if (cleanedMessage !== message) {
+      console.log(`[bridge] EXEC: lines stripped from outgoing message to ${chatId}`);
+    }
+
+    const chunks = splitLongMessage(formatOutgoingMessage(cleanedMessage));
     const messageIds = [];
     for (let i = 0; i < chunks.length; i += 1) {
       const sent = await sendWithTimeout(chatId, { text: chunks[i] });
@@ -1600,6 +1790,55 @@ adminRouter.get('/chat/:id', async (req, res) => {
 });
 
 // Resolver nome de contato via WhatsApp (consulta sock.contacts)
+adminRouter.get('/contacts/search', (req, res) => {
+  const query = (req.query.name || '').trim().toLowerCase();
+  if (!query) return res.status(400).json({ error: 'name query required' });
+  if (!sock || !sock.contacts) return res.json({ results: [] });
+
+  const normalize = (s) => (s || '').toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
+  const queryNorm = normalize(query);
+  const results = [];
+
+  for (const [jid, contact] of Object.entries(sock.contacts)) {
+    if (jid.endsWith('@g.us') || jid.endsWith('@broadcast')) continue;
+    const name = contact.name || contact.verifiedName || contact.pushName || contact.notify || '';
+    const nameNorm = normalize(name);
+    if (name && (nameNorm.includes(queryNorm) || queryNorm.includes(nameNorm))) {
+      results.push({ jid, name });
+    }
+  }
+
+  // Também busca no contactNameCache
+  for (const [cleanJid, cached] of contactNameCache.entries()) {
+    if (cached.expiresAt > Date.now()) {
+      const nameNorm = normalize(cached.name || '');
+      if (cached.name && (nameNorm.includes(queryNorm) || queryNorm.includes(nameNorm))) {
+        const jid = cleanJid.includes('@') ? cleanJid : `${cleanJid}@s.whatsapp.net`;
+        if (!results.find(r => r.jid === jid)) {
+          results.push({ jid, name: cached.name });
+        }
+      }
+    }
+  }
+
+  res.json({ results });
+});
+
+adminRouter.get('/contacts/all', (req, res) => {
+  if (!sock || !sock.contacts) return res.json({ contacts: [] });
+  const contacts = [];
+  const seen = new Set();
+  for (const [jid, contact] of Object.entries(sock.contacts)) {
+    if (jid.endsWith('@g.us') || jid.endsWith('@broadcast')) continue;
+    const cleanJid = jid.split(':')[0] + (jid.includes('@') ? '@' + jid.split('@')[1] : '');
+    if (seen.has(cleanJid)) continue;
+    seen.add(cleanJid);
+    const name = contact.name || contact.verifiedName || contact.notify || contact.pushName || '';
+    if (name) contacts.push({ jid: cleanJid, name });
+  }
+  res.json({ contacts });
+});
+
 adminRouter.get('/contact/:jid', async (req, res) => {
   const jid = req.params.jid;
   if (!jid) {
@@ -1674,7 +1913,8 @@ export {
   resolveContactName,
   loadEnv,
   runSelfDiagnostics,
-  clearRecentlyProcessedIds
+  clearRecentlyProcessedIds,
+  stripExecLines,
 };
 
 function getBotPaused() { return botPaused; }
@@ -1686,3 +1926,6 @@ function getMessageQueue() { return messageQueue; }
 function setSock(s) { sock = s; }
 function getRecentLogs() { return recentLogs; }
 function clearRecentlyProcessedIds() { recentlyProcessedIds.clear(); }
+function stripExecLines(text) {
+  return (text || '').replace(/^EXEC:\s*\S+.*$/gim, '').replace(/\n{3,}/g, '\n\n').trim();
+}
