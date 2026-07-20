@@ -1,0 +1,124 @@
+# ==============================================================================
+# Hermes + WhatsApp Bridge — DEPLOY EM SERVIDOR LOCAL (rede interna, sem domínio)
+# ==============================================================================
+#
+# Uso:
+#   1. Copie este arquivo e o .env.local.example para uma pasta do servidor
+#   2. Renomeie .env.local.example para .env e preencha as variáveis
+#   3. docker compose -f docker-compose.local.yml up -d
+#
+# Acessos (troque SEU_IP pelo IP da máquina na rede, ex: 192.168.0.50):
+#   Dashboard:  http://SEU_IP:9119
+#   API REST:   http://SEU_IP:8642
+#   QR Code:    http://SEU_IP:3000/whatsapp/qr
+#   Status:     http://SEU_IP:3000/whatsapp/status
+#
+# ⚠️ Este compose NÃO expõe nada na internet — use apenas em rede local
+#    confiável. O Dashboard dá acesso a terminal e conversas: proteja a rede.
+# ==============================================================================
+
+services:
+  hermes:
+    image: nousresearch/hermes-agent:v2026.5.16
+    restart: unless-stopped
+    # Micro-proxy TCP: expõe a bridge internamente como localhost:3000 p/ o plugin
+    command: ["bash", "-c", "node -e \"process.on('uncaughtException', () => {}); const net = require('net'); net.createServer(s => { const c = net.connect(3000, 'whatsapp-bridge'); s.pipe(c).pipe(s); c.on('error', () => s.destroy()); s.on('error', () => c.destroy()); }).listen(3000, '127.0.0.1');\" & exec hermes gateway run"]
+
+    ports:
+      - "9119:9119"   # Dashboard + WebSocket
+      - "8642:8642"   # API REST
+
+    volumes:
+      - hermes_data:/opt/data
+
+    environment:
+      # Caminhos internos — não alterar
+      - HOME=/opt/data
+      - HERMES_HOME=/opt/data/.hermes
+      - PATH=/opt/hermes/.venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+      - WORKSPACE=/opt/data/workspace
+      - HERMES_WORKSPACE=/opt/data/workspace
+      - TZ=${TZ:-America/Sao_Paulo}
+
+      # Indispensáveis
+      - API_SERVER_KEY=${API_SERVER_KEY}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
+      - WHATSAPP_OWNER_NUMBER=${WHATSAPP_OWNER_NUMBER}
+      - WHATSAPP_OWNER_NAME=${WHATSAPP_OWNER_NAME}
+
+      # Providers de IA alternativos
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - AISA_API_KEY=${AISA_API_KEY:-}
+
+      # Integração MK-AUTH (deixe vazio até a fase de integração)
+      - MKAUTH_URL=${MKAUTH_URL:-}
+      - MKAUTH_CLIENT_ID=${MKAUTH_CLIENT_ID:-}
+      - MKAUTH_CLIENT_SECRET=${MKAUTH_CLIENT_SECRET:-}
+      - MKAUTH_VERIFY_SSL=${MKAUTH_VERIFY_SSL:-false}
+      - MKAUTH_SYNC_INTERVAL_H=${MKAUTH_SYNC_INTERVAL_H:-6}
+
+      # Modelos por função (padrão: Gemini)
+      - WHATSAPP_OWNER_MODEL=${WHATSAPP_OWNER_MODEL:-gemini-3.1-flash-lite}
+      - WHATSAPP_OWNER_PROVIDER=${WHATSAPP_OWNER_PROVIDER:-gemini}
+      - WHATSAPP_CLIENT_MODEL=${WHATSAPP_CLIENT_MODEL:-gemini-3.1-flash-lite}
+      - WHATSAPP_CLIENT_PROVIDER=${WHATSAPP_CLIENT_PROVIDER:-gemini}
+      - WHATSAPP_CLIENT_MEDIA_MODEL=${WHATSAPP_CLIENT_MEDIA_MODEL:-gemini-3.1-flash-lite}
+      - WHATSAPP_CONTACT_CLASSIFIER_MODEL=${WHATSAPP_CONTACT_CLASSIFIER_MODEL:-gemini-3.1-flash-lite}
+
+      # WhatsApp
+      - WHATSAPP_ENABLED=${WHATSAPP_ENABLED:-true}
+      - WHATSAPP_MODE=${WHATSAPP_MODE:-bot}
+      - WHATSAPP_ALLOWED_USERS=${WHATSAPP_ALLOWED_USERS:-*}
+      - WHATSAPP_CONNECTION_NAME=${WHATSAPP_CONNECTION_NAME:-BotFinanceiro}
+      - WHATSAPP_QR_PATH=${WHATSAPP_QR_PATH:-/whatsapp}
+      - WHATSAPP_BRIDGE_URL=http://whatsapp-bridge:3000
+
+      # Sincronização de configuração via GitHub (fork do projeto)
+      - HERMES_SETUP_GITHUB_USER=${HERMES_SETUP_GITHUB_USER:-}
+      - CONFIG_REPO=${CONFIG_REPO:-}
+      - CONFIG_GITHUB_TOKEN=${CONFIG_GITHUB_TOKEN:-}
+
+      # Dashboard e API
+      - HERMES_DASHBOARD_PORT=9119
+      - HERMES_API_TIMEOUT=${HERMES_API_TIMEOUT:-1800}
+      - MAX_TURNS=${MAX_TURNS:-8}
+      - GATEWAY_ALLOW_ALL_USERS=${GATEWAY_ALLOW_ALL_USERS:-false}
+
+    networks:
+      - hermes_net
+
+  whatsapp-bridge:
+    image: nousresearch/hermes-agent:v2026.5.16
+    restart: unless-stopped
+    # Aguarda o bridge.js ser copiado para o volume antes de iniciar.
+    command: ["bash", "-c", "while [ ! -f /opt/data/.hermes/platforms/whatsapp/bridge/bridge.js ]; do sleep 1; done && node /opt/data/.hermes/platforms/whatsapp/bridge/bridge.js --port 3000 --session /opt/data/.hermes/platforms/whatsapp/session --mode bot || (echo 'Cleaning session...' && rm -rf /opt/data/.hermes/platforms/whatsapp/session/* && exit 1)"]
+
+    ports:
+      - "3000:3000"   # QR Code e status (http://SEU_IP:3000/whatsapp/qr)
+
+    volumes:
+      - hermes_data:/opt/data
+
+    environment:
+      - HOME=/opt/data
+      - HERMES_HOME=/opt/data/.hermes
+      - NODE_PATH=/opt/hermes/scripts/whatsapp-bridge/node_modules
+      - TZ=${TZ:-America/Sao_Paulo}
+      - WHATSAPP_MODE=${WHATSAPP_MODE:-bot}
+      - WHATSAPP_ALLOWED_USERS=${WHATSAPP_ALLOWED_USERS:-*}
+      - WHATSAPP_OWNER_NUMBER=${WHATSAPP_OWNER_NUMBER}
+      - WHATSAPP_CONNECTION_NAME=${WHATSAPP_CONNECTION_NAME:-BotFinanceiro}
+      - WHATSAPP_CLIENT_MEDIA_MODEL=${WHATSAPP_CLIENT_MEDIA_MODEL:-gemini-3.1-flash-lite}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
+      - OPENROUTER_API_KEY=${OPENROUTER_API_KEY:-}
+
+    networks:
+      - hermes_net
+
+volumes:
+  hermes_data:
+
+networks:
+  hermes_net:
