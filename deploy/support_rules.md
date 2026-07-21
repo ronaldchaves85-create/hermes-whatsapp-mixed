@@ -46,8 +46,10 @@ o que o bot sabe sobre a empresa. Mantenha atualizado!
 - **Formas de pagamento:** dinheiro (no escritório) ou **boleto** — o boleto pode ser pago por **PIX pelo QR Code** que acompanha o próprio boleto.
 - **Vencimento:** o cliente escolhe entre os dias **1, 10 ou 20** de cada mês.
 - **Atraso:** após o dia do vencimento é cobrado **R$ 10,00 adicional**. A internet é **bloqueada 5 dias após o vencimento** se não houver pagamento.
-- **2ª via de boleto:** por enquanto, orientar o cliente a chamar o atendimento no **(91) 98599-4245**. (Quando a integração com o sistema estiver ativa, o próprio bot enviará os dados da fatura.)
-- O bot PODE informar sobre débitos e valores em aberto quando tiver esses dados no contexto. Se não tiver os dados, orienta o atendimento humano — NUNCA inventa valores, datas ou códigos.
+- **2ª via de boleto / consulta de fatura:** o bot TEM acesso ao sistema de cobrança. Quando a conversa contiver a seção "DADOS DO CLIENTE (MK-AUTH)", use esses dados para responder DIRETAMENTE: informe valor, vencimento e envie a linha digitável e/ou o PIX copia e cola em linha separada. NÃO mande o cliente para o atendimento nesses casos — resolver a fatura é o seu trabalho.
+- Se a seção de dados disser que o número NÃO foi localizado no cadastro, peça o CPF do titular para localizar (não direcione ao atendimento ainda).
+- Só oriente o atendimento humano (91) 98599-4245 como último recurso: se mesmo com o CPF não encontrar o cadastro, ou se o cliente quiser negociar/contestar valores.
+- NUNCA invente valores, datas, linha digitável ou códigos PIX — use somente o que estiver na seção de dados.
 
 ---
 
@@ -71,7 +73,7 @@ o que o bot sabe sobre a empresa. Mantenha atualizado!
 
 ## ❓ Perguntas frequentes
 
-- **"Qual minha data de vencimento?"** → Se o dado estiver no contexto (integração do sistema), informar. Se não estiver, explicar que os vencimentos são todo dia 1, 10 ou 20 conforme o cadastro, e que o atendimento (91) 98599-4245 confirma qual é o do cliente.
+- **"Qual minha data de vencimento?"** → Se houver a seção "DADOS DO CLIENTE (MK-AUTH)" no contexto, responder com o vencimento real. Se o número não foi localizado, pedir o CPF. Vencimentos possíveis: dia 1, 10 ou 20.
 - **"Quais os planos?"** → Listar os 3 planos residenciais com velocidade e preço. Perguntar onde o cliente mora para orientar sobre a taxa de instalação.
 - **"Vocês atendem em [local]?"** → Cidade de Acará e PA-252 até o KM 18: sim. Ramais e outros pontos: orientar a confirmar com o atendimento (91) 98599-4245.
 - **"Como pago meu boleto?"** → Pelo PIX usando o QR Code do próprio boleto, ou em dinheiro no escritório (Av. Comandante Pedro Vinagre, ao lado do Hotel Fonseca).
