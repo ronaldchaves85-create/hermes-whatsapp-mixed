@@ -83,6 +83,22 @@ class MkAuthConfig:
             return 50 * 60
 
     @property
+    def data_dir(self) -> str:
+        return os.environ.get("MKAUTH_DATA_DIR", "/opt/data")
+
+    @property
+    def enrich_enabled(self) -> bool:
+        """Enriquecimento de telefones via /api/cliente/show em background."""
+        return os.environ.get("MKAUTH_ENRICH", "true").strip().lower() in ("1", "true", "yes")
+
+    @property
+    def titulos_ttl_s(self) -> int:
+        try:
+            return int(float(os.environ.get("MKAUTH_TITULOS_TTL_MIN", "10")) * 60)
+        except ValueError:
+            return 600
+
+    @property
     def enabled(self) -> bool:
         return bool(self.url and self.client_id and self.client_secret)
 
@@ -139,6 +155,16 @@ class MkAuthClient:
         self._clients_ts: float = 0.0
         self._phone_index: dict[str, dict] = {}
         self._cpf_index: dict[str, dict] = {}
+        self._login_index: dict[str, dict] = {}
+        # Cache de títulos (evita baixar a listagem completa a cada consulta)
+        self._titulos: list[dict] = []
+        self._titulos_ts: float = 0.0
+        # Enriquecimento de telefones (via /api/cliente/show) e vínculos memorizados
+        self._enrich_running = threading.Event()
+        self._persist_loaded = False
+        self._phone_to_login: dict[str, str] = {}
+        self._enriched_logins: set = set()
+        self._bindings: dict[str, str] = {}
 
     # ── HTTP ────────────────────────────────────────────────────────────────
 
@@ -207,7 +233,54 @@ class MkAuthClient:
             return candidate
         return None
 
-    def _request(self, method: str, path: str, payload: dict | None = None, _retry: bool = True):
+    # ── Persistência local (índice de telefones e vínculos) ────────────────
+
+    def _persist_path(self, name: str) -> str:
+        return os.path.join(config.data_dir, name)
+
+    def _load_persisted(self) -> None:
+        if self._persist_loaded:
+            return
+        self._persist_loaded = True
+        try:
+            with open(self._persist_path("mkauth_phone_index.json"), encoding="utf-8") as f:
+                j = json.load(f)
+            self._phone_to_login = dict(j.get("phone_to_login", {}))
+            self._enriched_logins = set(j.get("enriched_logins", []))
+            logger.info(f"[mkauth] Índice de telefones carregado: {len(self._phone_to_login)} números.")
+        except (OSError, ValueError):
+            pass
+        try:
+            with open(self._persist_path("mkauth_bindings.json"), encoding="utf-8") as f:
+                self._bindings = dict(json.load(f))
+        except (OSError, ValueError):
+            pass
+
+    def _save_phone_index(self) -> None:
+        try:
+            with open(self._persist_path("mkauth_phone_index.json"), "w", encoding="utf-8") as f:
+                json.dump({"phone_to_login": self._phone_to_login,
+                           "enriched_logins": sorted(self._enriched_logins)}, f, ensure_ascii=False)
+        except OSError as e:
+            logger.warning(f"[mkauth] Falha ao salvar índice de telefones: {e}")
+
+    def save_binding(self, phone: str, login: str) -> None:
+        """Memoriza o vínculo número de WhatsApp → login do cliente (após 1ª identificação)."""
+        try:
+            norm = normalize_phone(phone)
+            if not norm or not login:
+                return
+            self._load_persisted()
+            if self._bindings.get(norm) == login:
+                return
+            self._bindings[norm] = str(login)
+            with open(self._persist_path("mkauth_bindings.json"), "w", encoding="utf-8") as f:
+                json.dump(self._bindings, f, ensure_ascii=False)
+            logger.info(f"[mkauth] Vínculo memorizado: {norm[:4]}**** → {login}")
+        except OSError as e:
+            logger.warning(f"[mkauth] Falha ao salvar vínculo: {e}")
+
+    def _request(self, method: str, path: str, payload: dict | None = None, _retry: bool = True, timeout: int = 20):
         """Chamada autenticada. Renova o token e tenta 1x novamente em caso de 401."""
         token = self.get_token()
         data = json.dumps(payload).encode() if payload is not None else None
@@ -222,13 +295,13 @@ class MkAuthClient:
             method=method,
         )
         try:
-            with self._urlopen(req, timeout=20) as resp:
+            with self._urlopen(req, timeout=timeout) as resp:
                 body = resp.read().decode("utf-8", errors="replace")
         except urllib.error.HTTPError as e:
             if e.code == 401 and _retry:
                 logger.info("[mkauth] 401 — renovando token e repetindo a chamada.")
                 self.get_token(force=True)
-                return self._request(method, path, payload, _retry=False)
+                return self._request(method, path, payload, _retry=False, timeout=timeout)
             raise MkAuthError(f"HTTP {e.code} em {path}") from e
         except (urllib.error.URLError, OSError) as e:
             raise MkAuthError(f"Erro de rede em {path}: {e}") from e
@@ -312,16 +385,27 @@ class MkAuthClient:
             if cpf:
                 cpf_index.setdefault(cpf, cli)
 
+        login_index: dict[str, dict] = {}
+        for cli in all_clients:
+            lg = str(cli.get("login") or "").strip().lower()
+            if lg:
+                login_index.setdefault(lg, cli)
+
         self._clients = all_clients
         self._clients_ts = time.time()
         self._phone_index = phone_index
         self._cpf_index = cpf_index
+        self._login_index = login_index
         logger.info(f"[mkauth] Cache de clientes atualizado: {len(all_clients)} registros, "
                     f"{len(phone_index)} telefones indexados.")
         return len(all_clients)
 
     def find_client_by_phone(self, phone: str) -> dict | None:
-        """Casa o número do WhatsApp com o cadastro do MK-AUTH (cache local)."""
+        """Casa o número do WhatsApp com o cadastro do MK-AUTH.
+
+        Ordem: campos de telefone da listagem → vínculo memorizado (CPF informado
+        antes) → índice enriquecido via /api/cliente/show (background).
+        """
         norm = normalize_phone(phone)
         if len(norm) < 10:
             return None
@@ -329,7 +413,75 @@ class MkAuthClient:
             self.refresh_clients_cache()
         except MkAuthError as e:
             logger.error(f"[mkauth] Falha ao atualizar cache de clientes: {e}")
-        return self._phone_index.get(norm)
+        self._load_persisted()
+
+        cli = self._phone_index.get(norm)
+        if cli:
+            return cli
+
+        login = self._bindings.get(norm) or self._phone_to_login.get(norm)
+        if login:
+            cli = self._login_index.get(str(login).strip().lower())
+            if cli:
+                return cli
+
+        # Não achou — dispara o enriquecimento em background p/ próximas consultas
+        if config.enrich_enabled:
+            self.start_phone_enrichment()
+        return None
+
+    def get_client_detail(self, login: str) -> dict | None:
+        """Cadastro completo de um cliente via /api/cliente/show (inclui telefones)."""
+        data = self._request("GET", f"/api/cliente/show/{urllib.parse.quote(str(login))}")
+        itens = self._extract_list(data)
+        alvo = itens[0] if itens else (data if isinstance(data, dict) else None)
+        while isinstance(alvo, dict) and len(alvo) == 1 and isinstance(next(iter(alvo.values())), dict):
+            alvo = next(iter(alvo.values()))
+        return alvo if isinstance(alvo, dict) else None
+
+    def start_phone_enrichment(self) -> None:
+        """Inicia (se ainda não estiver rodando) a varredura de telefones em background."""
+        if self._enrich_running.is_set():
+            return
+        self._enrich_running.set()
+        threading.Thread(target=self._enrich_worker, daemon=True).start()
+
+    def _enrich_worker(self) -> None:
+        try:
+            self._load_persisted()
+            done = {str(l).lower() for l in self._enriched_logins}
+            total = len(self._clients)
+            novos = 0
+            logger.info(f"[mkauth] Enriquecimento de telefones iniciado ({len(done)}/{total} já feitos).")
+            for cli in list(self._clients):
+                login = str(cli.get("login") or "").strip()
+                if not login or login.lower() in done:
+                    continue
+                try:
+                    det = self.get_client_detail(login) or {}
+                except MkAuthError:
+                    time.sleep(2)
+                    continue
+                for k, v in det.items():
+                    kl = k.lower()
+                    if any(t in kl for t in ("fone", "celular", "whats", "contato")) and "op" not in kl:
+                        n = normalize_phone(str(v or ""))
+                        if len(n) >= 10:
+                            self._phone_to_login[n] = login
+                self._enriched_logins.add(login)
+                done.add(login.lower())
+                novos += 1
+                if novos % 200 == 0:
+                    self._save_phone_index()
+                    logger.info(f"[mkauth] Enriquecimento: {len(done)}/{total} clientes, "
+                                f"{len(self._phone_to_login)} telefones mapeados.")
+                time.sleep(0.05)  # gentileza com o servidor MK-AUTH
+            self._save_phone_index()
+            logger.info(f"[mkauth] Enriquecimento concluído: {len(self._phone_to_login)} telefones mapeados.")
+        except Exception as e:
+            logger.error(f"[mkauth] Enriquecimento interrompido: {e}")
+        finally:
+            self._enrich_running.clear()
 
     def find_client_by_cpf(self, cpf: str) -> dict | None:
         norm = normalize_cpf(cpf)
@@ -363,17 +515,10 @@ class MkAuthClient:
                     return titulos
             except MkAuthError:
                 pass
-        # 2) Fallback: listagem completa filtrada por CPF ou login
-        try:
-            data = self._request("GET", "/api/titulo/listagem")
-            titulos = self._extract_list(data)
-        except MkAuthError:
-            try:
-                data = self._request("GET", "/api/titulo/listar")
-                titulos = self._extract_list(data)
-            except MkAuthError as e:
-                logger.error(f"[mkauth] Falha ao listar títulos: {e}")
-                return []
+        # 2) Fallback: listagem completa (em cache com TTL) filtrada por CPF ou login
+        titulos = self._get_all_titulos()
+        if not titulos:
+            return []
         res = []
         for t in titulos:
             t_cpf = normalize_cpf(str(t.get("cpf_cnpj") or t.get("cpf") or ""))
@@ -381,6 +526,23 @@ class MkAuthClient:
             if (norm and t_cpf == norm) or (login and t_login == login.strip().lower()):
                 res.append(t)
         return res
+
+    def _get_all_titulos(self) -> list[dict]:
+        """Listagem completa de títulos com cache (TTL configurável, padrão 10 min)."""
+        if self._titulos and (time.time() - self._titulos_ts) < config.titulos_ttl_s:
+            return self._titulos
+        for path in ("/api/titulo/listagem", "/api/titulo/listar"):
+            try:
+                titulos = self._extract_list(self._request("GET", path, timeout=60))
+                if titulos:
+                    self._titulos = titulos
+                    self._titulos_ts = time.time()
+                    logger.info(f"[mkauth] Cache de títulos atualizado: {len(titulos)} registros.")
+                    return titulos
+            except MkAuthError:
+                continue
+        logger.error("[mkauth] Falha ao listar títulos em todas as rotas.")
+        return self._titulos
 
     @staticmethod
     def filter_titulos_abertos(titulos: list[dict]) -> list[dict]:
@@ -488,6 +650,9 @@ def build_mkauth_context_block(phone_number: str, user_msg: str = "") -> str:
             cpf_msg = extract_cpf_from_text(user_msg)
             if cpf_msg:
                 cli = client.find_client_by_cpf(cpf_msg)
+                if cli and cli.get("login"):
+                    # Memoriza o vínculo: próximas conversas nem pedem CPF
+                    client.save_binding(phone_number, str(cli["login"]))
         if not cli:
             return (
                 "### DADOS DO CLIENTE (MK-AUTH) ###\n"

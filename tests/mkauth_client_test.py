@@ -25,6 +25,7 @@ ENV = {
     "MKAUTH_URL": "https://mkauth.local",
     "MKAUTH_CLIENT_ID": "botwpp",
     "MKAUTH_CLIENT_SECRET": "s3cr3t",
+    "MKAUTH_ENRICH": "false",  # sem threads de fundo nos testes
 }
 
 FAKE_JWT = "eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJib3QifQ.abc123sig"
@@ -255,3 +256,57 @@ class ContextBlockTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class BindingTest(unittest.TestCase):
+    def setUp(self):
+        import tempfile
+        self.tmp = tempfile.mkdtemp()
+        self.env = patch.dict(os.environ, {**ENV, "MKAUTH_DATA_DIR": self.tmp,
+                                           "MKAUTH_ENRICH": "false"})
+        self.env.start()
+        self.client = mkauth_client.MkAuthClient()
+        self.client._clients = [{"login": "maria", "nome": "Maria"}]  # cache "fresco"
+        self.client._clients_ts = 9e12  # sem HTTP
+        self.client._login_index = {"maria": {"login": "maria", "nome": "Maria"}}
+
+    def tearDown(self):
+        self.env.stop()
+
+    def test_binding_saved_and_used(self):
+        self.client.save_binding("5511998765432", "maria")
+        # novo cliente (simula restart) deve carregar o vínculo do disco
+        c2 = mkauth_client.MkAuthClient()
+        c2._clients = [{"login": "maria", "nome": "Maria"}]
+        c2._clients_ts = 9e12
+        c2._login_index = {"maria": {"login": "maria", "nome": "Maria"}}
+        cli = c2.find_client_by_phone("5511998765432")
+        self.assertIsNotNone(cli)
+        self.assertEqual(cli["nome"], "Maria")
+
+    def test_enriched_index_used(self):
+        self.client._load_persisted()
+        self.client._phone_to_login["1198765432"] = "maria"
+        cli = self.client.find_client_by_phone("+55 11 99876-5432")
+        self.assertEqual(cli["login"], "maria")
+
+
+class TitulosCacheTest(unittest.TestCase):
+    def setUp(self):
+        self.env = patch.dict(os.environ, ENV)
+        self.env.start()
+        self.client = mkauth_client.MkAuthClient()
+
+    def tearDown(self):
+        self.env.stop()
+
+    @patch.object(mkauth_client.MkAuthClient, "_request")
+    def test_titulos_cached(self, mock_req):
+        self.client._token = FAKE_JWT
+        self.client._token_ts = 9e12
+        mock_req.return_value = {"titulos": [{"titulo": "1", "valor": "10", "status": "aberto"}]}
+        t1 = self.client._get_all_titulos()
+        t2 = self.client._get_all_titulos()
+        self.assertEqual(len(t1), 1)
+        self.assertEqual(t1, t2)
+        self.assertEqual(mock_req.call_count, 1)  # segunda veio do cache
