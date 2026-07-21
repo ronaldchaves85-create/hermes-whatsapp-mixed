@@ -365,6 +365,9 @@ if [ -f "$BASE_DIR/.env" ]; then
     _fill_env_key "OPENROUTER_API_KEY" "$OPENROUTER_API_KEY"
     _fill_env_key "AISA_API_KEY" "$AISA_API_KEY"
     _fill_env_key "TELEGRAM_BOT_TOKEN" "$TELEGRAM_BOT_TOKEN"
+    _fill_env_key "WHATSAPP_OWNER_NUMBER" "$WHATSAPP_OWNER_NUMBER"
+    _fill_env_key "WHATSAPP_ADMIN_NUMBERS" "$WHATSAPP_ADMIN_NUMBERS"
+    _fill_env_key "WHATSAPP_OWNER_NAME" "$WHATSAPP_OWNER_NAME"
     # Comenta qualquer placeholder restante para não ser lido como chave válida
     sed -i '/_aqui/s/^\([^#]\)/#\1/' "$BASE_DIR/.env"
 fi
