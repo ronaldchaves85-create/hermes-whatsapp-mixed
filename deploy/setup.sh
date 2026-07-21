@@ -339,6 +339,30 @@ else
     echo "  - Arquivo .env já existe localmente, pulando."
 fi
 
+# Preenche o .env com as chaves reais vindas das variáveis de ambiente da stack
+# (substitui placeholders como "sua_chave_gemini_aqui" pelos valores verdadeiros)
+if [ -f "$BASE_DIR/.env" ]; then
+    _fill_env_key() {
+        _key="$1"; _val="$2"
+        if [ -n "$_val" ]; then
+            if grep -q "^#*\s*${_key}=" "$BASE_DIR/.env"; then
+                sed -i "s|^#*\s*${_key}=.*|${_key}=${_val}|" "$BASE_DIR/.env"
+            else
+                echo "${_key}=${_val}" >> "$BASE_DIR/.env"
+            fi
+            echo "  ✓ ${_key} configurada no .env a partir da variável da stack."
+        fi
+    }
+    _fill_env_key "GOOGLE_API_KEY" "$GOOGLE_API_KEY"
+    _fill_env_key "OPENAI_API_KEY" "$OPENAI_API_KEY"
+    _fill_env_key "ANTHROPIC_API_KEY" "$ANTHROPIC_API_KEY"
+    _fill_env_key "OPENROUTER_API_KEY" "$OPENROUTER_API_KEY"
+    _fill_env_key "AISA_API_KEY" "$AISA_API_KEY"
+    _fill_env_key "TELEGRAM_BOT_TOKEN" "$TELEGRAM_BOT_TOKEN"
+    # Comenta qualquer placeholder restante para não ser lido como chave válida
+    sed -i '/_aqui/s/^\([^#]\)/#\1/' "$BASE_DIR/.env"
+fi
+
 
 echo "⏳ 2. Baixando e aplicando o Patch do WhatsApp..."
 # Sincroniza o arquivo bridge.js modificado diretamente do repositório
