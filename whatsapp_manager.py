@@ -5396,13 +5396,24 @@ def pre_llm_call(*args, **kwargs):
     # ── Integração MK-AUTH: injetar dados reais quando o assunto é cobrança ──
     mkauth_block = ""
     try:
+        # Garante que o diretório do plugin está no sys.path (o loader do Hermes
+        # importa este arquivo por caminho, então imports de vizinhos podem falhar)
+        _plugin_dir = str(Path(__file__).resolve().parent)
+        if _plugin_dir not in sys.path:
+            sys.path.insert(0, _plugin_dir)
         import mkauth_client as _mk
         if _mk.config.enabled:
             _user_msg = kwargs.get("user_message") or (context or {}).get("user_message") or ""
-            if _mk.detect_billing_intent(_user_msg) or _mk.extract_cpf_from_text(_user_msg):
+            _has_billing = _mk.detect_billing_intent(_user_msg)
+            logger.info(f"[mkauth] enabled=True msg={_user_msg[:40]!r} billing_intent={_has_billing}")
+            if _has_billing or _mk.extract_cpf_from_text(_user_msg):
                 mkauth_block = _mk.build_mkauth_context_block(phone_number, _user_msg)
                 if mkauth_block:
                     logger.info(f"[mkauth] Contexto de cobrança injetado para {phone_number}")
+                else:
+                    logger.warning(f"[mkauth] Bloco vazio para {phone_number} — ver erros acima")
+        else:
+            logger.info("[mkauth] Integração desabilitada (MKAUTH_URL/CLIENT_ID/SECRET ausentes)")
     except Exception as _mk_err:
         logger.error(f"[mkauth] Erro na integração (ignorado, atendimento segue): {_mk_err}")
 

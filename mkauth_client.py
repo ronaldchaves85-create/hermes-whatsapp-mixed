@@ -35,6 +35,13 @@ import urllib.parse
 import urllib.request
 
 logger = logging.getLogger("mkauth_client")
+# Handler próprio para os logs aparecerem no stdout do container (docker logs)
+if not logger.handlers:
+    _mk_handler = logging.StreamHandler()
+    _mk_handler.setFormatter(logging.Formatter("[mkauth] %(levelname)s %(message)s"))
+    logger.addHandler(_mk_handler)
+    logger.setLevel(logging.INFO)
+    logger.propagate = False
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Configuração
