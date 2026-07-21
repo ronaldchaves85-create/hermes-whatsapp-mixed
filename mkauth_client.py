@@ -92,6 +92,18 @@ class MkAuthConfig:
         return os.environ.get("MKAUTH_ENRICH", "true").strip().lower() in ("1", "true", "yes")
 
     @property
+    def pix_key(self) -> str:
+        return os.environ.get("MKAUTH_PIX_KEY", "").strip()
+
+    @property
+    def pix_name(self) -> str:
+        return os.environ.get("MKAUTH_PIX_NAME", "SPEEDNET ACARA").strip()[:25]
+
+    @property
+    def pix_city(self) -> str:
+        return os.environ.get("MKAUTH_PIX_CITY", "ACARA").strip()[:15]
+
+    @property
     def titulos_ttl_s(self) -> int:
         try:
             return int(float(os.environ.get("MKAUTH_TITULOS_TTL_MIN", "10")) * 60)
@@ -636,6 +648,46 @@ def format_titulo(titulo: dict) -> str:
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# PIX (BR Code EMV — padrão Banco Central)
+# ─────────────────────────────────────────────────────────────────────────────
+
+
+def _crc16_ccitt(payload: str) -> str:
+    crc = 0xFFFF
+    for ch in payload.encode("utf-8"):
+        crc ^= ch << 8
+        for _ in range(8):
+            crc = ((crc << 1) ^ 0x1021) if (crc & 0x8000) else (crc << 1)
+            crc &= 0xFFFF
+    return f"{crc:04X}"
+
+
+def _emv(field_id: str, value: str) -> str:
+    return f"{field_id}{len(value):02d}{value}"
+
+
+def build_pix_payload(amount: float, txid: str = "***") -> str | None:
+    """Monta o 'PIX copia e cola' estático com valor, usando a chave da empresa."""
+    if not config.pix_key:
+        return None
+    txid = re.sub(r"[^A-Za-z0-9]", "", txid)[:25] or "***"
+    mai = _emv("00", "br.gov.bcb.pix") + _emv("01", config.pix_key)
+    payload = (
+        _emv("00", "01")
+        + _emv("26", mai)
+        + _emv("52", "0000")
+        + _emv("53", "986")
+        + _emv("54", f"{amount:.2f}")
+        + _emv("58", "BR")
+        + _emv("59", _strip_accents(config.pix_name))
+        + _emv("60", _strip_accents(config.pix_city))
+        + _emv("62", _emv("05", txid))
+        + "6304"
+    )
+    return payload + _crc16_ccitt(payload)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Geração do PDF da fatura
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -704,12 +756,41 @@ def generate_boleto_pdf(cli: dict, titulo: dict, out_dir: str | None = None) -> 
             pdf.cell(0, 6, "Pague em qualquer banco, lotérica ou pelo app do seu banco (opcao boleto).",
                      new_x="LMARGIN", new_y="NEXT")
 
-        pdf.ln(8)
-        pdf.set_font("helvetica", "B", 11)
-        pdf.cell(0, 7, "Aplicativo Speednet - consulte boletos e faca desbloqueios:", new_x="LMARGIN", new_y="NEXT")
-        pdf.set_font("helvetica", "", 10)
-        pdf.cell(0, 6, "Android: https://evolink.me/qOx9Yy", new_x="LMARGIN", new_y="NEXT")
-        pdf.cell(0, 6, "iOS: https://evolink.me/U3pLFY", new_x="LMARGIN", new_y="NEXT")
+        # PIX com QR Code (quando a chave da empresa está configurada)
+        try:
+            _valor_f = float(str(titulo.get("valor") or "0").replace(",", "."))
+        except (ValueError, TypeError):
+            _valor_f = 0.0
+        pix_payload = build_pix_payload(_valor_f, txid=nossonum) if _valor_f > 0 else None
+        if pix_payload:
+            try:
+                import qrcode
+                qr_img = qrcode.make(pix_payload)
+                qr_tmp = os.path.join(out_dir, "_qr_tmp.png")
+                qr_img.save(qr_tmp)
+                pdf.ln(6)
+                y0 = pdf.get_y()
+                pdf.image(qr_tmp, x=12, y=y0, w=48, h=48)
+                pdf.set_xy(66, y0)
+                pdf.set_font("helvetica", "B", 12)
+                pdf.cell(0, 8, "Pague com PIX (QR Code ao lado)", new_x="LMARGIN", new_y="NEXT")
+                pdf.set_xy(66, y0 + 9)
+                pdf.set_font("helvetica", "", 9)
+                pdf.multi_cell(130, 5,
+                               "Abra o app do seu banco, escolha PIX > Ler QR Code e aponte "
+                               "a camera. O valor ja vem preenchido. Ou use o copia e cola abaixo.")
+                pdf.set_y(y0 + 50)
+                pdf.set_font("helvetica", "B", 10)
+                pdf.cell(0, 6, "PIX copia e cola:", new_x="LMARGIN", new_y="NEXT")
+                pdf.set_font("courier", "", 8)
+                pdf.set_fill_color(248, 248, 248)
+                pdf.multi_cell(0, 4.5, pix_payload, border=1, fill=True)
+                try:
+                    os.remove(qr_tmp)
+                except OSError:
+                    pass
+            except Exception as qr_err:
+                logger.warning(f"[mkauth] QR PIX indisponivel no PDF: {qr_err}")
 
         pdf.ln(6)
         pdf.set_font("helvetica", "", 9)
@@ -728,6 +809,41 @@ def generate_boleto_pdf(cli: dict, titulo: dict, out_dir: str | None = None) -> 
     except Exception as e:
         logger.error(f"[mkauth] Falha ao gerar PDF: {e}")
         return None
+
+
+def fetch_official_boleto_pdf(titulo: dict, out_dir: str | None = None) -> str | None:
+    """Baixa o boleto oficial (Sicoob, com QR PIX) do próprio MK-AUTH.
+
+    Usa a rota pública /boleto/boleto.hhvm?titulo=N. Retorna o caminho do PDF
+    ou None se a resposta não for um PDF (aí usamos o PDF gerado como fallback).
+    """
+    tid = str(titulo.get("titulo") or "").strip()
+    if not tid or not config.url:
+        return None
+    out_dir = out_dir or os.path.join(config.data_dir, "boletos_pdf")
+    try:
+        os.makedirs(out_dir, exist_ok=True)
+    except OSError:
+        return None
+    base = config.url
+    urls = [f"{base}/boleto/boleto.hhvm?titulo={tid}"]
+    if base.startswith("https://"):
+        urls.append(f"http://{base[8:]}/boleto/boleto.hhvm?titulo={tid}")
+    for u in urls:
+        try:
+            req = urllib.request.Request(u, headers={"User-Agent": "Mozilla/5.0"})
+            with client._urlopen(req, timeout=30) as resp:
+                data = resp.read()
+            if data[:5] == b"%PDF-":
+                path = os.path.join(out_dir, f"Boleto_Speednet_{tid}.pdf")
+                with open(path, "wb") as f:
+                    f.write(data)
+                logger.info(f"[mkauth] Boleto oficial baixado ({len(data)} bytes): {path}")
+                return path
+            logger.info(f"[mkauth] {u} não retornou PDF (início: {data[:15]!r}) — tentando próxima/fallback.")
+        except Exception as e:
+            logger.warning(f"[mkauth] Falha ao baixar boleto oficial em {u}: {e}")
+    return None
 
 
 # Cache do bundle por (telefone+mensagem) — pre_llm_call roda várias vezes por turno
@@ -805,8 +921,9 @@ def build_billing_bundle(phone_number: str, user_msg: str = "") -> dict:
             lines_pdf.append(f"\nFaturas em aberto: {len(titulos)}. "
                              f"A mais próxima: {valor0}, vencimento {venc0}.")
 
-            # Gerar o PDF da fatura mais próxima
-            pdf_path = generate_boleto_pdf(cli, t0)
+            # 1º: boleto oficial do banco (com QR PIX de baixa automática);
+            # 2º: PDF gerado localmente como fallback
+            pdf_path = fetch_official_boleto_pdf(t0) or generate_boleto_pdf(cli, t0)
             if pdf_path:
                 res["pdf_path"] = pdf_path
                 res["pdf_name"] = os.path.basename(pdf_path)
@@ -823,7 +940,8 @@ def build_billing_bundle(phone_number: str, user_msg: str = "") -> dict:
             "Estes dados pertencem ao titular deste número — não repasse dados de outros clientes."
         )
         lines_pdf.append(
-            "\nIMPORTANTE: o PDF da fatura JÁ FOI ENVIADO como anexo nesta conversa. "
+            "\nIMPORTANTE: o BOLETO em PDF JÁ FOI ENVIADO como anexo nesta conversa "
+            "(com QR Code PIX para pagamento). "
             "NÃO envie linha digitável, código de barras nem PIX no texto — está tudo no PDF. "
             "Apenas avise que a fatura está em anexo (com valor e vencimento) e apresente o "
             "aplicativo da Speednet com os links (estão na base de conhecimento). "
