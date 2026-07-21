@@ -1,8 +1,8 @@
-"""Diagnóstico da integração MK-AUTH — roda dentro do container hermes.
+"""Diagnóstico da integração MK-AUTH — sonda os endpoints da API.
 
 Uso:
-    python test_mkauth.py                # testa conexão e cache de clientes
-    python test_mkauth.py 5591999998888  # também busca este número e seus boletos
+    python test_mkauth.py                # descobre quais rotas funcionam
+    python test_mkauth.py 5591999998888  # (após rotas ok) busca número e boletos
 """
 
 import sys
@@ -19,7 +19,7 @@ print("habilitado:", m.config.enabled)
 print("url:", m.config.url)
 
 if not m.config.enabled:
-    print("-> Variáveis MKAUTH_URL / MKAUTH_CLIENT_ID / MKAUTH_CLIENT_SECRET ausentes no ambiente.")
+    print("-> Variáveis MKAUTH_* ausentes no ambiente.")
     sys.exit(1)
 
 try:
@@ -29,36 +29,66 @@ except Exception as e:
     print("ERRO ao gerar token:", type(e).__name__, e)
     sys.exit(1)
 
-try:
-    n = m.client.refresh_clients_cache(force=True)
-    print("clientes no cache:", n)
-    print("telefones indexados:", len(m.client._phone_index))
-    exemplos = list(m.client._phone_index)[:3]
-    for tel in exemplos:
-        print("  exemplo de telefone indexado:", tel[:4] + "****" + tel[-2:])
-except Exception as e:
-    print("ERRO ao listar clientes:", type(e).__name__, e)
-    sys.exit(1)
+print()
+print("=== SONDANDO ROTAS DE CLIENTES ===")
+candidatos = [
+    "/api/cliente/listar/pagina=1?limite=500",
+    "/api/cliente/listar/pagina=1",
+    "/api/cliente/listar/1",
+    "/api/cliente/listar",
+    "/api/cliente/listagem/pagina=1",
+    "/api/cliente/listagem",
+]
+rota_ok = None
+for path in candidatos:
+    try:
+        data = m.client._request("GET", path)
+        itens = m.client._extract_list(data)
+        resumo = str(data)[:100].replace("\n", " ")
+        print(f"[OK {len(itens):4d} itens] {path} -> {resumo}")
+        if itens and rota_ok is None:
+            rota_ok = path
+    except Exception as e:
+        print(f"[FALHOU] {path} -> {type(e).__name__}: {str(e)[:90]}")
 
-if len(sys.argv) > 1:
-    alvo = sys.argv[1]
-    print("---")
-    print("buscando numero:", alvo, "(normalizado:", m.normalize_phone(alvo) + ")")
-    cli = m.client.find_client_by_phone(alvo)
-    if not cli:
-        print("cliente NAO encontrado pelo telefone.")
-        print("-> confira se este numero esta no campo celular/telefone do cadastro no MK-AUTH")
-    else:
-        print("cliente encontrado:", cli.get("nome") or cli.get("login"))
-        cpf = m.normalize_cpf(str(cli.get("cpf_cnpj") or cli.get("cpf") or ""))
-        print("cpf no cadastro:", (cpf[:3] + "*****" + cpf[-2:]) if cpf else "(vazio)")
-        if cpf:
-            titulos = m.client.get_titulos_by_cpf(cpf)
-            abertos = m.client.filter_titulos_abertos(titulos)
-            print("titulos retornados:", len(titulos), "| em aberto:", len(abertos))
-            if abertos:
-                print("exemplo de titulo em aberto:")
-                print(m.format_titulo(abertos[0]))
-    print("---")
-    print("bloco que seria injetado no prompt:")
-    print(m.build_mkauth_context_block(alvo, "quero meu boleto"))
+print()
+print("=== SONDANDO ROTAS DE TÍTULOS ===")
+cand_tit = [
+    "/api/titulo/listar/pagina=1",
+    "/api/titulo/listar",
+    "/api/titulo/listagem",
+]
+for path in cand_tit:
+    try:
+        data = m.client._request("GET", path)
+        itens = m.client._extract_list(data)
+        resumo = str(data)[:100].replace("\n", " ")
+        print(f"[OK {len(itens):4d} itens] {path} -> {resumo}")
+    except Exception as e:
+        print(f"[FALHOU] {path} -> {type(e).__name__}: {str(e)[:90]}")
+
+if rota_ok:
+    print()
+    print(">>> Melhor rota de clientes:", rota_ok)
+    if len(sys.argv) > 1:
+        alvo = sys.argv[1]
+        print("buscando numero:", alvo)
+        # busca manual usando a rota que funcionou
+        data = m.client._request("GET", rota_ok)
+        itens = m.client._extract_list(data)
+        norm = m.normalize_phone(alvo)
+        achado = None
+        for cli in itens:
+            for campo in ("celular", "celular2", "telefone", "fone", "whatsapp"):
+                if m.normalize_phone(str(cli.get(campo, ""))) == norm:
+                    achado = cli
+                    break
+            if achado:
+                break
+        if achado:
+            print("cliente encontrado:", achado.get("nome") or achado.get("login"))
+            print("campos do cadastro:", sorted(achado.keys()))
+        else:
+            print("numero NAO encontrado nesta pagina de clientes.")
+            if itens:
+                print("exemplo de campos de um cliente:", sorted(itens[0].keys()))
