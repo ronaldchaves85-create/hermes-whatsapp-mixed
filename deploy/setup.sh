@@ -329,6 +329,12 @@ if [ -n "$ENV_MAX_TURNS" ] && [ -f "$BASE_DIR/config.yaml" ]; then
     rm -f "$BASE_DIR/config.yaml.bak"
 fi
 
+# Instala o transcritor de voz (faster-whisper) se ainda não estiver disponível
+if ! /opt/hermes/.venv/bin/python -c "import faster_whisper" 2>/dev/null; then
+    echo "🎤 Instalando faster-whisper (transcrição de áudio)..."
+    /opt/hermes/.venv/bin/pip install -q faster-whisper && echo "  ✓ faster-whisper instalado." || echo "  ⚠️ Falha ao instalar faster-whisper — áudios não serão transcritos."
+fi
+
 # Baixa o modelo de chaves de API (.env) se ele não existir localmente
 if [ ! -f "$BASE_DIR/.env" ]; then
     if ! download_file "$RAW_URL/env.example" "$BASE_DIR/.env" "$CURL_CODE_AUTH_HEADER"; then
