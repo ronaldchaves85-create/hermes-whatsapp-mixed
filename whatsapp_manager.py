@@ -29,7 +29,7 @@ if not logger.handlers:
             try:
                 msg = self.format(record)
                 stream = sys.stderr if record.levelno >= logging.WARNING else sys.stdout
-                print(msg, file=stream)
+                print(msg, file=stream, flush=True)
             except Exception:
                 self.handleError(record)
 
@@ -249,6 +249,10 @@ def _log_suppressed(reason: str, session_id: str, chat_id: str, response_preview
 
 # Cache do último texto do owner (usado em pre_llm_call para detecção cross-session)
 _last_owner_text: dict[str, str] = {}
+
+# Cache da última mensagem de QUALQUER remetente (usado pela integração MK-AUTH,
+# pois o hook pre_llm_call nem sempre recebe user_message nos kwargs)
+_last_client_text: dict[str, str] = {}
 
 # Mapeamento LID -> telefone obtido da ponte no bot-status
 _lid_to_phone: dict[str, str] = {}
@@ -5182,6 +5186,21 @@ def pre_gateway_dispatch(*args, **kwargs):
         if sender_id and msg_text:
             _last_owner_text[sender_id] = msg_text
 
+    # Cachear a última mensagem de qualquer remetente (integração MK-AUTH)
+    try:
+        if sender_id and msg_text:
+            if len(_last_client_text) > 5000:
+                _last_client_text.clear()
+            _last_client_text[sender_id] = msg_text
+            _digits = "".join(c for c in str(sender_id).split("@")[0].split(":")[0] if c.isdigit())
+            if _digits:
+                _last_client_text[_digits] = msg_text
+            _chat_key = str(getattr(event.source, "chat_id", "") or "")
+            if _chat_key:
+                _last_client_text[_chat_key] = msg_text
+    except Exception:
+        pass
+
     # Roteamento Dinâmico de Modelos (Dono vs Clientes)
     try:
         session_key = gateway._session_key_for_source(event.source)
@@ -5403,7 +5422,13 @@ def pre_llm_call(*args, **kwargs):
             sys.path.insert(0, _plugin_dir)
         import mkauth_client as _mk
         if _mk.config.enabled:
-            _user_msg = kwargs.get("user_message") or (context or {}).get("user_message") or ""
+            _user_msg = (
+                kwargs.get("user_message")
+                or (context or {}).get("user_message")
+                or _last_client_text.get(sender_id, "")
+                or _last_client_text.get(clean_jid, "")
+                or _last_client_text.get(phone_number, "")
+            )
             _has_billing = _mk.detect_billing_intent(_user_msg)
             logger.info(f"[mkauth] enabled=True msg={_user_msg[:40]!r} billing_intent={_has_billing}")
             if _has_billing or _mk.extract_cpf_from_text(_user_msg):
