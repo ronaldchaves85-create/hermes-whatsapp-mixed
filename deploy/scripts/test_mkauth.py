@@ -26,6 +26,32 @@ print("titulos na listagem:", len(titulos))
 if titulos:
     print("campos de um titulo:", sorted(titulos[0].keys()))
 
+
+if len(sys.argv) > 1 and not sys.argv[1].isdigit():
+    # Argumento não-numérico = login → sondar o endpoint de detalhe do cliente
+    login = sys.argv[1]
+    print("---")
+    print("sondando /api/cliente/show para login:", login)
+    import urllib.parse as _up
+    for rota in (f"/api/cliente/show/{_up.quote(login)}",
+                 f"/api/cliente/exibir/{_up.quote(login)}",
+                 f"/api/cliente/{_up.quote(login)}"):
+        try:
+            data = m.client._request("GET", rota)
+            itens = m.client._extract_list(data)
+            alvo = itens[0] if itens else (data if isinstance(data, dict) else None)
+            if alvo:
+                print(f"[OK] {rota}")
+                print("campos:", sorted(alvo.keys()))
+                tel_campos = {k: v for k, v in alvo.items()
+                              if any(t in k.lower() for t in ("fone", "celular", "whats", "contato"))}
+                print("campos de telefone:", tel_campos if tel_campos else "NENHUM")
+                break
+            print(f"[vazio] {rota}")
+        except Exception as e:
+            print(f"[FALHOU] {rota} -> {type(e).__name__}: {str(e)[:80]}")
+    sys.exit(0)
+
 if len(sys.argv) > 1:
     cpf = m.normalize_cpf(sys.argv[1])
     print("---")
