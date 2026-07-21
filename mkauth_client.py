@@ -253,9 +253,25 @@ class MkAuthClient:
                 return [data]
         return []
 
+    # Rotas variam por versão do MK-AUTH — a que funcionar fica memorizada
+    _CLIENT_ROUTES = [
+        "/api/cliente/listar/pagina={pagina}?limite=500",
+        "/api/cliente/listagem/pagina={pagina}",
+        "/api/cliente/listagem",
+    ]
+
     def list_clients(self, pagina: int = 1, limite: int = 500) -> list[dict]:
-        data = self._request("GET", f"/api/cliente/listar/pagina={pagina}?limite={limite}")
-        return self._extract_list(data)
+        routes = [self._client_route] if getattr(self, "_client_route", None) else self._CLIENT_ROUTES
+        for route in routes:
+            try:
+                data = self._request("GET", route.format(pagina=pagina))
+                itens = self._extract_list(data)
+                if itens:
+                    self._client_route = route
+                    return itens
+            except MkAuthError as e:
+                logger.info(f"[mkauth] Rota {route} falhou ({e}); tentando próxima.")
+        return []
 
     def refresh_clients_cache(self, force: bool = False) -> int:
         """Baixa todos os clientes (paginado) e monta índices por telefone e CPF."""
@@ -263,11 +279,17 @@ class MkAuthClient:
             return len(self._clients)
 
         all_clients: list[dict] = []
+        vistos: set = set()
         pagina = 1
         while pagina <= 100:  # trava de segurança
             batch = self.list_clients(pagina=pagina)
             if not batch:
                 break
+            # Algumas versões ignoram a paginação e devolvem tudo — detectar repetição
+            chave_batch = (batch[0].get("uuid") or batch[0].get("id"), len(batch))
+            if chave_batch in vistos:
+                break
+            vistos.add(chave_batch)
             all_clients.extend(batch)
             if len(batch) < 500:
                 break
@@ -276,10 +298,13 @@ class MkAuthClient:
         phone_index: dict[str, dict] = {}
         cpf_index: dict[str, dict] = {}
         for cli in all_clients:
-            for field in ("celular", "celular2", "telefone", "fone", "whatsapp"):
-                norm = normalize_phone(str(cli.get(field, "")))
-                if len(norm) >= 10:
-                    phone_index.setdefault(norm, cli)
+            # Varre qualquer campo que pareça telefone (nomes variam por versão/tema)
+            for field, value in cli.items():
+                fl = field.lower()
+                if any(k in fl for k in ("celular", "telefone", "fone", "whatsapp", "contato")):
+                    norm = normalize_phone(str(value or ""))
+                    if len(norm) >= 10:
+                        phone_index.setdefault(norm, cli)
             cpf = normalize_cpf(str(cli.get("cpf_cnpj") or cli.get("cpf") or cli.get("cnpj") or ""))
             if cpf:
                 cpf_index.setdefault(cpf, cli)
@@ -320,26 +345,39 @@ class MkAuthClient:
 
     # ── Títulos / boletos ───────────────────────────────────────────────────
 
-    def get_titulos_by_cpf(self, cpf: str) -> list[dict]:
-        """Títulos do cliente. Tenta /api/titulo/titulos/{cpf}; fallback /api/titulo/listar."""
+    def get_titulos_by_cpf(self, cpf: str, login: str = "") -> list[dict]:
+        """Títulos do cliente. Tenta rotas por CPF; fallback: listagem completa filtrada."""
         norm = normalize_cpf(cpf)
-        if not norm:
+        if not norm and not login:
             return []
+        # 1) Rotas diretas por CPF (existem em algumas versões)
+        for path in (f"/api/titulo/titulos/{norm}", f"/api/titulo/show/{norm}"):
+            if not norm:
+                break
+            try:
+                titulos = self._extract_list(self._request("GET", path))
+                if titulos:
+                    return titulos
+            except MkAuthError:
+                pass
+        # 2) Fallback: listagem completa filtrada por CPF ou login
         try:
-            data = self._request("GET", f"/api/titulo/titulos/{norm}")
+            data = self._request("GET", "/api/titulo/listagem")
             titulos = self._extract_list(data)
-            if titulos:
-                return titulos
-        except MkAuthError as e:
-            logger.warning(f"[mkauth] /api/titulo/titulos/{norm} falhou ({e}); tentando /api/titulo/listar.")
-        try:
-            data = self._request("GET", "/api/titulo/listar")
-            titulos = self._extract_list(data)
-            return [t for t in titulos
-                    if normalize_cpf(str(t.get("cpf_cnpj") or t.get("cpf") or "")) == norm]
-        except MkAuthError as e:
-            logger.error(f"[mkauth] Falha ao listar títulos: {e}")
-            return []
+        except MkAuthError:
+            try:
+                data = self._request("GET", "/api/titulo/listar")
+                titulos = self._extract_list(data)
+            except MkAuthError as e:
+                logger.error(f"[mkauth] Falha ao listar títulos: {e}")
+                return []
+        res = []
+        for t in titulos:
+            t_cpf = normalize_cpf(str(t.get("cpf_cnpj") or t.get("cpf") or ""))
+            t_login = str(t.get("login") or "").strip().lower()
+            if (norm and t_cpf == norm) or (login and t_login == login.strip().lower()):
+                res.append(t)
+        return res
 
     @staticmethod
     def filter_titulos_abertos(titulos: list[dict]) -> list[dict]:
@@ -472,8 +510,8 @@ def build_mkauth_context_block(phone_number: str, user_msg: str = "") -> str:
             ativo = "ativo" if str(cli_status).lower() in ("s", "sim", "1", "true", "ativo") else str(cli_status)
             lines.append(f"Situação do cadastro: {ativo}")
 
-        if cpf:
-            titulos = client.filter_titulos_abertos(client.get_titulos_by_cpf(cpf))
+        if cpf or login:
+            titulos = client.filter_titulos_abertos(client.get_titulos_by_cpf(cpf, login=login))
             if titulos:
                 lines.append(f"\nFaturas em aberto ({len(titulos)}):")
                 for t in titulos[:5]:

@@ -344,8 +344,13 @@ class TestMessageRoutingAndDispatch(BaseWhatsAppManagerTest):
 
         res = pre_dispatch("pre_gateway_dispatch", context)
         self.assertEqual(res, {"action": "skip", "reason": "sync-contacts-command"})
-        
-        # Verificar que sync foi chamado com force=True
+
+        # Verificar que sync foi chamado com force=True (roda em thread — aguardar)
+        import time as _t
+        for _ in range(20):
+            if mock_sync.called:
+                break
+            _t.sleep(0.1)
         mock_sync.assert_called_once_with(force=True)
         
         # Verificar que enviou a mensagem de volta
