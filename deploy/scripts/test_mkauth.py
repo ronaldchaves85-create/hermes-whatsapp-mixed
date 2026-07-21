@@ -40,6 +40,9 @@ if len(sys.argv) > 1 and not sys.argv[1].isdigit():
             data = m.client._request("GET", rota)
             itens = m.client._extract_list(data)
             alvo = itens[0] if itens else (data if isinstance(data, dict) else None)
+            # desembrulhar envelopes de registro único (ex.: {'dados': {...}})
+            while isinstance(alvo, dict) and len(alvo) == 1 and isinstance(next(iter(alvo.values())), dict):
+                alvo = next(iter(alvo.values()))
             if alvo:
                 print(f"[OK] {rota}")
                 print("campos:", sorted(alvo.keys()))

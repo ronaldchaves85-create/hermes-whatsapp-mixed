@@ -246,9 +246,11 @@ class MkAuthClient:
         if isinstance(data, list):
             return [d for d in data if isinstance(d, dict)]
         if isinstance(data, dict):
-            for key in ("clientes", "registros", "data", "titulos", "resultado", "lista"):
+            for key in ("clientes", "registros", "data", "dados", "titulos", "resultado", "lista"):
                 if isinstance(data.get(key), list):
                     return [d for d in data[key] if isinstance(d, dict)]
+                if isinstance(data.get(key), dict):
+                    return [data[key]]  # registro único embrulhado (ex.: {'dados': {...}})
             # dict de um registro só
             if any(k in data for k in ("nome", "login", "cpf_cnpj", "cpf")):
                 return [data]
