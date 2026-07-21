@@ -335,6 +335,12 @@ if ! /opt/hermes/.venv/bin/python -c "import faster_whisper" 2>/dev/null; then
     /opt/hermes/.venv/bin/pip install -q faster-whisper && echo "  ✓ faster-whisper instalado." || echo "  ⚠️ Falha ao instalar faster-whisper — áudios não serão transcritos."
 fi
 
+# Instala o gerador de PDF de faturas (fpdf2) se ainda não estiver disponível
+if ! /opt/hermes/.venv/bin/python -c "import fpdf" 2>/dev/null; then
+    echo "📄 Instalando fpdf2 (PDF de faturas)..."
+    /opt/hermes/.venv/bin/pip install -q fpdf2 && echo "  ✓ fpdf2 instalado." || echo "  ⚠️ Falha ao instalar fpdf2 — faturas irão como texto."
+fi
+
 # Baixa o modelo de chaves de API (.env) se ele não existir localmente
 if [ ! -f "$BASE_DIR/.env" ]; then
     if ! download_file "$RAW_URL/env.example" "$BASE_DIR/.env" "$CURL_CODE_AUTH_HEADER"; then

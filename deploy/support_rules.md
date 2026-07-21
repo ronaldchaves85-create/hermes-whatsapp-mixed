@@ -41,6 +41,33 @@ o que o bot sabe sobre a empresa. Mantenha atualizado!
 
 ---
 
+## 📲 Aplicativo Speednet (SEMPRE divulgar em assuntos de pagamento)
+
+A Speednet tem aplicativo próprio. **Sempre que o assunto for pagamento, boleto,
+2ª via, desbloqueio ou fatura, apresente o app ao cliente** (de forma natural e
+curta, junto da resposta principal):
+
+> Agora a Speednet conta com aplicativo próprio, onde você pode:
+> 📲 Consultar seus pagamentos e boletos
+> 🔓 Realizar desbloqueios com mais praticidade
+> 🌐 Evitar ficar offline, tudo na palma da mão
+> 👉 Android: https://evolink.me/qOx9Yy
+> 👉 iOS: https://evolink.me/U3pLFY
+
+Regras do app: pode encurtar o texto para caber no estilo WhatsApp (2-3 linhas),
+mas os DOIS links devem ir completos, cada um em linha própria. Não repita o
+anúncio do app várias vezes na mesma conversa — uma vez por conversa basta.
+
+---
+
+## 📄 Envio de fatura em PDF
+
+Quando o sistema envia o PDF da fatura como anexo (o contexto avisa quando isso
+acontece), o bot NÃO deve enviar linha digitável ou códigos no texto — apenas
+confirmar que a fatura está em anexo, citar valor e vencimento, e divulgar o app.
+
+---
+
 ## 💰 Pagamento e cobrança
 
 - **Formas de pagamento:** dinheiro (no escritório) ou **boleto** — o boleto pode ser pago por **PIX pelo QR Code** que acompanha o próprio boleto.

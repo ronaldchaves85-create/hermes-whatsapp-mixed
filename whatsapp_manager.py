@@ -5229,6 +5229,38 @@ def pre_gateway_dispatch(*args, **kwargs):
     return None
 
 
+# Controle de reenvio do PDF de fatura (evita duplicar em chamadas repetidas do hook)
+_mkauth_pdf_sent: dict = {}
+
+
+def _send_boleto_pdf_once(chat_id: str, file_path: str, file_name: str | None = None) -> bool:
+    """Envia o PDF da fatura via bridge (/send-media), no máximo 1x por 30 min por chat."""
+    try:
+        key = f"{chat_id}:{file_path}"
+        if time.time() - _mkauth_pdf_sent.get(key, 0) < 1800:
+            return True  # já enviado há pouco — considerar entregue
+        payload = json.dumps({
+            "chatId": chat_id,
+            "filePath": file_path,
+            "mediaType": "document",
+            "fileName": file_name or os.path.basename(file_path),
+            "caption": "Sua fatura Speednet 📄",
+        }).encode()
+        req = urllib.request.Request(f"{BRIDGE_URL}/send-media", data=payload,
+                                     headers={"Content-Type": "application/json"}, method="POST")
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            ok = 200 <= resp.status < 300
+        if ok:
+            _mkauth_pdf_sent[key] = time.time()
+            logger.info(f"[mkauth] 📄 PDF da fatura enviado para {chat_id}: {file_name}")
+        else:
+            logger.warning(f"[mkauth] Bridge recusou o envio do PDF (HTTP {resp.status})")
+        return ok
+    except Exception as e:
+        logger.error(f"[mkauth] Falha ao enviar PDF via bridge: {e}")
+        return False
+
+
 def pre_llm_call(*args, **kwargs):
     context = kwargs.get("context")
     if not context:
@@ -5432,7 +5464,16 @@ def pre_llm_call(*args, **kwargs):
             _has_billing = _mk.detect_billing_intent(_user_msg)
             logger.info(f"[mkauth] enabled=True msg={_user_msg[:40]!r} billing_intent={_has_billing}")
             if _has_billing or _mk.extract_cpf_from_text(_user_msg):
-                mkauth_block = _mk.build_mkauth_context_block(phone_number, _user_msg)
+                if hasattr(_mk, "build_billing_bundle"):
+                    _bundle = _mk.build_billing_bundle(phone_number, _user_msg)
+                    mkauth_block = _bundle.get("block", "")
+                    _pdf_path = _bundle.get("pdf_path")
+                    if _pdf_path:
+                        _chat_pdf = _resolve_chat_id(sender_id) or sender_id
+                        if _send_boleto_pdf_once(_chat_pdf, _pdf_path, _bundle.get("pdf_name")):
+                            mkauth_block = _bundle.get("block_pdf") or mkauth_block
+                else:
+                    mkauth_block = _mk.build_mkauth_context_block(phone_number, _user_msg)
                 if mkauth_block:
                     logger.info(f"[mkauth] Contexto de cobrança injetado para {phone_number}")
                 else:

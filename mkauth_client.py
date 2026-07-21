@@ -635,14 +635,120 @@ def format_titulo(titulo: dict) -> str:
     return "\n".join(lines)
 
 
-def build_mkauth_context_block(phone_number: str, user_msg: str = "") -> str:
-    """Monta o bloco '### DADOS DO CLIENTE (MK-AUTH) ###' para injetar no prompt.
+# ─────────────────────────────────────────────────────────────────────────────
+# Geração do PDF da fatura
+# ─────────────────────────────────────────────────────────────────────────────
 
-    Retorna string vazia quando o MK-AUTH não está configurado ou não há dados.
-    Nunca levanta exceção — falhas viram log + bloco de aviso neutro.
+
+def generate_boleto_pdf(cli: dict, titulo: dict, out_dir: str | None = None) -> str | None:
+    """Gera um PDF de fatura (Speednet) com os dados do título. None se indisponível."""
+    try:
+        from fpdf import FPDF
+    except Exception:
+        logger.warning("[mkauth] fpdf2 não instalado — envio de PDF desabilitado (fallback: linha digitável no texto).")
+        return None
+    try:
+        out_dir = out_dir or os.path.join(config.data_dir, "boletos_pdf")
+        os.makedirs(out_dir, exist_ok=True)
+
+        nome = str(cli.get("nome") or cli.get("login") or "Cliente")
+        login = str(cli.get("login") or "")
+        valor = _fmt_money(titulo.get("valor") or titulo.get("valor_titulo") or "")
+        venc_raw = str(titulo.get("datavenc") or titulo.get("vencimento") or "")
+        venc = _fmt_date(venc_raw)
+        status = str(titulo.get("status", "")).strip() or "aberto"
+        linha = (titulo.get("linhadig") or titulo.get("linha_digitavel")
+                 or titulo.get("codigobarras") or titulo.get("codigo_barras") or "")
+        nossonum = str(titulo.get("nossonum") or titulo.get("titulo") or "")
+
+        pdf = FPDF()
+        pdf.set_auto_page_break(auto=True, margin=15)
+        pdf.add_page()
+
+        # Cabeçalho verde
+        pdf.set_fill_color(19, 128, 66)
+        pdf.rect(0, 0, 210, 30, "F")
+        pdf.set_text_color(255, 255, 255)
+        pdf.set_font("helvetica", "B", 20)
+        pdf.set_xy(12, 7)
+        pdf.cell(0, 10, "SPEEDNET ACARA")
+        pdf.set_font("helvetica", "", 10)
+        pdf.set_xy(12, 18)
+        pdf.cell(0, 6, "Provedor de Internet - Fatura de Servicos")
+
+        pdf.set_text_color(30, 30, 30)
+        pdf.set_y(40)
+        pdf.set_font("helvetica", "B", 13)
+        pdf.cell(0, 8, f"Cliente: {nome}", new_x="LMARGIN", new_y="NEXT")
+        pdf.set_font("helvetica", "", 11)
+        if login:
+            pdf.cell(0, 7, f"Login: {login}", new_x="LMARGIN", new_y="NEXT")
+        if nossonum:
+            pdf.cell(0, 7, f"Documento: {nossonum}", new_x="LMARGIN", new_y="NEXT")
+
+        pdf.ln(4)
+        pdf.set_font("helvetica", "B", 14)
+        pdf.set_fill_color(240, 240, 240)
+        pdf.cell(63, 12, f"Valor: {valor}", border=1, fill=True)
+        pdf.cell(63, 12, f"Vencimento: {venc}", border=1, fill=True)
+        pdf.cell(63, 12, f"Situacao: {status}", border=1, fill=True, new_x="LMARGIN", new_y="NEXT")
+
+        if linha:
+            pdf.ln(6)
+            pdf.set_font("helvetica", "B", 12)
+            pdf.cell(0, 8, "Linha digitavel para pagamento:", new_x="LMARGIN", new_y="NEXT")
+            pdf.set_font("courier", "B", 13)
+            pdf.set_fill_color(248, 248, 248)
+            pdf.multi_cell(0, 9, linha, border=1, fill=True)
+            pdf.set_font("helvetica", "", 9)
+            pdf.cell(0, 6, "Pague em qualquer banco, lotérica ou pelo app do seu banco (opcao boleto).",
+                     new_x="LMARGIN", new_y="NEXT")
+
+        pdf.ln(8)
+        pdf.set_font("helvetica", "B", 11)
+        pdf.cell(0, 7, "Aplicativo Speednet - consulte boletos e faca desbloqueios:", new_x="LMARGIN", new_y="NEXT")
+        pdf.set_font("helvetica", "", 10)
+        pdf.cell(0, 6, "Android: https://evolink.me/qOx9Yy", new_x="LMARGIN", new_y="NEXT")
+        pdf.cell(0, 6, "iOS: https://evolink.me/U3pLFY", new_x="LMARGIN", new_y="NEXT")
+
+        pdf.ln(6)
+        pdf.set_font("helvetica", "", 9)
+        pdf.set_text_color(110, 110, 110)
+        pdf.cell(0, 5, "Atendimento: (91) 98599-4245 - seg a sab, 08:00-12:00 / 14:00-18:00",
+                 new_x="LMARGIN", new_y="NEXT")
+        pdf.cell(0, 5, "Av. Comandante Pedro Vinagre, ao lado do Hotel e Supermercado Fonseca - Acara/PA",
+                 new_x="LMARGIN", new_y="NEXT")
+
+        safe_nome = re.sub(r"[^A-Za-z0-9]+", "_", nome).strip("_")[:30] or "cliente"
+        safe_venc = re.sub(r"[^0-9-]", "", venc_raw)[:10] or "fatura"
+        path = os.path.join(out_dir, f"Fatura_Speednet_{safe_nome}_{safe_venc}.pdf")
+        pdf.output(path)
+        logger.info(f"[mkauth] PDF gerado: {path}")
+        return path
+    except Exception as e:
+        logger.error(f"[mkauth] Falha ao gerar PDF: {e}")
+        return None
+
+
+# Cache do bundle por (telefone+mensagem) — pre_llm_call roda várias vezes por turno
+_bundle_cache: dict = {}
+
+
+def build_billing_bundle(phone_number: str, user_msg: str = "") -> dict:
+    """Monta o contexto de cobrança + PDF da fatura (quando possível).
+
+    Retorna {"block": str, "block_pdf": str, "pdf_path": str|None, "pdf_name": str|None}.
+    - block: contexto com linha digitável (fallback quando o PDF não vai)
+    - block_pdf: contexto para quando o PDF FOI enviado (sem códigos no texto)
     """
+    res = {"block": "", "block_pdf": "", "pdf_path": None, "pdf_name": None}
     if not config.enabled:
-        return ""
+        return res
+
+    cache_key = normalize_phone(phone_number) + ":" + (user_msg or "")[:60]
+    cached = _bundle_cache.get(cache_key)
+    if cached and (time.time() - cached[0]) < 600:
+        return cached[1]
 
     try:
         cli = client.find_client_by_phone(phone_number)
@@ -654,12 +760,14 @@ def build_mkauth_context_block(phone_number: str, user_msg: str = "") -> str:
                     # Memoriza o vínculo: próximas conversas nem pedem CPF
                     client.save_binding(phone_number, str(cli["login"]))
         if not cli:
-            return (
+            res["block"] = (
                 "### DADOS DO CLIENTE (MK-AUTH) ###\n"
                 "Este número de WhatsApp NÃO foi localizado no cadastro do provedor.\n"
                 "Peça educadamente o CPF do titular para localizar o cadastro e a fatura. "
                 "NUNCA invente valores, vencimentos ou códigos de pagamento.\n\n"
             )
+            _bundle_cache[cache_key] = (time.time(), res)
+            return res
 
         nome = cli.get("nome") or cli.get("name") or ""
         login = cli.get("login") or ""
@@ -678,23 +786,59 @@ def build_mkauth_context_block(phone_number: str, user_msg: str = "") -> str:
             ativo = "ativo" if str(cli_status).lower() in ("s", "sim", "1", "true", "ativo") else str(cli_status)
             lines.append(f"Situação do cadastro: {ativo}")
 
+        titulos = []
         if cpf or login:
             titulos = client.filter_titulos_abertos(client.get_titulos_by_cpf(cpf, login=login))
-            if titulos:
-                lines.append(f"\nFaturas em aberto ({len(titulos)}):")
-                for t in titulos[:5]:
-                    lines.append(format_titulo(t))
-                if len(titulos) > 5:
-                    lines.append(f"(+{len(titulos) - 5} faturas mais antigas em aberto)")
-            else:
-                lines.append("\nNenhuma fatura em aberto — cliente em dia. Parabenize se fizer sentido.")
+
+        lines_pdf = list(lines)  # variante para quando o PDF é enviado
+
+        if titulos:
+            lines.append(f"\nFaturas em aberto ({len(titulos)}):")
+            for t in titulos[:5]:
+                lines.append(format_titulo(t))
+            if len(titulos) > 5:
+                lines.append(f"(+{len(titulos) - 5} faturas mais antigas em aberto)")
+
+            t0 = titulos[0]
+            venc0 = _fmt_date(t0.get("datavenc") or t0.get("vencimento") or "")
+            valor0 = _fmt_money(t0.get("valor") or "")
+            lines_pdf.append(f"\nFaturas em aberto: {len(titulos)}. "
+                             f"A mais próxima: {valor0}, vencimento {venc0}.")
+
+            # Gerar o PDF da fatura mais próxima
+            pdf_path = generate_boleto_pdf(cli, t0)
+            if pdf_path:
+                res["pdf_path"] = pdf_path
+                res["pdf_name"] = os.path.basename(pdf_path)
+        else:
+            aviso = "\nNenhuma fatura em aberto — cliente em dia. Parabenize se fizer sentido."
+            lines.append(aviso)
+            lines_pdf.append(aviso)
 
         lines.append(
             "\nREGRAS: use SOMENTE os dados acima — nunca invente valores, datas ou códigos. "
             "Ao enviar linha digitável ou PIX, envie o código completo em linha própria para facilitar a cópia. "
+            "Sempre que o assunto for pagamento/boleto, apresente também o aplicativo da Speednet "
+            "(links na base de conhecimento). "
             "Estes dados pertencem ao titular deste número — não repasse dados de outros clientes."
         )
-        return "\n".join(lines) + "\n\n"
+        lines_pdf.append(
+            "\nIMPORTANTE: o PDF da fatura JÁ FOI ENVIADO como anexo nesta conversa. "
+            "NÃO envie linha digitável, código de barras nem PIX no texto — está tudo no PDF. "
+            "Apenas avise que a fatura está em anexo (com valor e vencimento) e apresente o "
+            "aplicativo da Speednet com os links (estão na base de conhecimento). "
+            "Não repasse dados de outros clientes."
+        )
+
+        res["block"] = "\n".join(lines) + "\n\n"
+        res["block_pdf"] = "\n".join(lines_pdf) + "\n\n"
+        _bundle_cache[cache_key] = (time.time(), res)
+        return res
     except Exception as e:  # nunca derrubar o fluxo de atendimento
         logger.error(f"[mkauth] Erro ao montar contexto: {e}")
-        return ""
+        return res
+
+
+def build_mkauth_context_block(phone_number: str, user_msg: str = "") -> str:
+    """Compatibilidade: retorna apenas o bloco de texto (sem PDF)."""
+    return build_billing_bundle(phone_number, user_msg)["block"]
