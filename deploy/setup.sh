@@ -368,6 +368,12 @@ if [ -f "$BASE_DIR/.env" ]; then
     _fill_env_key "WHATSAPP_OWNER_NUMBER" "$WHATSAPP_OWNER_NUMBER"
     _fill_env_key "WHATSAPP_ADMIN_NUMBERS" "$WHATSAPP_ADMIN_NUMBERS"
     _fill_env_key "WHATSAPP_OWNER_NAME" "$WHATSAPP_OWNER_NAME"
+    _fill_env_key "WHATSAPP_OWNER_MODEL" "$WHATSAPP_OWNER_MODEL"
+    _fill_env_key "WHATSAPP_CLIENT_MODEL" "$WHATSAPP_CLIENT_MODEL"
+    _fill_env_key "WHATSAPP_CLIENT_MEDIA_MODEL" "$WHATSAPP_CLIENT_MEDIA_MODEL"
+    _fill_env_key "WHATSAPP_CONTACT_CLASSIFIER_MODEL" "$WHATSAPP_CONTACT_CLASSIFIER_MODEL"
+    # Migra modelos caros do template para o flash-lite
+    sed -i "s/gemini-3.5-flash/gemini-3.1-flash-lite/g" "$BASE_DIR/.env" 2>/dev/null || true
     # Comenta qualquer placeholder restante para não ser lido como chave válida
     sed -i '/_aqui/s/^\([^#]\)/#\1/' "$BASE_DIR/.env"
 fi
