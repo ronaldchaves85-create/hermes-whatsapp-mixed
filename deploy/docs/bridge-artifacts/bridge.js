@@ -187,6 +187,8 @@ const DOCUMENT_CACHE_DIR = path.join(process.env.HOME || '~', '.hermes', 'docume
 const AUDIO_CACHE_DIR = path.join(process.env.HOME || '~', '.hermes', 'audio_cache');
 const PAIR_ONLY = args.includes('--pair-only');
 const WHATSAPP_MODE = getArg('mode', process.env.WHATSAPP_MODE || 'self-chat'); // "bot" or "self-chat"
+// Ignorar mensagens de grupos (padrão: true). O bot nunca responde em grupos.
+const WHATSAPP_IGNORE_GROUPS = (process.env.WHATSAPP_IGNORE_GROUPS || 'true').trim().toLowerCase() !== 'false';
 const ALLOWED_USERS = parseAllowedUsers(process.env.WHATSAPP_ALLOWED_USERS || '');
 const WHATSAPP_OWNER_NUMBER = (process.env.WHATSAPP_OWNER_NUMBER || '').replace(/\D/g, '');
 
@@ -929,6 +931,12 @@ let onMessagesUpsert = async ({ messages, type }) => {
       timestamp: msg.messageTimestamp,
       fromMe: !!msg.key.fromMe,
     };
+
+    // ── Nunca responder em GRUPOS (evita spam e gasto de cota) ───────────────
+    if (isGroup && WHATSAPP_IGNORE_GROUPS) {
+      if (WHATSAPP_DEBUG) console.log(`[bridge] Ignorando mensagem de grupo: ${chatId}`);
+      continue;
+    }
 
     // ── DEBOUNCE PROGRESSIVO: apenas mensagens de texto puro ─────────────────
     if (!hasMedia && WHATSAPP_DEBOUNCE_INITIAL_MS > 0) {

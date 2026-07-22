@@ -4727,6 +4727,10 @@ def pre_gateway_dispatch(*args, **kwargs):
     # Nota: para from_me=1, sender_id==chat_id, então is_self_chat seria True erroneamente.
     # Usamos _is_from_me + verificar que não é self-chat pelo chat_id (@g.us excluído também)
     _is_group = "@g.us" in chat_id
+    # Reforço: nunca responder em grupos (a bridge já filtra, isto é defesa extra)
+    if _is_group and os.getenv("WHATSAPP_IGNORE_GROUPS", "true").strip().lower() != "false":
+        logger.info(f"[grupo] Ignorando mensagem de grupo {chat_id}")
+        return {"action": "skip", "reason": "group-ignored"}
     _chat_phone = "".join(c for c in chat_id.split("@")[0].split(":")[0] if c.isdigit())
     _owner_phone_clean = "".join(c for c in owner_number.split("@")[0].split(":")[0] if c.isdigit())
     _is_real_self_chat = _normalize_brazilian_phone(_chat_phone) == _normalize_brazilian_phone(_owner_phone_clean)
