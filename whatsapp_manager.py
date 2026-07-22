@@ -5815,15 +5815,19 @@ def post_llm_call(*args, **kwargs):
             or session_id
         )
 
-        # Dedup por sessão: cada session_id Hermes só pode enviar UMA resposta real.
-        # Esta camada é independente do turn-based dedup e cobre race conditions.
+        # Dedup por (sessão + mensagem): protege contra envio duplo na MESMA mensagem
+        # (race conditions), mas SEM bloquear mensagens novas quando o Hermes reaproveita
+        # a mesma session_id ao longo da conversa (o que suprimia respostas legítimas).
         if session_id:
+            import hashlib as _hl_sess
+            _umsg = kwargs.get("user_message") or (kwargs.get("context") or {}).get("user_message") or ""
+            _sess_turn = session_id + ":" + _hl_sess.md5(_umsg.encode()).hexdigest()
             with _responded_sessions_lock:
-                if session_id in _responded_sessions:
-                    logger.warning(f"[post_llm_call] Sessão já respondida — suprimindo (session={session_id!r})")
+                if _sess_turn in _responded_sessions:
+                    logger.warning(f"[post_llm_call] Sessão+msg já respondida — suprimindo (session={session_id!r})")
                     _log_suppressed("SESSION_DEDUP", session_id, chat_id, clean_text)
                     return {"assistant_response": ""}
-                _responded_sessions.add(session_id)
+                _responded_sessions.add(_sess_turn)
                 if len(_responded_sessions) > 2000:
                     _responded_sessions.clear()
 
