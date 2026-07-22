@@ -636,6 +636,91 @@ def _normalize_brazilian_phone(phone: str) -> str:
     return clean
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Expediente do bot (WHATSAPP_HUMAN_HOURS)
+# Formato: "seg-sab=08:00-12:00,14:00-18:00" — nesses períodos o atendimento é
+# humano: clientes recebem um aviso único e o bot silencia (admins passam sempre).
+# Vazio = bot 24/7.
+# ─────────────────────────────────────────────────────────────────────────────
+
+_WEEKDAYS_PT = {"seg": 0, "ter": 1, "qua": 2, "qui": 3, "sex": 4, "sab": 5, "dom": 6,
+                "mon": 0, "tue": 1, "wed": 2, "thu": 3, "fri": 4, "sat": 5, "sun": 6}
+_handoff_sent: dict = {}
+
+
+def _parse_human_hours(spec: str) -> dict:
+    """'seg-sab=08:00-12:00,14:00-18:00;dom=...' → {dia_semana: [(ini_min, fim_min)]}"""
+    out: dict = {}
+    for group in (spec or "").split(";"):
+        group = group.strip()
+        if not group or "=" not in group:
+            continue
+        days_part, hours_part = group.split("=", 1)
+        days = []
+        for d in days_part.split(","):
+            d = d.strip().lower()
+            if "-" in d:
+                a, b = (x.strip() for x in d.split("-", 1))
+                if a in _WEEKDAYS_PT and b in _WEEKDAYS_PT:
+                    i = _WEEKDAYS_PT[a]
+                    while True:
+                        days.append(i)
+                        if i == _WEEKDAYS_PT[b]:
+                            break
+                        i = (i + 1) % 7
+            elif d in _WEEKDAYS_PT:
+                days.append(_WEEKDAYS_PT[d])
+        windows = []
+        for w in hours_part.split(","):
+            m = re.match(r"^\s*(\d{1,2}):(\d{2})\s*-\s*(\d{1,2}):(\d{2})\s*$", w)
+            if m:
+                windows.append((int(m.group(1)) * 60 + int(m.group(2)),
+                                int(m.group(3)) * 60 + int(m.group(4))))
+        for day in days:
+            out.setdefault(day, []).extend(windows)
+    return out
+
+
+_SCHEDULE_STATE_PATH = "/opt/data/.hermes/bot_schedule.json"
+
+
+def _load_schedule_mode() -> str:
+    """Modo atual: 'expediente' (respeita horários) ou '24_7' (sempre ativo)."""
+    try:
+        with open(_SCHEDULE_STATE_PATH, encoding="utf-8") as f:
+            return json.load(f).get("mode", "expediente")
+    except (OSError, ValueError):
+        return "expediente"
+
+
+def _save_schedule_mode(mode: str) -> None:
+    try:
+        with open(_SCHEDULE_STATE_PATH, "w", encoding="utf-8") as f:
+            json.dump({"mode": mode}, f)
+        logger.info(f"[expediente] Modo alterado para: {mode}")
+    except OSError as e:
+        logger.error(f"[expediente] Falha ao salvar modo: {e}")
+
+
+def _in_human_hours(now=None) -> bool:
+    """True se AGORA está dentro do horário de atendimento humano (bot silencia p/ clientes)."""
+    spec = os.getenv("WHATSAPP_HUMAN_HOURS", "").strip()
+    if not spec:
+        return False
+    if _load_schedule_mode() == "24_7":
+        return False
+    try:
+        sched = _parse_human_hours(spec)
+        now = now or datetime.datetime.now()
+        mins = now.hour * 60 + now.minute
+        for start, end in sched.get(now.weekday(), []):
+            if start <= mins < end:
+                return True
+    except Exception as e:
+        logger.error(f"[expediente] Erro ao interpretar WHATSAPP_HUMAN_HOURS: {e}")
+    return False
+
+
 def _is_admin_number(sender: str) -> bool:
     """True se o número pertence ao dono principal OU a um admin extra.
 
@@ -4692,6 +4777,38 @@ def pre_gateway_dispatch(*args, **kwargs):
             logger.info(f"[contact-card] Cartão guardado: name='{card_name}' phone='{card_phone}'")
         return {"action": "skip", "reason": "contact-card-stored"}
 
+    # Comando (admins): controle do expediente — !24h / !expediente / !horario
+    _sched_cmds = ("!24h", "24h", "modo 24h", "bot 24h", "24/7", "modo 24/7", "bot 24/7",
+                   "!expediente", "expediente", "modo expediente", "bot expediente",
+                   "!horario", "horario", "horário", "!horário", "modo horario", "modo horário")
+    if is_owner and normalized_msg in _sched_cmds:
+        _spec_h = os.getenv("WHATSAPP_HUMAN_HOURS", "").strip() or "(não configurado)"
+        _cmd = normalized_msg.lstrip("!").strip()
+        if "24" in _cmd:
+            _save_schedule_mode("24_7")
+            _resp = ("🕐 Modo *24/7* ativado!\n\n"
+                     "O bot agora atende os clientes a qualquer hora, todos os dias.\n\n"
+                     "Para voltar ao expediente normal: `!expediente`")
+        elif "expediente" in _cmd:
+            _save_schedule_mode("expediente")
+            _resp = ("🕐 Modo *expediente* ativado!\n\n"
+                     "O bot atende os clientes apenas fora do horário da equipe.\n\n"
+                     f"*Horário humano* (bot em silêncio): {_spec_h}\n\n"
+                     "Para liberar o bot direto: `!24h`")
+        else:
+            _mode = _load_schedule_mode()
+            _agora = "🔇 em silêncio para clientes (horário da equipe)" if _in_human_hours() \
+                else "✅ ativo para clientes"
+            _resp = ("🕐 *Expediente do bot*\n\n"
+                     f"Modo: *{'24/7' if _mode == '24_7' else 'expediente'}*\n"
+                     f"Agora: {_agora}\n"
+                     f"Horário humano configurado: {_spec_h}\n\n"
+                     "Comandos: `!24h` · `!expediente` · `!horario`")
+        _chat_sched = str(event.source.chat_id) if event.source.chat_id else ""
+        if _chat_sched:
+            _human_send(_chat_sched, _resp)
+        return {"action": "skip", "reason": "schedule-command"}
+
     sync_keywords = [
         "sync contacts", "sync contatos", "sincronizar contatos",
         "sincronize contatos", "sincronize os contatos", "sincronizar os contatos",
@@ -4747,7 +4864,10 @@ def pre_gateway_dispatch(*args, **kwargs):
             "*📋 COMANDOS DE CONTROLE*\n"
             "• `stop_bot` — pausa o atendimento a clientes (você continua usando normalmente)\n"
             "• `start_bot` — reativa o atendimento a clientes\n"
-            "• `sincronizar contatos` — classifica novos contatos e sincroniza com o GitHub\n\n"
+            "• `sincronizar contatos` — classifica novos contatos e sincroniza com o GitHub\n"
+            "• `!24h` — bot atende clientes a qualquer hora\n"
+            "• `!expediente` — bot atende clientes só fora do horário da equipe\n"
+            "• `!horario` — mostra o modo atual do expediente\n\n"
             "*👤 ATUALIZAR CONTATO*\n"
             "• Em linguagem natural: _\"a Isabel é minha filha, apelido Bebel\"_\n"
             "• Comando direto: `update contact <nome> campo=valor`\n"
@@ -5201,6 +5321,22 @@ def pre_gateway_dispatch(*args, **kwargs):
                 _last_client_text[_chat_key] = msg_text
     except Exception:
         pass
+
+    # ── Expediente: em horário de atendimento humano, cliente recebe um aviso
+    #    único e o bot silencia. Admins passam sempre. ──
+    if not is_owner and _in_human_hours():
+        try:
+            _chat_h = str(getattr(event.source, "chat_id", "") or sender_id)
+            if time.time() - _handoff_sent.get(_chat_h, 0) > 4 * 3600:
+                _handoff_sent[_chat_h] = time.time()
+                _human_send(_chat_h,
+                            "Oi! 😊 Nosso atendimento está ativo agora — a equipe já vai te responder por aqui.")
+                logger.info(f"[expediente] Aviso de atendimento humano enviado para {_chat_h}")
+            else:
+                logger.info(f"[expediente] Horário humano — bot em silêncio para {sender_id}")
+        except Exception as e:
+            logger.error(f"[expediente] Falha no aviso: {e}")
+        return {"action": "skip", "reason": "human-hours"}
 
     # Roteamento Dinâmico de Modelos (Dono vs Clientes)
     try:
