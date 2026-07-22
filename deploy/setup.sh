@@ -341,7 +341,7 @@ fi
 # Instala o gerador de PDF de faturas (fpdf2) se ainda não estiver disponível
 if ! /opt/hermes/.venv/bin/python -c "import fpdf" 2>/dev/null; then
     echo "📄 Instalando fpdf2 (PDF de faturas)..."
-    /opt/hermes/.venv/bin/pip install -q fpdf2 && echo "  ✓ fpdf2 instalado." || echo "  ⚠️ Falha ao instalar fpdf2 — faturas irão como texto."
+    /opt/hermes/.venv/bin/pip install -q fpdf2 qrcode pillow && echo "  ✓ fpdf2/qrcode/pillow instalados." || echo "  ⚠️ Falha ao instalar fpdf2 — faturas irão como texto."
 fi
 
 # Baixa o modelo de chaves de API (.env) se ele não existir localmente
