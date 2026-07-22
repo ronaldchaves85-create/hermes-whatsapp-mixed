@@ -813,9 +813,9 @@ def generate_boleto_pdf(cli: dict, titulo: dict, out_dir: str | None = None) -> 
 
 def _render_boleto_via_browser(url: str, out_path: str) -> bool:
     """Renderiza a página HTML do boleto em PDF usando o Chromium embutido (Playwright)."""
-    script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "render_boleto.js")
+    script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "render_boleto.cjs")
     if not os.path.exists(script):
-        logger.warning("[mkauth] render_boleto.js não encontrado ao lado do plugin.")
+        logger.warning("[mkauth] render_boleto.cjs não encontrado ao lado do plugin.")
         return False
     import subprocess
     env = dict(os.environ)

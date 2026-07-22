@@ -245,7 +245,7 @@ if [ ! -d "/opt/data/.hermes/plugins/whatsapp-manager" ]; then
     safe_download "$RAW_ROOT/package.json"    "/opt/data/.hermes/plugins/whatsapp-manager/package.json" "$CURL_CODE_AUTH_HEADER" "package.json"
     safe_download "$RAW_ROOT/google_api.py"   "/opt/data/.hermes/plugins/whatsapp-manager/google_api.py" "$CURL_CODE_AUTH_HEADER" "google_api.py"
     safe_download "$RAW_ROOT/mkauth_client.py" "/opt/data/.hermes/plugins/whatsapp-manager/mkauth_client.py" "$CURL_CODE_AUTH_HEADER" "mkauth_client.py"
-    safe_download "$RAW_ROOT/render_boleto.js" "/opt/data/.hermes/plugins/whatsapp-manager/render_boleto.js" "$CURL_CODE_AUTH_HEADER" "render_boleto.js"
+    safe_download "$RAW_ROOT/render_boleto.cjs" "/opt/data/.hermes/plugins/whatsapp-manager/render_boleto.cjs" "$CURL_CODE_AUTH_HEADER" "render_boleto.cjs"
     
     # Instalar skills bundled do plugin
     mkdir -p "/opt/data/.hermes/plugins/whatsapp-manager/skills/google-oauth"
@@ -278,7 +278,7 @@ else
             safe_download "$RAW_ROOT/whatsapp_manager.py" "/opt/data/.hermes/plugins/whatsapp-manager/whatsapp_manager.py" "$CURL_CODE_AUTH_HEADER" "whatsapp_manager.py"
             safe_download "$RAW_ROOT/google_api.py" "/opt/data/.hermes/plugins/whatsapp-manager/google_api.py" "$CURL_CODE_AUTH_HEADER" "google_api.py"
             safe_download "$RAW_ROOT/mkauth_client.py" "/opt/data/.hermes/plugins/whatsapp-manager/mkauth_client.py" "$CURL_CODE_AUTH_HEADER" "mkauth_client.py"
-            safe_download "$RAW_ROOT/render_boleto.js" "/opt/data/.hermes/plugins/whatsapp-manager/render_boleto.js" "$CURL_CODE_AUTH_HEADER" "render_boleto.js"
+            safe_download "$RAW_ROOT/render_boleto.cjs" "/opt/data/.hermes/plugins/whatsapp-manager/render_boleto.cjs" "$CURL_CODE_AUTH_HEADER" "render_boleto.cjs"
             mkdir -p "/opt/data/.hermes/plugins/whatsapp-manager/skills/google-oauth"
             safe_download "$RAW_ROOT/skills/google-oauth/SKILL.md" "/opt/data/.hermes/plugins/whatsapp-manager/skills/google-oauth/SKILL.md" "$CURL_CODE_AUTH_HEADER" "skills/google-oauth/SKILL.md"
             mkdir -p "/opt/data/.hermes/plugins/whatsapp-manager/skills/research-sources"
@@ -293,7 +293,7 @@ else
         safe_download "$RAW_ROOT/whatsapp_manager.py" "/opt/data/.hermes/plugins/whatsapp-manager/whatsapp_manager.py" "$CURL_CODE_AUTH_HEADER" "whatsapp_manager.py"
         safe_download "$RAW_ROOT/google_api.py" "/opt/data/.hermes/plugins/whatsapp-manager/google_api.py" "$CURL_CODE_AUTH_HEADER" "google_api.py"
         safe_download "$RAW_ROOT/mkauth_client.py" "/opt/data/.hermes/plugins/whatsapp-manager/mkauth_client.py" "$CURL_CODE_AUTH_HEADER" "mkauth_client.py"
-        safe_download "$RAW_ROOT/render_boleto.js" "/opt/data/.hermes/plugins/whatsapp-manager/render_boleto.js" "$CURL_CODE_AUTH_HEADER" "render_boleto.js"
+        safe_download "$RAW_ROOT/render_boleto.cjs" "/opt/data/.hermes/plugins/whatsapp-manager/render_boleto.cjs" "$CURL_CODE_AUTH_HEADER" "render_boleto.cjs"
         mkdir -p "/opt/data/.hermes/plugins/whatsapp-manager/skills/google-oauth"
         safe_download "$RAW_ROOT/skills/google-oauth/SKILL.md" "/opt/data/.hermes/plugins/whatsapp-manager/skills/google-oauth/SKILL.md" "$CURL_CODE_AUTH_HEADER" "skills/google-oauth/SKILL.md"
         mkdir -p "/opt/data/.hermes/plugins/whatsapp-manager/skills/research-sources"
