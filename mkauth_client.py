@@ -811,6 +811,28 @@ def generate_boleto_pdf(cli: dict, titulo: dict, out_dir: str | None = None) -> 
         return None
 
 
+def _render_boleto_via_browser(url: str, out_path: str) -> bool:
+    """Renderiza a página HTML do boleto em PDF usando o Chromium embutido (Playwright)."""
+    script = os.path.join(os.path.dirname(os.path.abspath(__file__)), "render_boleto.js")
+    if not os.path.exists(script):
+        logger.warning("[mkauth] render_boleto.js não encontrado ao lado do plugin.")
+        return False
+    import subprocess
+    env = dict(os.environ)
+    env.setdefault("NODE_PATH", "/opt/hermes/node_modules")
+    try:
+        r = subprocess.run(["node", script, out_path, url], env=env,
+                           capture_output=True, timeout=90)
+        ok = (r.returncode == 0 and os.path.exists(out_path)
+              and os.path.getsize(out_path) > 5000)
+        if not ok:
+            logger.warning(f"[mkauth] Render do boleto falhou: {r.stderr.decode(errors='replace')[:150]}")
+        return ok
+    except Exception as e:
+        logger.warning(f"[mkauth] Render do boleto: {e}")
+        return False
+
+
 def fetch_official_boleto_pdf(titulo: dict, out_dir: str | None = None) -> str | None:
     """Baixa o boleto oficial (Sicoob, com QR PIX) do próprio MK-AUTH.
 
@@ -829,20 +851,30 @@ def fetch_official_boleto_pdf(titulo: dict, out_dir: str | None = None) -> str |
     urls = [f"{base}/boleto/boleto.hhvm?titulo={tid}"]
     if base.startswith("https://"):
         urls.append(f"http://{base[8:]}/boleto/boleto.hhvm?titulo={tid}")
+    path = os.path.join(out_dir, f"Boleto_Speednet_{tid}.pdf")
+    # Reaproveita render recente (evita abrir o navegador de novo à toa)
+    try:
+        if os.path.exists(path) and (time.time() - os.path.getmtime(path)) < 3600                 and os.path.getsize(path) > 5000:
+            return path
+    except OSError:
+        pass
     for u in urls:
         try:
             req = urllib.request.Request(u, headers={"User-Agent": "Mozilla/5.0"})
             with client._urlopen(req, timeout=30) as resp:
                 data = resp.read()
             if data[:5] == b"%PDF-":
-                path = os.path.join(out_dir, f"Boleto_Speednet_{tid}.pdf")
                 with open(path, "wb") as f:
                     f.write(data)
                 logger.info(f"[mkauth] Boleto oficial baixado ({len(data)} bytes): {path}")
                 return path
-            logger.info(f"[mkauth] {u} não retornou PDF (início: {data[:15]!r}) — tentando próxima/fallback.")
+            # Página HTML → renderizar com o navegador embutido (fica idêntico ao impresso)
+            logger.info(f"[mkauth] {u} é HTML — renderizando boleto oficial via navegador...")
+            if _render_boleto_via_browser(u, path):
+                logger.info(f"[mkauth] Boleto oficial renderizado ({os.path.getsize(path)} bytes): {path}")
+                return path
         except Exception as e:
-            logger.warning(f"[mkauth] Falha ao baixar boleto oficial em {u}: {e}")
+            logger.warning(f"[mkauth] Falha ao obter boleto oficial em {u}: {e}")
     return None
 
 

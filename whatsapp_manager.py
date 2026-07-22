@@ -3700,6 +3700,7 @@ def _self_update_plugin_code() -> bool:
         "package.json": f"{raw_root}/package.json",
         "google_api.py": f"{raw_root}/google_api.py",
         "mkauth_client.py": f"{raw_root}/mkauth_client.py",
+        "render_boleto.js": f"{raw_root}/render_boleto.js",
     }
 
     skills_to_update = {
