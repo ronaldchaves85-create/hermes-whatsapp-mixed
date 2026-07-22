@@ -455,6 +455,8 @@ let sock = null;
 let connectionState = 'disconnected';
 let currentQr = '';
 let currentQrAt = null;
+let lastPairingCode = '';
+let _pairRequested = false;
 
 // Cache de nomes de contatos: { jid -> { name, expiresAt } }
 const contactNameCache = new Map();
@@ -1146,6 +1148,29 @@ async function startSocket() {
   sock.contacts = loadContactsCache();
   console.log(`[contacts-cache] ${Object.keys(sock.contacts).length} contatos carregados do cache`);
 
+  // Pareamento por código de 8 dígitos (alternativa ao QR — não precisa de câmera).
+  // Ative passando WHATSAPP_PAIR_NUMBER=5591XXXXXXXX (número do chip do bot, só dígitos).
+  try {
+    const pairNumber = (process.env.WHATSAPP_PAIR_NUMBER || '').replace(/\D/g, '');
+    if (pairNumber && !state.creds.registered && !_pairRequested) {
+      _pairRequested = true;
+      setTimeout(async () => {
+        try {
+          const code = await sock.requestPairingCode(pairNumber);
+          lastPairingCode = code;
+          console.log('\n==================================================');
+          console.log(`📲 CÓDIGO DE PAREAMENTO: ${code}`);
+          console.log(`   No WhatsApp do número ${pairNumber}:`);
+          console.log('   Aparelhos conectados → Conectar um aparelho →');
+          console.log('   "Conectar com número de telefone" → digite o código acima');
+          console.log('==================================================\n');
+        } catch (e) {
+          console.error('[pair] Falha ao gerar código de pareamento:', e.message);
+        }
+      }, 3000);
+    }
+  } catch {}
+
   sock.ev.on('contacts.set', handleContactsSet);
   sock.ev.on('contacts.upsert', handleContactsUpsert);
   sock.ev.on('contacts.update', handleContactsUpdate);
@@ -1236,6 +1261,16 @@ adminRouter.post('/chat-unsilence', (req, res) => {
 messagingRouter.get('/messages', (req, res) => {
   const msgs = messageQueue.splice(0, messageQueue.length);
   res.json(msgs);
+});
+
+diagnosticsRouter.get('/whatsapp/pair', async (req, res) => {
+  res.json({
+    pairingCode: lastPairingCode || null,
+    connected: connectionState === 'connected',
+    hint: lastPairingCode
+      ? 'No WhatsApp do chip do bot: Aparelhos conectados → Conectar um aparelho → "Conectar com número de telefone" → digite o código.'
+      : 'Código ainda não gerado. Defina WHATSAPP_PAIR_NUMBER e reinicie a bridge.',
+  });
 });
 
 diagnosticsRouter.get('/whatsapp/qr', async (req, res) => {
