@@ -975,8 +975,9 @@ def build_billing_bundle(phone_number: str, user_msg: str = "") -> dict:
             "\nIMPORTANTE: o BOLETO em PDF JÁ FOI ENVIADO como anexo nesta conversa "
             "(com QR Code PIX para pagamento). "
             "NÃO envie linha digitável, código de barras nem PIX no texto — está tudo no PDF. "
-            "Apenas avise que a fatura está em anexo (com valor e vencimento) e apresente o "
-            "aplicativo da Speednet com os links (estão na base de conhecimento). "
+            "Apenas avise que a fatura está em anexo, com *Valor:* e *Vencimento:* em linhas "
+            "próprias (negrito com um asterisco), e apresente o aplicativo da Speednet com os "
+            "links em linhas próprias (modelo na base de conhecimento). "
             "Não repasse dados de outros clientes."
         )
 

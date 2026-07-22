@@ -5649,7 +5649,8 @@ def post_llm_call(*args, **kwargs):
         clean_text = _EXEC_PATTERN.sub("", response_text).strip()
 
         # Colapsar múltiplas quebras de linha em espaço (evita resposta robótica com parágrafos)
-        clean_text = re.sub(r'\n{2,}', ' ', clean_text).strip()
+        # Preservar o layout (negrito, listas, parágrafos) — só limitar excessos
+        clean_text = re.sub(r'\n{3,}', '\n\n', clean_text).strip()
 
         # Filtrar tool results intermediários
         _tool_result_patterns = [

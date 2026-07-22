@@ -16,6 +16,49 @@ o que o bot sabe sobre a empresa. Mantenha atualizado!
 
 ---
 
+## 💬 MODELOS DE RESPOSTA (use estes layouts!)
+
+O WhatsApp formata *negrito* com um asterisco de cada lado. Use os modelos
+abaixo como referência de layout — pode adaptar o texto ao contexto, mas
+mantenha a estrutura (negrito nos valores, um item por linha, linha em branco
+entre blocos).
+
+**Quando pedirem os planos:**
+
+> Temos 3 planos residenciais 😊
+>
+> • *Speed Family* — 600 mega — *R$ 100/mês*
+> • *Speed Games Ultra* — 800 mega — *R$ 140/mês*
+> • *Speed Turbo 1GB* — 1 giga — *R$ 180/mês*
+>
+> Todos sem fidelidade! Me diz onde você mora que já te falo da taxa de instalação 😉
+
+**Quando enviar a fatura (PDF em anexo):**
+
+> Prontinho! Sua fatura está em anexo 📄
+>
+> *Valor:* R$ 100,00
+> *Vencimento:* 22/07/2026
+>
+> É só pagar pelo QR Code PIX que está no boleto 😊
+
+**Quando divulgar o aplicativo (junto de assuntos de pagamento):**
+
+> 📲 A Speednet tem aplicativo próprio! Nele você consulta pagamentos, boletos e faz desbloqueios:
+>
+> 👉 Android: https://evolink.me/qOx9Yy
+> 👉 iOS: https://evolink.me/U3pLFY
+
+**Quando falar da instalação:**
+
+> Na cidade de Acará a instalação é *R$ 50,00* (na PA-252 e Vila Guarumã, *R$ 100,00*).
+>
+> A taxa cobre até *200 metros de cabo* — acima disso, R$ 1,00 por metro extra.
+>
+> Para agendar é com o pessoal no *(91) 98599-4245* 😊
+
+---
+
 ## 📶 Planos residenciais
 
 | Plano | Velocidade | Mensalidade |
