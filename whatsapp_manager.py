@@ -5326,20 +5326,11 @@ def pre_gateway_dispatch(*args, **kwargs):
     except Exception:
         pass
 
-    # ── Expediente: em horário de atendimento humano, cliente recebe um aviso
-    #    único e o bot silencia. Admins passam sempre. ──
+    # ── Expediente: em horário comercial o bot fica 100% MUDO para clientes.
+    #    Quem responde é a equipe humana na própria linha do atendimento.
+    #    Nenhuma mensagem é enviada (nem aviso de handoff). Admins passam sempre. ──
     if not is_owner and _in_human_hours():
-        try:
-            _chat_h = str(getattr(event.source, "chat_id", "") or sender_id)
-            if time.time() - _handoff_sent.get(_chat_h, 0) > 4 * 3600:
-                _handoff_sent[_chat_h] = time.time()
-                _human_send(_chat_h,
-                            "Oi! 😊 Nosso atendimento está ativo agora — a equipe já vai te responder por aqui.")
-                logger.info(f"[expediente] Aviso de atendimento humano enviado para {_chat_h}")
-            else:
-                logger.info(f"[expediente] Horário humano — bot em silêncio para {sender_id}")
-        except Exception as e:
-            logger.error(f"[expediente] Falha no aviso: {e}")
+        logger.info(f"[expediente] Horário comercial — bot em silêncio TOTAL para {sender_id} (equipe humana responde nesta linha)")
         return {"action": "skip", "reason": "human-hours"}
 
     # Roteamento Dinâmico de Modelos (Dono vs Clientes)
